@@ -840,17 +840,17 @@ class Luxtronik extends IPSModule
         $socket = socket_create(AF_INET, SOCK_STREAM, 0);
         $connect = socket_connect($socket, $IpWwc, $WwcJavaPort);
 
-        //Debug senden
-        if (!$connect) 
+        // Debug senden
+        if (!$connect)
         {
-            $error_code = socket_last_error();
-            $this->SendDebug("Socketverbindung", "Verbindung zum Socket fehlerhaft: ".$IpWwc.":".$WwcJavaPort." Fehler: ".$error_code."", 0);
-            $this->LogMessage("Verbindung zum Socket fehlerhaft: ".$IpWwc.":".$WwcJavaPort." Fehler: ".$error_code."", KL_ERROR);
-        } 
-        else 
-        {
-            $this->SendDebug("Socketverbindung", "Verbindung zum Socket erfolgreich: ".$IpWwc.":".$WwcJavaPort."", 0);
+            $error_code = socket_last_error($socket);
+            $this->SendDebug("Socketverbindung", "Verbindung zum Socket fehlerhaft: " . $IpWwc . ":" . $WwcJavaPort . " Fehler: " . $error_code, 0);
+            $this->LogMessage("Verbindung zum Socket fehlerhaft: " . $IpWwc . ":" . $WwcJavaPort . " Fehler: " . $error_code, KL_ERROR);
+            socket_close($socket);
+            return;
         }
+
+        $this->SendDebug("Socketverbindung", "Verbindung zum Socket erfolgreich: " . $IpWwc . ":" . $WwcJavaPort, 0);
 
         // Daten holen
         $msg = pack('N*',3004);
@@ -1121,6 +1121,15 @@ class Luxtronik extends IPSModule
     $socket = socket_create(AF_INET, SOCK_STREAM, 0);
     $connect = socket_connect($socket, $ipWwc, $wwcJavaPort);
 
+    if (!$connect)
+    {
+        $error_code = socket_last_error($socket);
+        $this->SendDebug("Socketverbindung", "Verbindung zum Socket fehlerhaft: " . $ipWwc . ":" . $wwcJavaPort . " Fehler: " . $error_code, 0);
+        $this->LogMessage("Verbindung zum Socket fehlerhaft: " . $ipWwc . ":" . $wwcJavaPort . " Fehler: " . $error_code, KL_ERROR);
+        socket_close($socket);
+        return;
+    }
+
     // Daten senden
     $msg = pack('N*', 3002); // 3002 senden aktivieren
     socket_write($socket, $msg, 4);
@@ -1191,6 +1200,15 @@ class Luxtronik extends IPSModule
 
         $socket = socket_create(AF_INET, SOCK_STREAM, 0);
         $connect = socket_connect($socket, $ipWwc, $wwcJavaPort);
+
+        if (!$connect)
+        {
+            $error_code = socket_last_error($socket);
+            $this->SendDebug("Socketverbindung", "Verbindung zum Socket fehlerhaft: " . $ipWwc . ":" . $wwcJavaPort . " Fehler: " . $error_code, 0);
+            $this->LogMessage("Verbindung zum Socket fehlerhaft: " . $ipWwc . ":" . $wwcJavaPort . " Fehler: " . $error_code, KL_ERROR);
+            socket_close($socket);
+            return;
+        }
 
         $msg = pack('N*', 3003);
         socket_write($socket, $msg, 4);
