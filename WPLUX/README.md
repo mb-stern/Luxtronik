@@ -106,6 +106,10 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 3.16 (15.6.2025)
+
+- Einige Codeoptinierungen und Fehlerbehadlung bei Socket-Verbindung
+
 Version 3.15 (12.1.2025)
 
 - Raumbedieneinheit RBE als Steuervariable hinzugefügt
