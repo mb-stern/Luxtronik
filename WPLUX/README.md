@@ -34,7 +34,7 @@ Die Bedeutung und ID's der Variablen sind hier zu finden: https://loxwiki.atlass
 
 ### 2. Voraussetzungen
 
-- IP-Symcon ab Version 7.0
+- IP-Symcon ab Version 8.1
 
 ### 3. Software-Installation
 
@@ -105,6 +105,10 @@ Beispiel:
 `WPLUX_Update(12345);`
 
 ### 8. Versionen
+
+Version 3.17 (02.01.2026)
+
+- Umrüstung auf IPSModuleStrict und hochsetzen der Kompatibilität auf 8.1
 
 Version 3.16 (15.6.2025)
 
