@@ -40,44 +40,49 @@ class Luxtronik extends IPSModuleStrict
 
     public function ApplyChanges(): void
     {
+         //Never delete this line!
+        parent::ApplyChanges();
+        
         //Migrationsroutine auf V4.0 (weil neu Kofiguration mit Checkboxen), wird einmalig ausgeführt um die ausgewählten ID's zu übernehmen
-        $alreadyMigrated = $this->ReadAttributeBoolean('MigratedToV4');
+        if (!$this->ReadAttributeBoolean('MigratedToV4')) {
 
-        if (!$alreadyMigrated) {
-            // Beim ersten Lauf nach dem Update:
-            // - KEINE Variablen löschen
-            // - nur vorhandene IDs übernehmen
+            $raw = json_decode($this->ReadPropertyString('IDListe'), true);
+            if (!is_array($raw)) {
+                $raw = [];
+            }
 
-            $existing = [];
+            $new = [];
+            $seen = [];
 
-            foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
-                if (IPS_GetObject($childID)['ObjectType'] === OBJECTTYPE_VARIABLE) {
-                    $ident = IPS_GetObject($childID)['ObjectIdent'];
-                    if ($ident !== '') {
-                        $existing[] = $ident;
+            foreach ($raw as $row) {
+                $id = 0;
+                $enabled = true; // wichtig: Default TRUE für alte Einträge
+
+                if (is_int($row) || (is_string($row) && ctype_digit($row))) {
+                    $id = (int)$row;
+                } elseif (is_array($row)) {
+                    $id = (int)($row['id'] ?? 0);
+                    if (array_key_exists('enabled', $row)) {
+                        $enabled = (bool)$row['enabled'];
                     }
+                }
+
+                if ($id > 0 && !isset($seen[$id])) {
+                    $seen[$id] = true;
+                    $new[] = ['enabled' => $enabled, 'id' => $id];
                 }
             }
 
-            // vorhandene Variablen als "SelectedIDs" übernehmen
-            $this->UpdateFormField(
-                'SelectedIDs',
-                'value',
-                json_encode(array_values($existing))
-            );
+            // Sortieren (optional)
+            usort($new, fn($a, $b) => $a['id'] <=> $b['id']);
 
+            // Flag setzen, Property schreiben, ApplyChanges neu auslösen
             $this->WriteAttributeBoolean('MigratedToV4', true);
-
-            $this->SendDebug('Migration', 'V3.17 Initial-Migration durchgeführt', 0);
-
-            // <<< WICHTIG >>>
+            IPS_SetProperty($this->InstanceID, 'IDListe', json_encode($new));
+            IPS_ApplyChanges($this->InstanceID);
             return;
         }
-
         //Ende der Migrationsroutine
-
-        //Never delete this line!
-        parent::ApplyChanges();
 
         //Variableprofile erstellen wenn nicht vorhanden
         require_once __DIR__ . '/variable_profile.php';
