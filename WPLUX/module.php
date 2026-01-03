@@ -826,9 +826,6 @@ class Luxtronik extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
-        // -----------------------------
-        // 1) java_3004.php laden (Namen der IDs)
-        // -----------------------------
         $dataset = [];
         $javaFile = __DIR__ . '/java_3004.php';
         if (is_file($javaFile)) {
@@ -838,17 +835,11 @@ class Luxtronik extends IPSModuleStrict
             }
         }
 
-        // -----------------------------
-        // 2) Bisher gespeicherte IDListe lesen
-        //    Original: List mit Spalte "id"
-        //    Neu: wir erweitern um "enabled" Checkbox, behalten aber "id"!
-        // -----------------------------
         $saved = json_decode($this->ReadPropertyString('IDListe'), true);
         if (!is_array($saved)) {
             $saved = [];
         }
 
-        // Map: id -> enabled (default: true wenn vorher schon drin war)
         $enabledMap = [];
         foreach ($saved as $row) {
             if (is_array($row) && isset($row['id'])) {
@@ -856,7 +847,6 @@ class Luxtronik extends IPSModuleStrict
             }
         }
 
-        // Liste komplett aufbauen (alle IDs aus java_3004.php anzeigen)
         $values = [];
         foreach ($dataset as $id => $name) {
             $id = (int)$id;
@@ -867,12 +857,8 @@ class Luxtronik extends IPSModuleStrict
             ];
         }
 
-        // nach ID sortieren
         usort($values, fn($a, $b) => ($a['id'] <=> $b['id']));
 
-        // -----------------------------
-        // 3) Formular (alle originalen Property-Namen verwenden!)
-        // -----------------------------
         $timerOptions = [
             ['caption' => 'deaktiviert', 'value' => 0],
             ['caption' => '1 Zeitfenster', 'value' => 1],
@@ -884,8 +870,60 @@ class Luxtronik extends IPSModuleStrict
 
         $form = [
             'elements' => [
+                // ---- Verbindung
+                [
+                    'name'    => 'IPAddress',
+                    'type'    => 'ValidationTextBox',
+                    'caption' => 'IP-Address'
+                ],
+                [
+                    'name'    => 'Port',
+                    'type'    => 'NumberSpinner',
+                    'caption' => 'Port (8888 oder 8889)'
+                ],
+                [
+                    'name'    => 'UpdateInterval',
+                    'type'    => 'IntervalBox',
+                    'caption' => 'Sekunden'
+                ],
 
-                // ---- Timer / Zusatz-Config (aus deinem originalen form.json)
+                // ---- IDListe: statt “manuell IDs eintippen” jetzt Checkbox-Auswahl
+                [
+                    'type'    => 'List',
+                    'name'    => 'IDListe',
+                    'caption' => "Überwachte ID's",
+                    'rowCount' => 15,
+
+                    'loadValuesFromConfiguration' => false,
+                    'add'    => false,
+                    'delete' => false,
+                    'sort'   => ['column' => 'id', 'direction' => 'ascending'],
+
+                    'columns' => [
+                        [
+                            'name'    => 'enabled',
+                            'caption' => 'Aktiv',
+                            'width'   => '70',
+                            'save'    => true,
+                            'edit'    => ['type' => 'CheckBox']
+                        ],
+                        [
+                            'name'    => 'id',
+                            'caption' => 'ID des Wertes',
+                            'width'   => '150',
+                            'save'    => true,
+                            'edit'    => ['type' => 'NumberSpinner']
+                        ],
+                        [
+                            'name'    => 'name',
+                            'caption' => 'Name',
+                            'width'   => 'auto',
+                            'save'    => false
+                        ]
+                    ],
+
+                    'values' => $values
+                ],
                 [
                     'type'    => 'ExpansionPanel',
                     'caption' => 'Timer / Zusatzfunktionen',
@@ -969,61 +1007,6 @@ class Luxtronik extends IPSModuleStrict
                             ]
                         ]
                     ]
-                ],
-
-                // ---- Verbindung (originale Namen!)
-                [
-                    'name'    => 'IPAddress',
-                    'type'    => 'ValidationTextBox',
-                    'caption' => 'IP-Address'
-                ],
-                [
-                    'name'    => 'Port',
-                    'type'    => 'NumberSpinner',
-                    'caption' => 'Port (8888 oder 8889)'
-                ],
-                [
-                    'name'    => 'UpdateInterval',
-                    'type'    => 'IntervalBox',
-                    'caption' => 'Sekunden'
-                ],
-
-                // ---- IDListe: statt “manuell IDs eintippen” jetzt Checkbox-Auswahl
-                [
-                    'type'    => 'List',
-                    'name'    => 'IDListe',
-                    'caption' => "Überwachte ID's",
-                    'rowCount' => 15,
-
-                    'loadValuesFromConfiguration' => false,
-                    'add'    => false,
-                    'delete' => false,
-                    'sort'   => ['column' => 'id', 'direction' => 'ascending'],
-
-                    'columns' => [
-                        [
-                            'name'    => 'enabled',
-                            'caption' => 'Aktiv',
-                            'width'   => '70',
-                            'save'    => true,
-                            'edit'    => ['type' => 'CheckBox']
-                        ],
-                        [
-                            'name'    => 'id',
-                            'caption' => 'ID des Wertes',
-                            'width'   => '150',
-                            'save'    => true,
-                            'edit'    => ['type' => 'NumberSpinner']
-                        ],
-                        [
-                            'name'    => 'name',
-                            'caption' => 'Name',
-                            'width'   => 'auto',
-                            'save'    => false
-                        ]
-                    ],
-
-                    'values' => $values
                 ]
             ],
 
