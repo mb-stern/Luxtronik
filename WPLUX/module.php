@@ -827,7 +827,7 @@ class Luxtronik extends IPSModuleStrict
 public function GetConfigurationForm(): string
 {
     // -----------------------------
-    // 1) java_3004.php laden
+    // 1) java_3004.php laden (Namen der IDs)
     // -----------------------------
     $dataset = [];
     $javaFile = __DIR__ . '/java_3004.php';
@@ -839,170 +839,179 @@ public function GetConfigurationForm(): string
     }
 
     // -----------------------------
-    // 2) IDListe (List-Property) einlesen und Enabled-Mapping bauen
-    //    Format: [{"Enabled":true,"ID":123,"Name":"..."}...]
+    // 2) Bisher gespeicherte IDListe lesen
+    //    Original: List mit Spalte "id"
+    //    Neu: wir erweitern um "enabled" Checkbox, behalten aber "id"!
     // -----------------------------
     $saved = json_decode($this->ReadPropertyString('IDListe'), true);
     if (!is_array($saved)) {
         $saved = [];
     }
 
+    // Map: id -> enabled (default: true wenn vorher schon drin war)
     $enabledMap = [];
     foreach ($saved as $row) {
-        if (is_array($row) && isset($row['ID'])) {
-            $enabledMap[(int)$row['ID']] = (bool)($row['Enabled'] ?? false);
+        if (is_array($row) && isset($row['id'])) {
+            $enabledMap[(int)$row['id']] = (bool)($row['enabled'] ?? true);
         }
     }
 
-    // Werte für List erzeugen (Name aus Dataset, Enabled aus Property)
+    // Liste komplett aufbauen (alle IDs aus java_3004.php anzeigen)
     $values = [];
     foreach ($dataset as $id => $name) {
         $id = (int)$id;
         $values[] = [
-            'Enabled' => $enabledMap[$id] ?? false,
-            'ID'      => $id,
-            'Name'    => (string)$name
+            'enabled' => $enabledMap[$id] ?? false,
+            'id'      => $id,
+            'name'    => (string)$name
         ];
     }
-    usort($values, fn($a, $b) => ($a['ID'] <=> $b['ID']));
+
+    // nach ID sortieren
+    usort($values, fn($a, $b) => ($a['id'] <=> $b['id']));
 
     // -----------------------------
-    // 3) Formular bauen
-    //    HINWEIS: Passe die Property-Namen an deine Create()-RegisterProperty*() an!
+    // 3) Formular (alle originalen Property-Namen verwenden!)
     // -----------------------------
+    $timerOptions = [
+        ['caption' => 'deaktiviert', 'value' => 0],
+        ['caption' => '1 Zeitfenster', 'value' => 1],
+        ['caption' => '2 Zeitfenster', 'value' => 2],
+        ['caption' => '3 Zeitfenster', 'value' => 3],
+        ['caption' => '4 Zeitfenster', 'value' => 4],
+        ['caption' => '5 Zeitfenster', 'value' => 5]
+    ];
+
     $form = [
-        'status' => [
-            ['code' => 101, 'icon' => 'active',   'caption' => 'Instanz ist aktiv'],
-            ['code' => 102, 'icon' => 'inactive', 'caption' => 'Instanz ist nicht aktiv (Konfiguration unvollständig?)'],
-            ['code' => 200, 'icon' => 'error',    'caption' => 'Fehler']
-        ],
         'elements' => [
 
-            // Kopfbereich
-            [
-                'type'    => 'Label',
-                'caption' => 'WPLUX / Modulkonfiguration'
-            ],
-
-            // -----------------------------
-            // Verbindung / Zugangsdaten
-            // (ANPASSEN: names müssen exakt zu deinen Properties passen)
-            // -----------------------------
+            // ---- Timer / Zusatz-Config (aus deinem originalen form.json)
             [
                 'type'    => 'ExpansionPanel',
-                'caption' => 'Verbindung',
+                'caption' => 'Timer / Zusatzfunktionen',
                 'items'   => [
                     [
-                        'type'    => 'ValidationTextBox',
-                        'name'    => 'Host',              // <-- ggf. anpassen
-                        'caption' => 'Host / IP'
+                        'type'    => 'Select',
+                        'name'    => 'BW_TimerWeekVisible',
+                        'caption' => 'Timer Mo-Fr Heizung',
+                        'options' => $timerOptions
                     ],
                     [
-                        'type'    => 'NumberSpinner',
-                        'name'    => 'Port',              // <-- ggf. anpassen
-                        'caption' => 'Port',
-                        'minimum' => 1,
-                        'maximum' => 65535
+                        'type'    => 'Select',
+                        'name'    => 'BW_TimerWeekendVisible',
+                        'caption' => 'Timer Mo-Fr/Sa+So Warmwasser',
+                        'options' => $timerOptions
                     ],
                     [
-                        'type'    => 'ValidationTextBox',
-                        'name'    => 'Username',          // <-- ggf. anpassen
-                        'caption' => 'Benutzername'
-                    ],
-                    [
-                        'type'    => 'PasswordTextBox',
-                        'name'    => 'Password',          // <-- ggf. anpassen
-                        'caption' => 'Passwort'
-                    ]
-                ]
-            ],
-
-            // -----------------------------
-            // Intervall / Optionen
-            // -----------------------------
-            [
-                'type'    => 'ExpansionPanel',
-                'caption' => 'Optionen',
-                'items'   => [
-                    [
-                        'type'    => 'NumberSpinner',
-                        'name'    => 'Interval',          // <-- ggf. anpassen (Sekunden/Minuten?)
-                        'caption' => 'Update-Intervall (Sek.)',
-                        'minimum' => 1,
-                        'maximum' => 86400
-                    ],
-                    [
-                        'type'    => 'CheckBox',
-                        'name'    => 'Debug',             // <-- ggf. anpassen
-                        'caption' => 'Debug-Ausgaben'
-                    ]
-                ]
-            ],
-
-            // -----------------------------
-            // Messwerte-Auswahl (Checkbox-Spalte)
-            // -----------------------------
-            [
-                'type'    => 'ExpansionPanel',
-                'caption' => 'Messwerte (Auswahl via Checkbox)',
-                'items'   => [
-                    [
-                        'type'    => 'List',
-                        'name'    => 'IDListe',           // <-- bleibt Property, wird gespeichert
-                        'caption' => 'Messwerte',
-                        'rowCount' => 15,
-                        'add'     => false,
-                        'delete'  => false,
-                        'sort'    => ['column' => 'ID', 'direction' => 'ascending'],
-
-                        // Wir liefern values selbst => deterministisch aus java_3004.php
-                        'loadValuesFromConfiguration' => false,
-
-                        'columns' => [
-                            [
-                                'caption' => 'Aktiv',
-                                'name'    => 'Enabled',
-                                'width'   => '70px',
-                                'save'    => true,
-                                'edit'    => ['type' => 'CheckBox']
-                            ],
-                            [
-                                'caption' => 'ID',
-                                'name'    => 'ID',
-                                'width'   => '80px',
-                                'save'    => true
-                            ],
-                            [
-                                'caption' => 'Name',
-                                'name'    => 'Name',
-                                'width'   => 'auto',
-                                'save'    => false
-                            ]
-                        ],
-                        'values' => $values
+                        'type'    => 'Select',
+                        'name'    => 'BW_TimerDayVisible',
+                        'caption' => 'Timer Tage Warmwasser',
+                        'options' => $timerOptions
                     ],
                     [
                         'type'    => 'Label',
-                        'caption' => 'Tipp: Häkchen setzen = Wert wird verarbeitet.'
+                        'caption' => 'JAZ & COP berechnen',
+                        'bold'    => true
+                    ],
+                    [
+                        'type'  => 'RowLayout',
+                        'items' => [
+                            [
+                                'type'    => 'SelectVariable',
+                                'name'    => 'kwin',
+                                'caption' => 'Eingangsleistung zur Berechnung des COP (kW)'
+                            ],
+                            [
+                                'type'    => 'SelectVariable',
+                                'name'    => 'kwhin',
+                                'caption' => 'Eingangsenergie zur Berechnung des JAZ (kWh)'
+                            ],
+                            [
+                                'type'    => 'SelectVariable',
+                                'name'    => 'kwhout',
+                                'caption' => 'Externer Wärmemengenzähler für JAZ (kWh)'
+                            ],
+                            [
+                                'type'    => 'Button',
+                                'label'   => 'JAZ-Berechnung zurücksetzen',
+                                'onClick' => 'WPLUX_reset_jaz($id);'
+                            ]
+                        ]
                     ]
                 ]
+            ],
+
+            // ---- Verbindung (originale Namen!)
+            [
+                'name'    => 'IPAddress',
+                'type'    => 'ValidationTextBox',
+                'caption' => 'IP-Address'
+            ],
+            [
+                'name'    => 'Port',
+                'type'    => 'NumberSpinner',
+                'caption' => 'Port (8888 oder 8889)'
+            ],
+            [
+                'name'    => 'UpdateInterval',
+                'type'    => 'IntervalBox',
+                'caption' => 'Sekunden'
+            ],
+
+            // ---- IDListe: statt “manuell IDs eintippen” jetzt Checkbox-Auswahl
+            [
+                'type'    => 'List',
+                'name'    => 'IDListe',
+                'caption' => "Überwachte ID's",
+                'rowCount' => 15,
+
+                // ganz wichtig: wir erzeugen values selbst und mergen Enabled aus gespeicherter Config
+                'loadValuesFromConfiguration' => false,
+
+                // Benutzer soll NICHT mehr add/delete machen, sondern nur Checkboxen setzen
+                'add'    => false,
+                'delete' => false,
+                'sort'   => ['column' => 'id', 'direction' => 'ascending'],
+
+                'columns' => [
+                    [
+                        'name'    => 'enabled',
+                        'caption' => 'Aktiv',
+                        'width'   => '70',
+                        'save'    => true,
+                        'edit'    => ['type' => 'CheckBox']
+                    ],
+                    [
+                        'name'    => 'id',
+                        'caption' => 'ID des Wertes',
+                        'width'   => '150',
+                        'save'    => true,
+                        'edit'    => ['type' => 'NumberSpinner']
+                    ],
+                    [
+                        'name'    => 'name',
+                        'caption' => 'Name',
+                        'width'   => 'auto',
+                        'save'    => false
+                    ]
+                ],
+
+                'values' => $values
             ]
         ],
 
-        // -----------------------------
-        // Aktionen
-        // -----------------------------
         'actions' => [
             [
                 'type'    => 'Button',
                 'caption' => 'Jetzt aktualisieren',
-                'onClick' => 'WPLUX_Update($id);' // falls deine Methode anders heisst: anpassen
+                'onClick' => 'WPLUX_Update($id);'
             ]
         ]
     ];
 
     return json_encode($form);
 }
+
 
 
 
