@@ -1016,116 +1016,136 @@ public function GetConfigurationForm(): string
 
 
     public function Update()
-    {
-        //Verbindung zur Lux
-        $IpWwc = "{$this->ReadPropertyString('IPAddress')}";
-        $WwcJavaPort = "{$this->ReadPropertyInteger('Port')}";
-        $SiteTitle = "WÄRMEPUMPE";
+{
+    // Verbindung zur Lux
+    $IpWwc      = (string)$this->ReadPropertyString('IPAddress');
+    $WwcJavaPort = (int)$this->ReadPropertyInteger('Port');
+    $SiteTitle  = "WÄRMEPUMPE"; // falls du es später nutzt
 
-        // Namen der Variablen laden (3004 Berechnungen lesen)
-        require_once __DIR__ . '/java_3004.php';
+    // Namen der Variablen laden (3004 Berechnungen lesen)
+    require_once __DIR__ . '/java_3004.php';
 
-        // Lese die ID-Liste
-        $idListe = json_decode($this->ReadPropertyString('IDListe'), true);
-        if (!is_array($idListe)) $idListe = [];
-
-        foreach ($idListe as $row) {
-            $id = (int)($row['id'] ?? 0);
-            $enabled = (bool)($row['enabled'] ?? false);
-
-            if ($id <= 0 || !$enabled) {
-                continue;
-            }
-
-        // Socket verbinden
-        $socket = socket_create(AF_INET, SOCK_STREAM, 0);
-        $connect = socket_connect($socket, $IpWwc, $WwcJavaPort);
-
-        // Debug senden
-        if (!$connect)
-        {
-            $error_code = socket_last_error($socket);
-            $this->SendDebug("Socketverbindung", "Verbindung zum Socket fehlerhaft: " . $IpWwc . ":" . $WwcJavaPort . " Fehler: " . $error_code, 0);
-            $this->LogMessage("Verbindung zum Socket fehlerhaft: " . $IpWwc . ":" . $WwcJavaPort . " Fehler: " . $error_code, KL_ERROR);
-            socket_close($socket);
-            return;
-        }
-
-        $this->SendDebug("Socketverbindung", "Verbindung zum Socket erfolgreich: " . $IpWwc . ":" . $WwcJavaPort, 0);
-
-        // Daten holen
-        $msg = pack('N*',3004);
-        $send=socket_write($socket, $msg, 4); //3004 senden
-
-        $msg = pack('N*',0);
-        $send=socket_write($socket, $msg, 4); //0 senden
-
-        socket_recv($socket,$Test,4,MSG_WAITALL);  // Lesen, sollte 3004 zurückkommen
-        $Test = unpack('N*',$Test);
-
-        socket_recv($socket,$Test,4,MSG_WAITALL); // Status
-        $Test = unpack('N*',$Test);
-
-        socket_recv($socket,$Test,4,MSG_WAITALL); // Länge der nachfolgenden Werte
-        $Test = unpack('N*',$Test);
-
-        $JavaWerte = implode($Test);
-
-        for ($i = 0; $i < $JavaWerte; ++$i)//vorwärts
-        {
-            socket_recv($socket,$InBuff[$i],4,MSG_WAITALL);  // Lesen, sollte 3004 zurückkommen
-            $daten_raw[$i] = implode(unpack('N*',$InBuff[$i]));
-        }
-
-        socket_close($socket);
-
-        for ($i = 0; $i < $JavaWerte; ++$i) 
-        {
-            
-            //Hier startet der Ablauf um Werte abzugreifen, welche ohne Auswahl einer ID zur Berechnung an die Funktion gesandt werden
-            if ($i == 257) //Wärmeleistung an Funktion senden zur Berechnung des COP
-            {
-                $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
-                $this->calc_cop('cop', $value);
-            }  
-
-            if ($i == 151) //Wärmemenge Heizung erfassen zur Berechnung des JAZ
-            {
-                $value_out_heizung = $this->convertValueBasedOnID($daten_raw[$i], $i);
-            }
-
-            if ($i == 152) //Wärmemenge Warmwasser erfassen zur Berechnung des JAZ
-            {
-                $value_out_warmwasser = $this->convertValueBasedOnID($daten_raw[$i], $i);
-            }
-            
-            //Hier startet der allgemeine Ablauf zum aktualiseren der Variablen nach Auswahl der ID's durch den Anwender
-            if (in_array($i, array_column($idListe, 'id'))) 
-            {
-        
-                // Werte umrechnen wenn nötig
-                $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
-
-                // Direkte Erstellung oder Aktualisierung der Variable mit Ident und Positionsnummer
-                $ident = $java_dataset[$i];
-                $this->CreateOrUpdateVariable($ident, $value, $i);
-
-                // Debug senden
-                $this->SendDebug("Wert gesendet", "Der Wert: ".$daten_raw[$i]." der ID: ".$i." wurde erfasst, umgerechnet in: ".$value." und an die Funktion 'CreateOrUpdateVariable' gesandt", 0);
-
-            }   
-            
-            else 
-            {
-            // Variable löschen, da sie nicht mehr in der ID-Liste ist
-            $this->DeleteVariableIfExists($java_dataset[$i]);
-            }
-        }
-
-        //Hier wird die Wärmemenge von Heizung und Warmwasser addiert und zur Berechnung des JAZ an die Funktion gesendet
-        $value_out = $value_out_heizung + $value_out_warmwasser;
-        $this->calc_jaz('jaz', $value_out);  
+    // ID-Liste lesen (List-Property mit: enabled + id)
+    $idListe = json_decode($this->ReadPropertyString('IDListe'), true);
+    if (!is_array($idListe)) {
+        $idListe = [];
     }
+
+    // Enabled-IDs als Map für schnellen Lookup
+    $enabledIds = [];
+    foreach ($idListe as $row) {
+        $id = (int)($row['id'] ?? 0);
+        $enabled = (bool)($row['enabled'] ?? false);
+
+        if ($id > 0 && $enabled) {
+            $enabledIds[$id] = true;
+        }
+    }
+
+    // Socket verbinden
+    $socket = socket_create(AF_INET, SOCK_STREAM, 0);
+    $connect = @socket_connect($socket, $IpWwc, $WwcJavaPort);
+
+    if (!$connect) {
+        $error_code = socket_last_error($socket);
+        $this->SendDebug(
+            "Socketverbindung",
+            "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
+            0
+        );
+        $this->LogMessage(
+            "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
+            KL_ERROR
+        );
+        socket_close($socket);
+        return;
+    }
+
+    $this->SendDebug("Socketverbindung", "Verbindung zum Socket erfolgreich: {$IpWwc}:{$WwcJavaPort}", 0);
+
+    // Anfrage 3004 senden
+    $msg = pack('N*', 3004);
+    socket_write($socket, $msg, 4);
+
+    $msg = pack('N*', 0);
+    socket_write($socket, $msg, 4);
+
+    // Header lesen
+    socket_recv($socket, $Test, 4, MSG_WAITALL);  // sollte 3004 zurückkommen
+    $Test = unpack('N*', $Test);
+
+    socket_recv($socket, $Test, 4, MSG_WAITALL);  // Status
+    $Test = unpack('N*', $Test);
+
+    socket_recv($socket, $Test, 4, MSG_WAITALL);  // Länge der nachfolgenden Werte
+    $Test = unpack('N*', $Test);
+
+    $JavaWerte = (int)implode($Test);
+
+    // Daten lesen
+    $daten_raw = [];
+    $InBuff = [];
+
+    for ($i = 0; $i < $JavaWerte; ++$i) {
+        socket_recv($socket, $InBuff[$i], 4, MSG_WAITALL);
+        $daten_raw[$i] = (int)implode(unpack('N*', $InBuff[$i]));
+    }
+
+    socket_close($socket);
+
+    // Init für JAZ (falls 151/152 nicht vorkommen)
+    $value_out_heizung = 0;
+    $value_out_warmwasser = 0;
+
+    // Alle Werte einmal durchgehen
+    for ($i = 0; $i < $JavaWerte; ++$i) {
+
+        // --- Werte erfassen für COP/JAZ unabhängig von Auswahl ---
+        if ($i == 257) { // Wärmeleistung an Funktion senden zur Berechnung des COP
+            $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
+            $this->calc_cop('cop', $value);
+        }
+
+        if ($i == 151) { // Wärmemenge Heizung
+            $value_out_heizung = $this->convertValueBasedOnID($daten_raw[$i], $i);
+        }
+
+        if ($i == 152) { // Wärmemenge Warmwasser
+            $value_out_warmwasser = $this->convertValueBasedOnID($daten_raw[$i], $i);
+        }
+
+        // --- Nur ausgewählte IDs verarbeiten ---
+        if (isset($enabledIds[$i])) {
+
+            // umrechnen wenn nötig
+            $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
+
+            // Ident aus Dataset, Fallback falls nicht vorhanden
+            $ident = $java_dataset[$i] ?? ('ID_' . $i);
+
+            // Variable anlegen/aktualisieren
+            $this->CreateOrUpdateVariable($ident, $value, $i);
+
+            // Debug
+            $this->SendDebug(
+                "Wert gesendet",
+                "Der Wert: {$daten_raw[$i]} der ID: {$i} wurde erfasst, umgerechnet in: {$value} und an 'CreateOrUpdateVariable' gesandt",
+                0
+            );
+
+        } else {
+            // Variable löschen, da nicht ausgewählt
+            if (isset($java_dataset[$i])) {
+                $this->DeleteVariableIfExists($java_dataset[$i]);
+            }
+        }
+    }
+
+    // JAZ berechnen
+    $value_out = $value_out_heizung + $value_out_warmwasser;
+    $this->calc_jaz('jaz', $value_out);
+}
+
     
     private function convertValueBasedOnID($value, $id)
     {
