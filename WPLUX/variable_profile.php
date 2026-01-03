@@ -169,8 +169,8 @@ if (!IPS_VariableProfileExists("WPLUX.lh")) {
     IPS_SetVariableProfileText("WPLUX.lh", "", " l/h"); //Präfix, Suffix
     $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.lh erstellt", 0);   
 }
-if (!IPS_VariableProfileExists("WPLUX.Wwhe")) {
-    IPS_CreateVariableProfile("WPLUX.Wwhe", 1); //1 für Integer
+if (!IPS_VariableProfileExists("WPLUX.Wwhe")) 
+    IPS_CreateVariableProfile("WPLUX.Wwhe", 1);{ //1 für Integer
     IPS_SetVariableProfileValues("WPLUX.Wwhe", 0, 4, 0); //Min, Max, Schritt
     IPS_SetVariableProfileDigits("WPLUX.Wwhe", 0); //Nachkommastellen
     IPS_SetVariableProfileText("WPLUX.Wwhe", "", ""); //Präfix, Suffix
@@ -181,8 +181,8 @@ if (!IPS_VariableProfileExists("WPLUX.Wwhe")) {
     IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 4, "Aus", "", -1);
     $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Wwhe erstellt", 0);   
 }
-if (!IPS_VariableProfileExists("WPLUX.Kue")) {
-    IPS_CreateVariableProfile("WPLUX.Kue", 1); //1 für Integer
+if (!IPS_VariableProfileExists("WPLUX.Kue")) 
+    IPS_CreateVariableProfile("WPLUX.Kue", 1);{ //1 für Integer
     IPS_SetVariableProfileValues("WPLUX.Kue", 0, 1, 0); //Min, Max, Schritt
     IPS_SetVariableProfileDigits("WPLUX.Kue", 0); //Nachkommastellen
     IPS_SetVariableProfileText("WPLUX.Kue", "", ""); //Präfix, Suffix
