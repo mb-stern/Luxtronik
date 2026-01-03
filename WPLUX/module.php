@@ -66,7 +66,7 @@ class Luxtronik extends IPSModuleStrict
                 json_encode(array_values($existing))
             );
 
-            $this->WriteAttributeBoolean('MigratedTo317', true);
+            $this->WriteAttributeBoolean('MigratedToV4', true);
 
             $this->SendDebug('Migration', 'V3.17 Initial-Migration durchgeführt', 0);
 
