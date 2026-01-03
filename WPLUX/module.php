@@ -1027,6 +1027,15 @@ public function GetConfigurationForm(): string
 
         // Lese die ID-Liste
         $idListe = json_decode($this->ReadPropertyString('IDListe'), true);
+        if (!is_array($idListe)) $idListe = [];
+
+        foreach ($idListe as $row) {
+            $id = (int)($row['id'] ?? 0);
+            $enabled = (bool)($row['enabled'] ?? false);
+
+            if ($id <= 0 || !$enabled) {
+                continue;
+            }
 
         // Socket verbinden
         $socket = socket_create(AF_INET, SOCK_STREAM, 0);
