@@ -824,356 +824,352 @@ class Luxtronik extends IPSModuleStrict
         }
     }
 
-public function GetConfigurationForm(): string
-{
-    // -----------------------------
-    // 1) java_3004.php laden (Namen der IDs)
-    // -----------------------------
-    $dataset = [];
-    $javaFile = __DIR__ . '/java_3004.php';
-    if (is_file($javaFile)) {
-        require_once $javaFile; // erwartet: $java_dataset
-        if (isset($java_dataset) && is_array($java_dataset)) {
-            $dataset = $java_dataset;
+    public function GetConfigurationForm(): string
+    {
+        // -----------------------------
+        // 1) java_3004.php laden (Namen der IDs)
+        // -----------------------------
+        $dataset = [];
+        $javaFile = __DIR__ . '/java_3004.php';
+        if (is_file($javaFile)) {
+            require_once $javaFile; // erwartet: $java_dataset
+            if (isset($java_dataset) && is_array($java_dataset)) {
+                $dataset = $java_dataset;
+            }
         }
-    }
 
-    // -----------------------------
-    // 2) Bisher gespeicherte IDListe lesen
-    //    Original: List mit Spalte "id"
-    //    Neu: wir erweitern um "enabled" Checkbox, behalten aber "id"!
-    // -----------------------------
-    $saved = json_decode($this->ReadPropertyString('IDListe'), true);
-    if (!is_array($saved)) {
-        $saved = [];
-    }
-
-    // Map: id -> enabled (default: true wenn vorher schon drin war)
-    $enabledMap = [];
-    foreach ($saved as $row) {
-        if (is_array($row) && isset($row['id'])) {
-            $enabledMap[(int)$row['id']] = (bool)($row['enabled'] ?? true);
+        // -----------------------------
+        // 2) Bisher gespeicherte IDListe lesen
+        //    Original: List mit Spalte "id"
+        //    Neu: wir erweitern um "enabled" Checkbox, behalten aber "id"!
+        // -----------------------------
+        $saved = json_decode($this->ReadPropertyString('IDListe'), true);
+        if (!is_array($saved)) {
+            $saved = [];
         }
-    }
 
-    // Liste komplett aufbauen (alle IDs aus java_3004.php anzeigen)
-    $values = [];
-    foreach ($dataset as $id => $name) {
-        $id = (int)$id;
-        $values[] = [
-            'enabled' => $enabledMap[$id] ?? false,
-            'id'      => $id,
-            'name'    => (string)$name
+        // Map: id -> enabled (default: true wenn vorher schon drin war)
+        $enabledMap = [];
+        foreach ($saved as $row) {
+            if (is_array($row) && isset($row['id'])) {
+                $enabledMap[(int)$row['id']] = (bool)($row['enabled'] ?? true);
+            }
+        }
+
+        // Liste komplett aufbauen (alle IDs aus java_3004.php anzeigen)
+        $values = [];
+        foreach ($dataset as $id => $name) {
+            $id = (int)$id;
+            $values[] = [
+                'enabled' => $enabledMap[$id] ?? false,
+                'id'      => $id,
+                'name'    => (string)$name
+            ];
+        }
+
+        // nach ID sortieren
+        usort($values, fn($a, $b) => ($a['id'] <=> $b['id']));
+
+        // -----------------------------
+        // 3) Formular (alle originalen Property-Namen verwenden!)
+        // -----------------------------
+        $timerOptions = [
+            ['caption' => 'deaktiviert', 'value' => 0],
+            ['caption' => '1 Zeitfenster', 'value' => 1],
+            ['caption' => '2 Zeitfenster', 'value' => 2],
+            ['caption' => '3 Zeitfenster', 'value' => 3],
+            ['caption' => '4 Zeitfenster', 'value' => 4],
+            ['caption' => '5 Zeitfenster', 'value' => 5]
         ];
-    }
 
-    // nach ID sortieren
-    usort($values, fn($a, $b) => ($a['id'] <=> $b['id']));
+        $form = [
+            'elements' => [
 
-    // -----------------------------
-    // 3) Formular (alle originalen Property-Namen verwenden!)
-    // -----------------------------
-    $timerOptions = [
-        ['caption' => 'deaktiviert', 'value' => 0],
-        ['caption' => '1 Zeitfenster', 'value' => 1],
-        ['caption' => '2 Zeitfenster', 'value' => 2],
-        ['caption' => '3 Zeitfenster', 'value' => 3],
-        ['caption' => '4 Zeitfenster', 'value' => 4],
-        ['caption' => '5 Zeitfenster', 'value' => 5]
-    ];
-
-    $form = [
-        'elements' => [
-
-            // ---- Timer / Zusatz-Config (aus deinem originalen form.json)
-            [
-                'type'    => 'ExpansionPanel',
-                'caption' => 'Timer / Zusatzfunktionen',
-                'items'   => [
-                    [
-                    'type'    => 'CheckBox',
-                    'name'    => 'HeizungVisible',
-                        'caption' => 'Steuervariable für Heizungs-Modus aktivieren'
-                    ],
-                    [
+                // ---- Timer / Zusatz-Config (aus deinem originalen form.json)
+                [
+                    'type'    => 'ExpansionPanel',
+                    'caption' => 'Timer / Zusatzfunktionen',
+                    'items'   => [
+                        [
                         'type'    => 'CheckBox',
-                        'name'    => 'WarmwasserVisible',
-                        'caption' => 'Steuervariable für Warmwasser-Modus aktivieren'
-                    ],
-                    [
-                    'type'    => 'CheckBox',
-                    'name'    => 'KuehlungVisible',
-                    'caption' => 'Steuervariable für Kühlungs-Modus aktivieren'
-                    ],
-                    [
+                        'name'    => 'HeizungVisible',
+                            'caption' => 'Steuervariable für Heizungs-Modus aktivieren'
+                        ],
+                        [
+                            'type'    => 'CheckBox',
+                            'name'    => 'WarmwasserVisible',
+                            'caption' => 'Steuervariable für Warmwasser-Modus aktivieren'
+                        ],
+                        [
                         'type'    => 'CheckBox',
-                        'name'    => 'TempsetVisible',
-                        'caption' => 'Steuervariable für Temperaturkorrektur aktivieren'
-                    ],
-                    [
-                    'type'    => 'CheckBox',
-                    'name'    => 'WWsetVisible',
-                    'caption' => 'Steuervariable für Warmwasser-Soll aktivieren'
-                    ],
-                    [
+                        'name'    => 'KuehlungVisible',
+                        'caption' => 'Steuervariable für Kühlungs-Modus aktivieren'
+                        ],
+                        [
+                            'type'    => 'CheckBox',
+                            'name'    => 'TempsetVisible',
+                            'caption' => 'Steuervariable für Temperaturkorrektur aktivieren'
+                        ],
+                        [
                         'type'    => 'CheckBox',
-                        'name'    => 'RBEsetVisible',
-                        'caption' => 'Steuervariable für Raumbedieneinheit aktivieren'
-                    ],
-                    [
-                        'type'    => 'Select',
-                        'name'    => 'BW_TimerWeekVisible',
-                        'caption' => 'Timer Mo-Fr Heizung',
-                        'options' => $timerOptions
-                    ],
-                    [
-                        'type'    => 'Select',
-                        'name'    => 'BW_TimerWeekendVisible',
-                        'caption' => 'Timer Mo-Fr/Sa+So Warmwasser',
-                        'options' => $timerOptions
-                    ],
-                    [
-                        'type'    => 'Select',
-                        'name'    => 'BW_TimerDayVisible',
-                        'caption' => 'Timer Tage Warmwasser',
-                        'options' => $timerOptions
-                    ],
-                    [
-                        'type'    => 'Label',
-                        'caption' => 'JAZ & COP berechnen',
-                        'bold'    => true
-                    ],
-                    [
-                        'type'  => 'RowLayout',
-                        'items' => [
-                            [
-                                'type'    => 'SelectVariable',
-                                'name'    => 'kwin',
-                                'caption' => 'Eingangsleistung zur Berechnung des COP (kW)'
-                            ],
-                            [
-                                'type'    => 'SelectVariable',
-                                'name'    => 'kwhin',
-                                'caption' => 'Eingangsenergie zur Berechnung des JAZ (kWh)'
-                            ],
-                            [
-                                'type'    => 'SelectVariable',
-                                'name'    => 'kwhout',
-                                'caption' => 'Externer Wärmemengenzähler für JAZ (kWh)'
-                            ],
-                            [
-                                'type'    => 'Button',
-                                'label'   => 'JAZ-Berechnung zurücksetzen',
-                                'onClick' => 'WPLUX_reset_jaz($id);'
+                        'name'    => 'WWsetVisible',
+                        'caption' => 'Steuervariable für Warmwasser-Soll aktivieren'
+                        ],
+                        [
+                            'type'    => 'CheckBox',
+                            'name'    => 'RBEsetVisible',
+                            'caption' => 'Steuervariable für Raumbedieneinheit aktivieren'
+                        ],
+                        [
+                            'type'    => 'Select',
+                            'name'    => 'BW_TimerWeekVisible',
+                            'caption' => 'Timer Mo-Fr Heizung',
+                            'options' => $timerOptions
+                        ],
+                        [
+                            'type'    => 'Select',
+                            'name'    => 'BW_TimerWeekendVisible',
+                            'caption' => 'Timer Mo-Fr/Sa+So Warmwasser',
+                            'options' => $timerOptions
+                        ],
+                        [
+                            'type'    => 'Select',
+                            'name'    => 'BW_TimerDayVisible',
+                            'caption' => 'Timer Tage Warmwasser',
+                            'options' => $timerOptions
+                        ],
+                        [
+                            'type'    => 'Label',
+                            'caption' => 'JAZ & COP berechnen',
+                            'bold'    => true
+                        ],
+                        [
+                            'type'  => 'RowLayout',
+                            'items' => [
+                                [
+                                    'type'    => 'SelectVariable',
+                                    'name'    => 'kwin',
+                                    'caption' => 'Eingangsleistung zur Berechnung des COP (kW)'
+                                ],
+                                [
+                                    'type'    => 'SelectVariable',
+                                    'name'    => 'kwhin',
+                                    'caption' => 'Eingangsenergie zur Berechnung des JAZ (kWh)'
+                                ],
+                                [
+                                    'type'    => 'SelectVariable',
+                                    'name'    => 'kwhout',
+                                    'caption' => 'Externer Wärmemengenzähler für JAZ (kWh)'
+                                ],
+                                [
+                                    'type'    => 'Button',
+                                    'label'   => 'JAZ-Berechnung zurücksetzen',
+                                    'onClick' => 'WPLUX_reset_jaz($id);'
+                                ]
                             ]
                         ]
                     ]
+                ],
+
+                // ---- Verbindung (originale Namen!)
+                [
+                    'name'    => 'IPAddress',
+                    'type'    => 'ValidationTextBox',
+                    'caption' => 'IP-Address'
+                ],
+                [
+                    'name'    => 'Port',
+                    'type'    => 'NumberSpinner',
+                    'caption' => 'Port (8888 oder 8889)'
+                ],
+                [
+                    'name'    => 'UpdateInterval',
+                    'type'    => 'IntervalBox',
+                    'caption' => 'Sekunden'
+                ],
+
+                // ---- IDListe: statt “manuell IDs eintippen” jetzt Checkbox-Auswahl
+                [
+                    'type'    => 'List',
+                    'name'    => 'IDListe',
+                    'caption' => "Überwachte ID's",
+                    'rowCount' => 15,
+
+                    'loadValuesFromConfiguration' => false,
+                    'add'    => false,
+                    'delete' => false,
+                    'sort'   => ['column' => 'id', 'direction' => 'ascending'],
+
+                    'columns' => [
+                        [
+                            'name'    => 'enabled',
+                            'caption' => 'Aktiv',
+                            'width'   => '70',
+                            'save'    => true,
+                            'edit'    => ['type' => 'CheckBox']
+                        ],
+                        [
+                            'name'    => 'id',
+                            'caption' => 'ID des Wertes',
+                            'width'   => '150',
+                            'save'    => true,
+                            'edit'    => ['type' => 'NumberSpinner']
+                        ],
+                        [
+                            'name'    => 'name',
+                            'caption' => 'Name',
+                            'width'   => 'auto',
+                            'save'    => false
+                        ]
+                    ],
+
+                    'values' => $values
                 ]
             ],
 
-            // ---- Verbindung (originale Namen!)
-            [
-                'name'    => 'IPAddress',
-                'type'    => 'ValidationTextBox',
-                'caption' => 'IP-Address'
-            ],
-            [
-                'name'    => 'Port',
-                'type'    => 'NumberSpinner',
-                'caption' => 'Port (8888 oder 8889)'
-            ],
-            [
-                'name'    => 'UpdateInterval',
-                'type'    => 'IntervalBox',
-                'caption' => 'Sekunden'
-            ],
-
-            // ---- IDListe: statt “manuell IDs eintippen” jetzt Checkbox-Auswahl
-            [
-                'type'    => 'List',
-                'name'    => 'IDListe',
-                'caption' => "Überwachte ID's",
-                'rowCount' => 15,
-
-                'loadValuesFromConfiguration' => false,
-                'add'    => false,
-                'delete' => false,
-                'sort'   => ['column' => 'id', 'direction' => 'ascending'],
-
-                'columns' => [
-                    [
-                        'name'    => 'enabled',
-                        'caption' => 'Aktiv',
-                        'width'   => '70',
-                        'save'    => true,
-                        'edit'    => ['type' => 'CheckBox']
-                    ],
-                    [
-                        'name'    => 'id',
-                        'caption' => 'ID des Wertes',
-                        'width'   => '150',
-                        'save'    => true,
-                        'edit'    => ['type' => 'NumberSpinner']
-                    ],
-                    [
-                        'name'    => 'name',
-                        'caption' => 'Name',
-                        'width'   => 'auto',
-                        'save'    => false
-                    ]
-                ],
-
-                'values' => $values
+            'actions' => [
+                [
+                    'type'    => 'Button',
+                    'caption' => 'Jetzt aktualisieren',
+                    'onClick' => 'WPLUX_Update($id);'
+                ]
             ]
-        ],
+        ];
 
-        'actions' => [
-            [
-                'type'    => 'Button',
-                'caption' => 'Jetzt aktualisieren',
-                'onClick' => 'WPLUX_Update($id);'
-            ]
-        ]
-    ];
-
-    return json_encode($form);
-}
-
-
-
+        return json_encode($form);
+    }
 
     public function Update()
-{
-    // Verbindung zur Lux
-    $IpWwc      = (string)$this->ReadPropertyString('IPAddress');
-    $WwcJavaPort = (int)$this->ReadPropertyInteger('Port');
-    $SiteTitle  = "WÄRMEPUMPE"; // falls du es später nutzt
+    {
+        // Verbindung zur Lux
+        $IpWwc      = (string)$this->ReadPropertyString('IPAddress');
+        $WwcJavaPort = (int)$this->ReadPropertyInteger('Port');
+        $SiteTitle  = "WÄRMEPUMPE"; // falls du es später nutzt
 
-    // Namen der Variablen laden (3004 Berechnungen lesen)
-    require_once __DIR__ . '/java_3004.php';
+        // Namen der Variablen laden (3004 Berechnungen lesen)
+        require_once __DIR__ . '/java_3004.php';
 
-    // ID-Liste lesen (List-Property mit: enabled + id)
-    $idListe = json_decode($this->ReadPropertyString('IDListe'), true);
-    if (!is_array($idListe)) {
-        $idListe = [];
-    }
-
-    // Enabled-IDs als Map für schnellen Lookup
-    $enabledIds = [];
-    foreach ($idListe as $row) {
-        $id = (int)($row['id'] ?? 0);
-        $enabled = (bool)($row['enabled'] ?? false);
-
-        if ($id > 0 && $enabled) {
-            $enabledIds[$id] = true;
-        }
-    }
-
-    // Socket verbinden
-    $socket = socket_create(AF_INET, SOCK_STREAM, 0);
-    $connect = @socket_connect($socket, $IpWwc, $WwcJavaPort);
-
-    if (!$connect) {
-        $error_code = socket_last_error($socket);
-        $this->SendDebug(
-            "Socketverbindung",
-            "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
-            0
-        );
-        $this->LogMessage(
-            "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
-            KL_ERROR
-        );
-        socket_close($socket);
-        return;
-    }
-
-    $this->SendDebug("Socketverbindung", "Verbindung zum Socket erfolgreich: {$IpWwc}:{$WwcJavaPort}", 0);
-
-    // Anfrage 3004 senden
-    $msg = pack('N*', 3004);
-    socket_write($socket, $msg, 4);
-
-    $msg = pack('N*', 0);
-    socket_write($socket, $msg, 4);
-
-    // Header lesen
-    socket_recv($socket, $Test, 4, MSG_WAITALL);  // sollte 3004 zurückkommen
-    $Test = unpack('N*', $Test);
-
-    socket_recv($socket, $Test, 4, MSG_WAITALL);  // Status
-    $Test = unpack('N*', $Test);
-
-    socket_recv($socket, $Test, 4, MSG_WAITALL);  // Länge der nachfolgenden Werte
-    $Test = unpack('N*', $Test);
-
-    $JavaWerte = (int)implode($Test);
-
-    // Daten lesen
-    $daten_raw = [];
-    $InBuff = [];
-
-    for ($i = 0; $i < $JavaWerte; ++$i) {
-        socket_recv($socket, $InBuff[$i], 4, MSG_WAITALL);
-        $daten_raw[$i] = (int)implode(unpack('N*', $InBuff[$i]));
-    }
-
-    socket_close($socket);
-
-    // Init für JAZ (falls 151/152 nicht vorkommen)
-    $value_out_heizung = 0;
-    $value_out_warmwasser = 0;
-
-    // Alle Werte einmal durchgehen
-    for ($i = 0; $i < $JavaWerte; ++$i) {
-
-        // --- Werte erfassen für COP/JAZ unabhängig von Auswahl ---
-        if ($i == 257) { // Wärmeleistung an Funktion senden zur Berechnung des COP
-            $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
-            $this->calc_cop('cop', $value);
+        // ID-Liste lesen (List-Property mit: enabled + id)
+        $idListe = json_decode($this->ReadPropertyString('IDListe'), true);
+        if (!is_array($idListe)) {
+            $idListe = [];
         }
 
-        if ($i == 151) { // Wärmemenge Heizung
-            $value_out_heizung = $this->convertValueBasedOnID($daten_raw[$i], $i);
-        }
+        // Enabled-IDs als Map für schnellen Lookup
+        $enabledIds = [];
+        foreach ($idListe as $row) {
+            $id = (int)($row['id'] ?? 0);
+            $enabled = (bool)($row['enabled'] ?? false);
 
-        if ($i == 152) { // Wärmemenge Warmwasser
-            $value_out_warmwasser = $this->convertValueBasedOnID($daten_raw[$i], $i);
-        }
-
-        // --- Nur ausgewählte IDs verarbeiten ---
-        if (isset($enabledIds[$i])) {
-
-            // umrechnen wenn nötig
-            $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
-
-            // Ident aus Dataset, Fallback falls nicht vorhanden
-            $ident = $java_dataset[$i] ?? ('ID_' . $i);
-
-            // Variable anlegen/aktualisieren
-            $this->CreateOrUpdateVariable($ident, $value, $i);
-
-            // Debug
-            $this->SendDebug(
-                "Wert gesendet",
-                "Der Wert: {$daten_raw[$i]} der ID: {$i} wurde erfasst, umgerechnet in: {$value} und an 'CreateOrUpdateVariable' gesandt",
-                0
-            );
-
-        } else {
-            // Variable löschen, da nicht ausgewählt
-            if (isset($java_dataset[$i])) {
-                $this->DeleteVariableIfExists($java_dataset[$i]);
+            if ($id > 0 && $enabled) {
+                $enabledIds[$id] = true;
             }
         }
+
+        // Socket verbinden
+        $socket = socket_create(AF_INET, SOCK_STREAM, 0);
+        $connect = @socket_connect($socket, $IpWwc, $WwcJavaPort);
+
+        if (!$connect) {
+            $error_code = socket_last_error($socket);
+            $this->SendDebug(
+                "Socketverbindung",
+                "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
+                0
+            );
+            $this->LogMessage(
+                "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
+                KL_ERROR
+            );
+            socket_close($socket);
+            return;
+        }
+
+        $this->SendDebug("Socketverbindung", "Verbindung zum Socket erfolgreich: {$IpWwc}:{$WwcJavaPort}", 0);
+
+        // Anfrage 3004 senden
+        $msg = pack('N*', 3004);
+        socket_write($socket, $msg, 4);
+
+        $msg = pack('N*', 0);
+        socket_write($socket, $msg, 4);
+
+        // Header lesen
+        socket_recv($socket, $Test, 4, MSG_WAITALL);  // sollte 3004 zurückkommen
+        $Test = unpack('N*', $Test);
+
+        socket_recv($socket, $Test, 4, MSG_WAITALL);  // Status
+        $Test = unpack('N*', $Test);
+
+        socket_recv($socket, $Test, 4, MSG_WAITALL);  // Länge der nachfolgenden Werte
+        $Test = unpack('N*', $Test);
+
+        $JavaWerte = (int)implode($Test);
+
+        // Daten lesen
+        $daten_raw = [];
+        $InBuff = [];
+
+        for ($i = 0; $i < $JavaWerte; ++$i) {
+            socket_recv($socket, $InBuff[$i], 4, MSG_WAITALL);
+            $daten_raw[$i] = (int)implode(unpack('N*', $InBuff[$i]));
+        }
+
+        socket_close($socket);
+
+        // Init für JAZ (falls 151/152 nicht vorkommen)
+        $value_out_heizung = 0;
+        $value_out_warmwasser = 0;
+
+        // Alle Werte einmal durchgehen
+        for ($i = 0; $i < $JavaWerte; ++$i) {
+
+            // --- Werte erfassen für COP/JAZ unabhängig von Auswahl ---
+            if ($i == 257) { // Wärmeleistung an Funktion senden zur Berechnung des COP
+                $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
+                $this->calc_cop('cop', $value);
+            }
+
+            if ($i == 151) { // Wärmemenge Heizung
+                $value_out_heizung = $this->convertValueBasedOnID($daten_raw[$i], $i);
+            }
+
+            if ($i == 152) { // Wärmemenge Warmwasser
+                $value_out_warmwasser = $this->convertValueBasedOnID($daten_raw[$i], $i);
+            }
+
+            // --- Nur ausgewählte IDs verarbeiten ---
+            if (isset($enabledIds[$i])) {
+
+                // umrechnen wenn nötig
+                $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
+
+                // Ident aus Dataset, Fallback falls nicht vorhanden
+                $ident = $java_dataset[$i] ?? ('ID_' . $i);
+
+                // Variable anlegen/aktualisieren
+                $this->CreateOrUpdateVariable($ident, $value, $i);
+
+                // Debug
+                $this->SendDebug(
+                    "Wert gesendet",
+                    "Der Wert: {$daten_raw[$i]} der ID: {$i} wurde erfasst, umgerechnet in: {$value} und an 'CreateOrUpdateVariable' gesandt",
+                    0
+                );
+
+            } else {
+                // Variable löschen, da nicht ausgewählt
+                if (isset($java_dataset[$i])) {
+                    $this->DeleteVariableIfExists($java_dataset[$i]);
+                }
+            }
+        }
+
+        // JAZ berechnen
+        $value_out = $value_out_heizung + $value_out_warmwasser;
+        $this->calc_jaz('jaz', $value_out);
     }
 
-    // JAZ berechnen
-    $value_out = $value_out_heizung + $value_out_warmwasser;
-    $this->calc_jaz('jaz', $value_out);
-}
-
-    
     private function convertValueBasedOnID($value, $id)
     {
         // Hier erfolgt die Konvertierung der Werte basierend auf der 'id'
