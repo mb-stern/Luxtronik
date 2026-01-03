@@ -826,24 +826,27 @@ class Luxtronik extends IPSModuleStrict
 
 public function GetConfigurationForm(): string
 {
-    // 1) Dataset laden
+    // -----------------------------
+    // 1) java_3004.php laden
+    // -----------------------------
     $dataset = [];
     $javaFile = __DIR__ . '/java_3004.php';
     if (is_file($javaFile)) {
-        require_once $javaFile; // erwartet: $java_dataset = array(...)
+        require_once $javaFile; // erwartet: $java_dataset
         if (isset($java_dataset) && is_array($java_dataset)) {
             $dataset = $java_dataset;
         }
     }
 
-    // 2) Bisher gespeicherte Auswahl (aus List-Property) einlesen
-    //    Erwartetes Format in IDListe: [{"ID":123,"Enabled":true}, ...]
+    // -----------------------------
+    // 2) IDListe (List-Property) einlesen und Enabled-Mapping bauen
+    //    Format: [{"Enabled":true,"ID":123,"Name":"..."}...]
+    // -----------------------------
     $saved = json_decode($this->ReadPropertyString('IDListe'), true);
     if (!is_array($saved)) {
         $saved = [];
     }
 
-    // Map: ID -> Enabled
     $enabledMap = [];
     foreach ($saved as $row) {
         if (is_array($row) && isset($row['ID'])) {
@@ -851,7 +854,7 @@ public function GetConfigurationForm(): string
         }
     }
 
-    // 3) List-Werte neu aufbauen (immer aus java_3004.php, Enabled aus Property übernehmen)
+    // Werte für List erzeugen (Name aus Dataset, Enabled aus Property)
     $values = [];
     foreach ($dataset as $id => $name) {
         $id = (int)$id;
@@ -861,69 +864,146 @@ public function GetConfigurationForm(): string
             'Name'    => (string)$name
         ];
     }
-
-    // Optional: nach ID sortieren
     usort($values, fn($a, $b) => ($a['ID'] <=> $b['ID']));
 
-    // 4) Komplettes Formular (ohne form.json)
+    // -----------------------------
+    // 3) Formular bauen
+    //    HINWEIS: Passe die Property-Namen an deine Create()-RegisterProperty*() an!
+    // -----------------------------
     $form = [
+        'status' => [
+            ['code' => 101, 'icon' => 'active',   'caption' => 'Instanz ist aktiv'],
+            ['code' => 102, 'icon' => 'inactive', 'caption' => 'Instanz ist nicht aktiv (Konfiguration unvollständig?)'],
+            ['code' => 200, 'icon' => 'error',    'caption' => 'Fehler']
+        ],
         'elements' => [
+
+            // Kopfbereich
             [
                 'type'    => 'Label',
-                'caption' => 'Wähle die gewünschten Messwerte per Checkbox aus (Quelle: java_3004.php).'
+                'caption' => 'WPLUX / Modulkonfiguration'
             ],
+
+            // -----------------------------
+            // Verbindung / Zugangsdaten
+            // (ANPASSEN: names müssen exakt zu deinen Properties passen)
+            // -----------------------------
             [
-                'type' => 'List',
-                'name' => 'IDListe',
-                'caption' => 'Messwerte',
-                'rowCount' => 15,
-
-                // Ganz wichtig: Wir liefern die Werte komplett selbst (inkl. Enabled),
-                // damit es deterministisch ist und immer die java_3004.php Basis nutzt.
-                'loadValuesFromConfiguration' => false,
-
-                'columns' => [
+                'type'    => 'ExpansionPanel',
+                'caption' => 'Verbindung',
+                'items'   => [
                     [
-                        'caption' => 'Aktiv',
-                        'name'    => 'Enabled',
-                        'width'   => '70px',
-                        'save'    => true,
-                        'edit'    => [
-                            'type' => 'CheckBox'
-                        ]
+                        'type'    => 'ValidationTextBox',
+                        'name'    => 'Host',              // <-- ggf. anpassen
+                        'caption' => 'Host / IP'
                     ],
                     [
-                        'caption' => 'ID',
-                        'name'    => 'ID',
-                        'width'   => '80px',
-                        'save'    => true
+                        'type'    => 'NumberSpinner',
+                        'name'    => 'Port',              // <-- ggf. anpassen
+                        'caption' => 'Port',
+                        'minimum' => 1,
+                        'maximum' => 65535
                     ],
                     [
-                        'caption' => 'Name',
-                        'name'    => 'Name',
-                        'width'   => 'auto',
-                        'save'    => false
+                        'type'    => 'ValidationTextBox',
+                        'name'    => 'Username',          // <-- ggf. anpassen
+                        'caption' => 'Benutzername'
+                    ],
+                    [
+                        'type'    => 'PasswordTextBox',
+                        'name'    => 'Password',          // <-- ggf. anpassen
+                        'caption' => 'Passwort'
                     ]
-                ],
-                'values' => $values
+                ]
+            ],
+
+            // -----------------------------
+            // Intervall / Optionen
+            // -----------------------------
+            [
+                'type'    => 'ExpansionPanel',
+                'caption' => 'Optionen',
+                'items'   => [
+                    [
+                        'type'    => 'NumberSpinner',
+                        'name'    => 'Interval',          // <-- ggf. anpassen (Sekunden/Minuten?)
+                        'caption' => 'Update-Intervall (Sek.)',
+                        'minimum' => 1,
+                        'maximum' => 86400
+                    ],
+                    [
+                        'type'    => 'CheckBox',
+                        'name'    => 'Debug',             // <-- ggf. anpassen
+                        'caption' => 'Debug-Ausgaben'
+                    ]
+                ]
+            ],
+
+            // -----------------------------
+            // Messwerte-Auswahl (Checkbox-Spalte)
+            // -----------------------------
+            [
+                'type'    => 'ExpansionPanel',
+                'caption' => 'Messwerte (Auswahl via Checkbox)',
+                'items'   => [
+                    [
+                        'type'    => 'List',
+                        'name'    => 'IDListe',           // <-- bleibt Property, wird gespeichert
+                        'caption' => 'Messwerte',
+                        'rowCount' => 15,
+                        'add'     => false,
+                        'delete'  => false,
+                        'sort'    => ['column' => 'ID', 'direction' => 'ascending'],
+
+                        // Wir liefern values selbst => deterministisch aus java_3004.php
+                        'loadValuesFromConfiguration' => false,
+
+                        'columns' => [
+                            [
+                                'caption' => 'Aktiv',
+                                'name'    => 'Enabled',
+                                'width'   => '70px',
+                                'save'    => true,
+                                'edit'    => ['type' => 'CheckBox']
+                            ],
+                            [
+                                'caption' => 'ID',
+                                'name'    => 'ID',
+                                'width'   => '80px',
+                                'save'    => true
+                            ],
+                            [
+                                'caption' => 'Name',
+                                'name'    => 'Name',
+                                'width'   => 'auto',
+                                'save'    => false
+                            ]
+                        ],
+                        'values' => $values
+                    ],
+                    [
+                        'type'    => 'Label',
+                        'caption' => 'Tipp: Häkchen setzen = Wert wird verarbeitet.'
+                    ]
+                ]
             ]
         ],
+
+        // -----------------------------
+        // Aktionen
+        // -----------------------------
         'actions' => [
             [
                 'type'    => 'Button',
                 'caption' => 'Jetzt aktualisieren',
-                'onClick' => 'WPLUX_Update($id);'
+                'onClick' => 'WPLUX_Update($id);' // falls deine Methode anders heisst: anpassen
             ]
-        ],
-        'status' => [
-            ['code' => 101, 'icon' => 'active',   'caption' => 'Instanz ist aktiv'],
-            ['code' => 102, 'icon' => 'inactive', 'caption' => 'Instanz ist inaktiv'],
-            ['code' => 200, 'icon' => 'error',    'caption' => 'Fehler']
         ]
     ];
 
     return json_encode($form);
 }
+
 
 
     public function Update()
