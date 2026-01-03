@@ -106,9 +106,11 @@ Beispiel:
 
 ### 8. Versionen
 
-Version 3.17 (02.01.2026)
+Version 4.0 (03.01.2026)
 
 - Umrüstung auf IPSModuleStrict und hochsetzen der Kompatibilität auf 8.1
+- Komplett neues Konfigurationsformular mit Auswahl der IDs über Checkboxen.
+- Die Variablenprofile werden nun richtig angelegt, welche fälschlicherweise keine Auswahlliste hatten.
 
 Version 3.16 (15.6.2025)
 
