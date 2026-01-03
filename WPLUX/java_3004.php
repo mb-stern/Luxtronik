@@ -161,7 +161,7 @@ $java_dataset = array(
 "Sperre_zweiter_Verdichter_Heissgas",
 "Zulufttemperatur",               
 "Ablufttemperatur",                   
-"Betriebstundenzähler_Solar ",                 
+"Betriebstundenzaehler_Solar ",                 
 "Analog_Ausgang_3",                             
 "Analog_Ausgang_4",                             
 "Zuluft_Ventilator_Abtaufunktion",                                
