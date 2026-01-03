@@ -6,7 +6,6 @@ class Luxtronik extends IPSModuleStrict
 
     public function Create(): void
     {
-        //Never delete this line!
         parent::Create();
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
