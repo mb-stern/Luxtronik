@@ -28,6 +28,7 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyInteger('BW_TimerWeekVisible', 0);
         $this->RegisterPropertyInteger('BW_TimerWeekendVisible', 0);
         $this->RegisterPropertyInteger('BW_TimerDayVisible', 0);
+        $this->RegisterPropertyString('SelectedIDs', '[]');
 
         //Attribute als unsichtbare Variablen
         $this->RegisterAttributeFloat("start_value_out", 0);
@@ -821,6 +822,75 @@ class Luxtronik extends IPSModuleStrict
             $this->getParameter($Ident);
             $this->SendDebug("Parameter $Ident", "Folgender Wert wird an die Funktion setParameter gesendet: $Value", 0);
         }
+    }
+
+    public function GetConfigurationForm(): string
+    {
+        // 1) Optionen aus java_3004.php laden (IDs + Namen)
+        $options = [];
+        $javaFile = __DIR__ . '/java_3004.php';
+
+        if (is_file($javaFile)) {
+            // Die Datei muss $java_dataset bereitstellen (Array mit Index = ID)
+            require_once $javaFile;
+
+            if (isset($java_dataset) && is_array($java_dataset)) {
+                foreach ($java_dataset as $id => $name) {
+                    $options[] = [
+                        'caption' => sprintf('%d - %s', (int)$id, (string)$name),
+                        'value'   => (int)$id
+                    ];
+                }
+            }
+        }
+
+        // 2) Aktuelle Auswahl aus Property lesen
+        $selected = json_decode($this->ReadPropertyString('SelectedIDs'), true);
+        if (!is_array($selected)) {
+            $selected = [];
+        }
+
+        // 3) Komplettes Formular als Array bauen (ohne IDListe/List)
+        $form = [
+            'elements' => [
+                [
+                    'type'    => 'Label',
+                    'caption' => 'Konfiguration: Auswahl der Messwerte per Checkbox (java_3004.php)'
+                ],
+                [
+                    'type'    => 'ExpansionPanel',
+                    'caption' => 'Messwerte-Auswahl',
+                    'items'   => [
+                        [
+                            'type'    => 'Label',
+                            'caption' => 'Wähle die gewünschten IDs aus. Diese Auswahl wird in der Property "SelectedIDs" gespeichert.'
+                        ],
+                        [
+                            'type'    => 'CheckBoxList',
+                            'name'    => 'SelectedIDs',
+                            'caption' => 'IDs',
+                            'options' => $options,
+                            'value'   => $selected
+                        ]
+                    ]
+                ]
+            ],
+            'actions' => [
+                [
+                    'type'    => 'Button',
+                    'caption' => 'Jetzt aktualisieren',
+                    // Falls deine Funktion anders heisst, hier anpassen:
+                    'onClick' => 'WPLUX_Update($id);'
+                ]
+            ],
+            'status' => [
+                ['code' => 101, 'icon' => 'active',   'caption' => 'Instanz ist aktiv'],
+                ['code' => 102, 'icon' => 'inactive', 'caption' => 'Instanz ist inaktiv'],
+                ['code' => 200, 'icon' => 'error',    'caption' => 'Fehler']
+            ]
+        ];
+
+        return json_encode($form);
     }
 
     public function Update()
