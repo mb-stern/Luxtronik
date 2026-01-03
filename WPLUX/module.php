@@ -891,6 +891,36 @@ public function GetConfigurationForm(): string
                 'caption' => 'Timer / Zusatzfunktionen',
                 'items'   => [
                     [
+                    'type'    => 'CheckBox',
+                    'name'    => 'HeizungVisible',
+                        'caption' => 'Steuervariable für Heizungs-Modus aktivieren'
+                    ],
+                    [
+                        'type'    => 'CheckBox',
+                        'name'    => 'WarmwasserVisible',
+                        'caption' => 'Steuervariable für Warmwasser-Modus aktivieren'
+                    ],
+                    [
+                    'type'    => 'CheckBox',
+                    'name'    => 'KuehlungVisible',
+                    'caption' => 'Steuervariable für Kühlungs-Modus aktivieren'
+                    ],
+                    [
+                        'type'    => 'CheckBox',
+                        'name'    => 'TempsetVisible',
+                        'caption' => 'Steuervariable für Temperaturkorrektur aktivieren'
+                    ],
+                    [
+                    'type'    => 'CheckBox',
+                    'name'    => 'WWsetVisible',
+                    'caption' => 'Steuervariable für Warmwasser-Soll aktivieren'
+                    ],
+                    [
+                        'type'    => 'CheckBox',
+                        'name'    => 'RBEsetVisible',
+                        'caption' => 'Steuervariable für Raumbedieneinheit aktivieren'
+                    ],
+                    [
                         'type'    => 'Select',
                         'name'    => 'BW_TimerWeekVisible',
                         'caption' => 'Timer Mo-Fr Heizung',
@@ -965,10 +995,7 @@ public function GetConfigurationForm(): string
                 'caption' => "Überwachte ID's",
                 'rowCount' => 15,
 
-                // ganz wichtig: wir erzeugen values selbst und mergen Enabled aus gespeicherter Config
                 'loadValuesFromConfiguration' => false,
-
-                // Benutzer soll NICHT mehr add/delete machen, sondern nur Checkboxen setzen
                 'add'    => false,
                 'delete' => false,
                 'sort'   => ['column' => 'id', 'direction' => 'ascending'],
