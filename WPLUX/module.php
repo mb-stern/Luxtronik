@@ -40,7 +40,7 @@ class Luxtronik extends IPSModuleStrict
 
     public function ApplyChanges(): void
     {
-        //Migrationsroutine auf V4.0 (Kofiguration mit Checkboxen)
+        //Migrationsroutine auf V4.0 (Kofiguration mit Checkboxen), wird einmalig ausgeführt um die ausgewählten ID's zu übernehmen
         $alreadyMigrated = $this->ReadAttributeBoolean('MigratedToV4');
 
         if (!$alreadyMigrated) {
