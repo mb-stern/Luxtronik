@@ -1369,8 +1369,11 @@ class Luxtronik extends IPSModuleStrict
                 $this->RegisterVariableFloat($ident, $ident, 'WPLUX.kW', $id);
                 break;
 
+            case ($id == 268):
+                $this->RegisterVariableFloat($ident, $ident, '~Watt', $id);
+                break;
+
             default:
-                // Fallback: Float ohne spezielles Profil
                 $this->RegisterVariableString($ident, $ident, '', $id);
                 break;
         }
