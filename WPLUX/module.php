@@ -889,8 +889,15 @@ class Luxtronik extends IPSModuleStrict
         }
 
         $values = [];
+        $values = [];
         foreach ($dataset as $id => $name) {
             $id = (int)$id;
+
+            // IDs 0–10 ausblenden
+            if ($id >= 0 && $id <= 9) {
+                continue;
+            }
+
             $values[] = [
                 'enabled' => $enabledMap[$id] ?? false,
                 'id'      => $id,
@@ -1590,23 +1597,50 @@ class Luxtronik extends IPSModuleStrict
 
     private function calc_jaz(string $mode, float $value_out): void
     {
+        $kwhinVarId  = $this->ReadPropertyInteger('kwhin');
+        $kwhoutVarId = $this->ReadPropertyInteger('kwhout');
         $jazfaktorVariableID = @$this->GetIDForIdent('jazfaktor');
-        $kwhInVarId = $this->ReadPropertyInteger('kwhin');
-        $kwhOutVarId = $this->ReadPropertyInteger('kwhout');
 
-        if ($mode !== 'jaz' || $kwhInVarId === 0 || !IPS_VariableExists($kwhInVarId) || $jazfaktorVariableID === false) {
-            return;
-        }
+        if ($mode === 'jaz' && $kwhinVarId !== 0 && IPS_VariableExists($kwhinVarId) && $jazfaktorVariableID !== false) {
 
-        $kwh_in = (float) GetValue($kwhInVarId);
+            $kwh_in = (float) GetValue($kwhinVarId);
 
-        // externen Wärmemengenzähler optional
-        if ($kwhOutVarId !== 0 && IPS_VariableExists($kwhOutVarId)) {
-            $kwh_out = (float) GetValue($kwhOutVarId);
-            $this->SendDebug('JAZ-Berechnung', 'Berechnung des JAZ über externen Wärmemengenzähler', 0);
-        } else {
-            $kwh_out = (float) $value_out;
-            $this->SendDebug('JAZ-Berechnung', 'Berechnung des JAZ über internen Wärmemengenzähler', 0);
+            // Externen Wärmemengenzähler nutzen, falls gesetzt, sonst internen Wert
+            if ($kwhoutVarId !== 0 && IPS_VariableExists($kwhoutVarId)) {
+                $kwh_out = (float) GetValue($kwhoutVarId);
+                $this->SendDebug("JAZ-Berechnung", "Berechnung des JAZ über externen Wärmemengenzähler", 0);
+            } else {
+                $kwh_out = (float) $value_out;
+                $this->SendDebug("JAZ-Berechnung", "Berechnung des JAZ über internen Wärmemengenzähler", 0);
+            }
+
+            $this->SendDebug(
+                "JAZ-Berechnung",
+                "Berechnungsgrundlagen: Verbrauch (Reset): " . $this->ReadAttributeFloat('start_kwh_in') .
+                " kWh, Produktion (Reset): " . $this->ReadAttributeFloat('start_value_out') .
+                " kWh, Verbrauch (gesamt): $kwh_in kWh, Produktion (gesamt): $kwh_out kWh",
+                0
+            );
+
+            // Erst-Sync
+            if ($this->ReadAttributeFloat('start_kwh_in') == 0 || $this->ReadAttributeFloat('start_value_out') == 0) {
+                $this->WriteAttributeFloat('start_kwh_in', $kwh_in);
+                $this->WriteAttributeFloat('start_value_out', $kwh_out);
+                $this->SendDebug("JAZ-Synch", "Variablen synchronisiert (einmalig nach Reset)", 0);
+                return;
+            }
+
+            $kwh_in_Change    = $kwh_in  - $this->ReadAttributeFloat('start_kwh_in');
+            $value_out_Change = $kwh_out - $this->ReadAttributeFloat('start_value_out');
+
+            if ($kwh_in_Change != 0) {
+                $jaz = $value_out_Change / $kwh_in_Change;
+                $this->SetValue('jazfaktor', $jaz);
+                $this->SendDebug("JAZ-Faktor", "Faktor: $jaz (Verbrauch seit Reset: $kwh_in_Change kWh, Produktion seit Reset: $value_out_Change kWh)", 0);
+            } else {
+                $this->SetValue('jazfaktor', 0);
+                $this->SendDebug("JAZ-Faktor", "Noch keine Berechnung möglich (Verbrauch seit Reset unverändert)", 0);
+            }
         }
     }
 
