@@ -1088,10 +1088,6 @@ class Luxtronik extends IPSModule
                     $this->RegisterVariableFloat($ident, $ident, '~Watt', $id);
                     break;
 
-                case ($id == 67 || $id == 73 || $id == 141):
-                    $this->RegisterVariableString($ident, $ident, '', $id);
-                    break;
-
                 default:
                     // Standardprofil, falls keine spezifische Zuordnung gefunden wird
                     $this->RegisterVariableString($ident, $ident, '', $id);
