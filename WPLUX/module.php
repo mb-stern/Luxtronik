@@ -1371,7 +1371,7 @@ class Luxtronik extends IPSModuleStrict
 
             default:
                 // Fallback: Float ohne spezielles Profil
-                $this->RegisterVariableString($ident, $ident, '', $id);
+                $this->RegisterVariableFloat($ident, $ident, '', $id);
                 break;
         }
 
