@@ -889,8 +889,15 @@ class Luxtronik extends IPSModuleStrict
         }
 
         $values = [];
+        $values = [];
         foreach ($dataset as $id => $name) {
             $id = (int)$id;
+
+            // IDs 0–10 ausblenden
+            if ($id >= 0 && $id <= 9) {
+                continue;
+            }
+
             $values[] = [
                 'enabled' => $enabledMap[$id] ?? false,
                 'id'      => $id,
