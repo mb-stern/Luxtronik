@@ -42,9 +42,6 @@ class Luxtronik extends IPSModuleStrict
     {
          //Never delete this line!
         parent::ApplyChanges();
-
-        //Variableprofile erstellen wenn nicht vorhanden
-        require_once __DIR__ . '/variable_profile.php';
         
         //Migrationsroutine auf V4.0 (weil neu Kofiguration mit Checkboxen), wird einmalig ausgeführt um die ausgewählten ID's zu übernehmen
         if (!$this->ReadAttributeBoolean('MigratedToV4')) {
@@ -87,6 +84,8 @@ class Luxtronik extends IPSModuleStrict
         }
         //Ende der Migrationsroutine
 
+        //Variableprofile erstellen wenn nicht vorhanden
+        require_once __DIR__ . '/variable_profile.php';
 
         // Timer für Aktualisierung aktualisieren
         $this->SetTimerInterval('UpdateTimer', $this->ReadPropertyInteger('UpdateInterval') * 1000);
