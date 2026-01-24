@@ -34,7 +34,7 @@ Die Bedeutung und ID's der Variablen sind hier zu finden: https://loxwiki.atlass
 
 ### 2. Voraussetzungen
 
-- IP-Symcon ab Version 7.0
+- IP-Symcon ab Version 8.1
 
 ### 3. Software-Installation
 
@@ -52,11 +52,7 @@ Name     | Beschreibung
 IP-Adresse      |	IP-Adresse des Rechners auf dem der Libre Hardware Monitor läuft
 Port            |   Port der Luxtronic/Wärmepumpe (8888 oder 8889). Der Port muss in der Firewall geöffnet sein
 Intervall       |   Intervall für das Update der Werte
-Überwachte ID's |  Hier die gewünschten ID's der Werte. Diese Wert sind hier ersichtlich https://loxwiki.atlassian.net/wiki/spaces/LOX/pages/1533935933/Java+Webinterface
-
-![image](https://github.com/mb-stern/Luxtronik/assets/95777848/a29e9039-9026-49e1-af82-0dac7ca72536)
-
-![image](https://github.com/mb-stern/Luxtronik/assets/95777848/70a03389-272b-49b2-8ef4-81dbeee2633b)
+Überwachte ID's |  Hier die gewünschten ID's der Werte. Diese können über Checkboxen aktiviert werden.
 
 
 ### 5. Statusvariablen und Profile
@@ -105,6 +101,12 @@ Beispiel:
 `WPLUX_Update(12345);`
 
 ### 8. Versionen
+
+Version 4.0 (03.01.2026)
+
+- Umrüstung auf IPSModuleStrict und hochsetzen der Kompatibilität auf 8.1
+- Komplett neues Konfigurationsformular mit Auswahl der IDs über Checkboxen.
+- Die Variablenprofile werden nun richtig angelegt, welche fälschlicherweise keine Auswahlliste hatten.
 
 Version 3.16 (15.6.2025)
 
