@@ -42,48 +42,46 @@ class Luxtronik extends IPSModuleStrict
         // Niemals entfernen!
         parent::Migrate($JSONData);
 
+        // Alte Persistenz dekodieren
         $data = json_decode($JSONData, true);
         if (!is_array($data) || !isset($data['configuration']['IDListe'])) {
-            IPS_LogMessage('Luxtronik Migrate', 'Keine IDListe in Persistenz gefunden – nichts zu migrieren');
+            // Nichts zu tun
             return '';
         }
 
-        $rawJson = $data['configuration']['IDListe'];
-        $raw     = json_decode($rawJson, true);
-
+        // IDListe ist als JSON-String gespeichert
+        $raw = json_decode($data['configuration']['IDListe'], true);
         if (!is_array($raw) || empty($raw)) {
-            IPS_LogMessage('Luxtronik Migrate', 'IDListe leer oder ungültig – nichts zu migrieren');
+            // Nichts Sinnvolles drin
             return '';
         }
 
-        // Prüfen, ob bereits neues Format
+        // Prüfen: schon neues Format? (id + enabled)
         $alreadyNew = true;
         foreach ($raw as $row) {
-            if (!is_array($row) || !isset($row['id'], $row['enabled'])) {
+            if (!is_array($row) || !array_key_exists('id', $row) || !array_key_exists('enabled', $row)) {
                 $alreadyNew = false;
                 break;
             }
         }
-
         if ($alreadyNew) {
-            IPS_LogMessage(
-                'Luxtronik Migrate',
-                'IDListe bereits im neuen Format – Migration übersprungen: ' . json_encode($raw)
-            );
+            // Schon migriert -> nichts ändern
             return '';
         }
 
-        // --- Migration durchführen ---
+        // --- Migration: alte IDs -> [{enabled, id}] ---
         $new  = [];
         $seen = [];
 
         foreach ($raw as $row) {
             $id      = 0;
-            $enabled = true;
+            $enabled = true; // Default TRUE für alte Einträge
 
             if (is_int($row) || (is_string($row) && ctype_digit($row))) {
+                // Früher: Nur nackte IDs
                 $id = (int)$row;
             } elseif (is_array($row)) {
+                // Falls jemand zwischendurch schon "id" verwendet hat
                 $id = (int)($row['id'] ?? 0);
                 if (array_key_exists('enabled', $row)) {
                     $enabled = (bool)$row['enabled'];
@@ -97,18 +95,14 @@ class Luxtronik extends IPSModuleStrict
         }
 
         if (empty($new)) {
-            IPS_LogMessage('Luxtronik Migrate', 'Nach Migration keine gültigen IDs gefunden – Abbruch');
+            // Keine brauchbaren IDs gefunden -> nichts ändern
             return '';
         }
 
+        // Sortieren wie vorher
         usort($new, fn($a, $b) => $a['id'] <=> $b['id']);
 
-        // Log alt → neu
-        IPS_LogMessage(
-            'Luxtronik Migrate',
-            'Migration durchgeführt | ALT: ' . $rawJson . ' | NEU: ' . json_encode($new)
-        );
-
+        // Zurück in die Konfiguration (wieder als JSON-String)
         $data['configuration']['IDListe'] = json_encode($new);
 
         return json_encode($data);
