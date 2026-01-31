@@ -16,27 +16,28 @@
       "caption": "Sekunden"
     },
     {
-      "type": "List",
-      "name": "IDListe",
-      "caption": "Überwachte ID's",
-      "rowCount": 15,
-      "add": true,
-      "delete": true,
-      "sort": {
+    "type": "List",
+    "name": "IDListe",
+    "caption": "Überwachte ID's",
+    "rowCount": 15,
+    "add": true,
+    "delete": true,
+    "sort": {
         "column": "id",
         "direction": "ascending"
-      },
-      "columns": [
+    },
+    "columns": [
         {
-          "name": "id",
-          "caption": "ID des Wertes",
-          "width": "150",
-          "save": true,
-          "edit": {
+        "name": "id",
+        "caption": "ID des Wertes",
+        "width": "150",
+        "save": true,
+        "add": 0,
+        "edit": {
             "type": "NumberSpinner"
-          }
         }
-      ]
+        }
+    ]
     },
     {
       "type": "ExpansionPanel",
