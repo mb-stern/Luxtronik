@@ -28,7 +28,6 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyInteger('BW_TimerWeekendVisible', 0);
         $this->RegisterPropertyInteger('BW_TimerDayVisible', 0);
         $this->RegisterPropertyString('SelectedIDs', '[]');
-        $this->RegisterAttributeBoolean('MigratedToV4', false);
 
         //Attribute als unsichtbare Variablen
         $this->RegisterAttributeFloat("start_value_out", 0);
@@ -38,46 +37,80 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterTimer('UpdateTimer', 0, 'WPLUX_Update(' . $this->InstanceID . ');');  
     }
 
-    public function Migrate(string $JSONData): string 
+    public function Migrate(string $JSONData): string
     {
+        // Niemals entfernen!
+        parent::Migrate($JSONData);
 
-    // Diese Zeile nicht entfernen
-    parent::Migrate($JSONData);
+        $data = json_decode($JSONData, true);
+        if (!is_array($data)) {
+            // Wenn irgendwas schief ist, lieber nichts migrieren
+            return '';
+        }
 
-            $raw = json_decode($this->ReadPropertyString('IDListe'), true);
-            if (!is_array($raw)) {
-                $raw = [];
+        // Haben wir überhaupt eine Konfiguration mit IDListe?
+        if (!isset($data['configuration']) || !array_key_exists('IDListe', $data['configuration'])) {
+            return '';
+        }
+
+        // Alte IDListe ist als JSON-String gespeichert (z.B. "[1,2,3]" oder [{"id":1},...])
+        $raw = json_decode($data['configuration']['IDListe'], true);
+        if (!is_array($raw)) {
+            // Nichts sinnvolles drin -> keine Migration
+            return '';
+        }
+
+        // Prüfen, ob die Daten evtl. schon im neuen Format sind
+        $alreadyNewFormat = true;
+        foreach ($raw as $row) {
+            if (!is_array($row) || !array_key_exists('id', $row) || !array_key_exists('enabled', $row)) {
+                $alreadyNewFormat = false;
+                break;
+            }
+        }
+
+        if ($alreadyNewFormat) {
+            // Bereits neues Format -> nichts ändern
+            return '';
+        }
+
+        $new  = [];
+        $seen = [];
+
+        foreach ($raw as $row) {
+            $id      = 0;
+            $enabled = true; // wichtig: Default TRUE für alte Einträge
+
+            if (is_int($row) || (is_string($row) && ctype_digit($row))) {
+                // Früher: Nur nackte IDs
+                $id = (int)$row;
+            } elseif (is_array($row)) {
+                // Zwischenzustände / andere Varianten
+                $id = (int)($row['id'] ?? 0);
+                if (array_key_exists('enabled', $row)) {
+                    $enabled = (bool)$row['enabled'];
+                }
             }
 
-            $new = [];
-            $seen = [];
-
-            foreach ($raw as $row) {
-                $id = 0;
-                $enabled = true; // wichtig: Default TRUE für alte Einträge
-
-                if (is_int($row) || (is_string($row) && ctype_digit($row))) {
-                    $id = (int)$row;
-                } elseif (is_array($row)) {
-                    $id = (int)($row['id'] ?? 0);
-                    if (array_key_exists('enabled', $row)) {
-                        $enabled = (bool)$row['enabled'];
-                    }
-                }
-
-                if ($id > 0 && !isset($seen[$id])) {
-                    $seen[$id] = true;
-                    $new[] = ['enabled' => $enabled, 'id' => $id];
-                }
+            if ($id > 0 && !isset($seen[$id])) {
+                $seen[$id] = true;
+                $new[]     = ['enabled' => $enabled, 'id' => $id];
             }
+        }
 
-            // Sortieren (optional)
-            usort($new, fn($a, $b) => $a['id'] <=> $b['id']);
+        if (empty($new)) {
+            // Keine sinnvollen IDs -> nichts migrieren
+            return '';
+        }
 
-            // Flag setzen, Property schreiben, ApplyChanges neu auslösen
-            $this->WriteAttributeBoolean('MigratedToV4', true);
-            IPS_SetProperty($this->InstanceID, 'IDListe', json_encode($new));
-            IPS_ApplyChanges($this->InstanceID);
+        // Sortieren wie bisher
+        usort($new, fn($a, $b) => $a['id'] <=> $b['id']);
+
+        // Zurück in die Konfiguration (wieder als JSON-String)
+        $data['configuration']['IDListe'] = json_encode($new);
+
+        // Kernel bekommt die neue Persistenz
+        return json_encode($data);
     }
 
     public function ApplyChanges(): void
