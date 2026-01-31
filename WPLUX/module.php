@@ -1,11 +1,12 @@
 <?php
 
-class Luxtronik extends IPSModuleStrict
+class Luxtronik extends IPSModule
 {
     private $updateTimer;
 
-    public function Create(): void
+    public function Create()
     {
+        //Never delete this line!
         parent::Create();
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
@@ -18,16 +19,15 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyBoolean('TempsetVisible', false);
         $this->RegisterPropertyBoolean('WWsetVisible', false);
         $this->RegisterPropertyBoolean('RBEsetVisible', false);
-        $this->RegisterPropertyInteger('kwin', 0);
-        $this->RegisterPropertyInteger('kwhin', 0);
-        $this->RegisterPropertyInteger('kwhout', 0);
+        $this->RegisterPropertyFloat('kwin', 0);
+        $this->RegisterPropertyFloat('kwhin', 0);
+        $this->RegisterPropertyFloat('kwhout', 0);
         $this->RegisterPropertyInteger('HZ_TimerWeekVisible', 0);
         $this->RegisterPropertyInteger('HZ_TimerWeekendVisible', 0);
         $this->RegisterPropertyInteger('HZ_TimerDayVisible', 0);
         $this->RegisterPropertyInteger('BW_TimerWeekVisible', 0);
         $this->RegisterPropertyInteger('BW_TimerWeekendVisible', 0);
         $this->RegisterPropertyInteger('BW_TimerDayVisible', 0);
-        $this->RegisterPropertyString('SelectedIDs', '[]');
 
         //Attribute als unsichtbare Variablen
         $this->RegisterAttributeFloat("start_value_out", 0);
@@ -37,86 +37,9 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterTimer('UpdateTimer', 0, 'WPLUX_Update(' . $this->InstanceID . ');');  
     }
 
-    public function Migrate(string $JSONData): string
+    public function ApplyChanges()
     {
-        // Niemals entfernen!
-        parent::Migrate($JSONData);
-
-        $data = json_decode($JSONData, true);
-        if (!is_array($data) || !isset($data['configuration']['IDListe'])) {
-            IPS_LogMessage('Luxtronik Migrate', 'Keine IDListe in Persistenz gefunden – nichts zu migrieren');
-            return '';
-        }
-
-        $rawJson = $data['configuration']['IDListe'];
-        $raw     = json_decode($rawJson, true);
-
-        if (!is_array($raw) || empty($raw)) {
-            IPS_LogMessage('Luxtronik Migrate', 'IDListe leer oder ungültig – nichts zu migrieren');
-            return '';
-        }
-
-        // Prüfen, ob bereits neues Format
-        $alreadyNew = true;
-        foreach ($raw as $row) {
-            if (!is_array($row) || !isset($row['id'], $row['enabled'])) {
-                $alreadyNew = false;
-                break;
-            }
-        }
-
-        if ($alreadyNew) {
-            IPS_LogMessage(
-                'Luxtronik Migrate',
-                'IDListe bereits im neuen Format – Migration übersprungen: ' . json_encode($raw)
-            );
-            return '';
-        }
-
-        // --- Migration durchführen ---
-        $new  = [];
-        $seen = [];
-
-        foreach ($raw as $row) {
-            $id      = 0;
-            $enabled = true;
-
-            if (is_int($row) || (is_string($row) && ctype_digit($row))) {
-                $id = (int)$row;
-            } elseif (is_array($row)) {
-                $id = (int)($row['id'] ?? 0);
-                if (array_key_exists('enabled', $row)) {
-                    $enabled = (bool)$row['enabled'];
-                }
-            }
-
-            if ($id > 0 && !isset($seen[$id])) {
-                $seen[$id] = true;
-                $new[]     = ['enabled' => $enabled, 'id' => $id];
-            }
-        }
-
-        if (empty($new)) {
-            IPS_LogMessage('Luxtronik Migrate', 'Nach Migration keine gültigen IDs gefunden – Abbruch');
-            return '';
-        }
-
-        usort($new, fn($a, $b) => $a['id'] <=> $b['id']);
-
-        // Log alt → neu
-        IPS_LogMessage(
-            'Luxtronik Migrate',
-            'Migration durchgeführt | ALT: ' . $rawJson . ' | NEU: ' . json_encode($new)
-        );
-
-        $data['configuration']['IDListe'] = json_encode($new);
-
-        return json_encode($data);
-    }
-
-    public function ApplyChanges(): void
-    {
-         //Never delete this line!
+        //Never delete this line!
         parent::ApplyChanges();
 
         //Variableprofile erstellen wenn nicht vorhanden
@@ -148,8 +71,8 @@ class Luxtronik extends IPSModuleStrict
         $tempsetVisible = $this->ReadPropertyBoolean('TempsetVisible');
         $wwsetVisible = $this->ReadPropertyBoolean('WWsetVisible');
         $rbesetVisible = $this->ReadPropertyBoolean('RBEsetVisible');
-        $copVarId = $this->ReadPropertyInteger('kwin');
-        $jazVarId = $this->ReadPropertyInteger('kwhin');
+        $copVisible = $this->ReadPropertyFloat('kwin');
+        $jazVisible = $this->ReadPropertyFloat('kwhin');
         $hz_timerWeekVisible = $this->ReadPropertyInteger('HZ_TimerWeekVisible');
         $hz_timerWeekendVisible = $this->ReadPropertyInteger('HZ_TimerWeekendVisible');
         $hz_timerDayVisible = $this->ReadPropertyInteger('HZ_TimerDayVisible');
@@ -230,24 +153,24 @@ class Luxtronik extends IPSModuleStrict
             $this->UnregisterVariable('Anpassung_RBE');
         }
 
-        if ($copVarId !== 0 && IPS_VariableExists($copVarId)) {
-            $created = $this->RegisterVariableFloat('copfaktor', 'COP-Faktor', 'WPLUX.Cop', 6);
-            if ($created) {
-                $this->SetValue('copfaktor', 0);
-            }
-        } else {
+        if ($copVisible !== 0 && IPS_VariableExists($copVisible)) 
+        {
+            $this->RegisterVariableFloat('copfaktor', 'COP-Faktor', 'WPLUX.Cop', 6);
+        } 
+        else 
+        {
             $this->UnregisterVariable('copfaktor');
         }
-
-        if ($jazVarId !== 0 && IPS_VariableExists($jazVarId)) {
-            $created = $this->RegisterVariableFloat('jazfaktor', 'JAZ-Faktor', 'WPLUX.Cop', 7);
-            if ($created) {
-                $this->SetValue('jazfaktor', 0);
-            }
-        } else {
+        
+        if ($jazVisible !== 0 && IPS_VariableExists($jazVisible)) 
+        {
+            $this->RegisterVariableFloat('jazfaktor', 'JAZ-Faktor', 'WPLUX.Cop', 7);
+        } 
+        else 
+        {
             $this->UnregisterVariable('jazfaktor');
         }
-
+        
         //Variabelerstellung Timer Woche Heizung
 
         if ($hz_timerWeekVisible >= 0 && $hz_timerWeekVisible <= 3) 
@@ -309,9 +232,9 @@ class Luxtronik extends IPSModuleStrict
             foreach ($ids as $id => $name) 
             {
                 $this->RegisterVariableInteger($id, $name, '~UnixTimestampTime', $position++);
-                $this->EnableAction($id);
-                // holt Wert von der Lux und schreibt intern per $this->SetValue(...)
                 $this->getParameter($id);
+                $this->GetValue($id);
+                $this->EnableAction($id);
             }
         } 
         
@@ -880,7 +803,7 @@ class Luxtronik extends IPSModuleStrict
         }
     }
 
-    public function RequestAction(string $Ident, mixed $Value): void 
+    public function RequestAction($Ident, $Value) 
     {
         // Parameterbereich von 'set_223' bis 'set_504'
         if (strpos($Ident, 'set_') === 0 && intval(substr($Ident, 4)) >= 223 && intval(substr($Ident, 4)) <= 504) 
@@ -900,366 +823,115 @@ class Luxtronik extends IPSModuleStrict
         }
     }
 
-    public function GetConfigurationForm(): string
-    {
-        $dataset = [];
-        $javaFile = __DIR__ . '/java_3004.php';
-        if (is_file($javaFile)) {
-            require_once $javaFile; // erwartet: $java_dataset
-            if (isset($java_dataset) && is_array($java_dataset)) {
-                $dataset = $java_dataset;
-            }
-        }
-
-        $saved = json_decode($this->ReadPropertyString('IDListe'), true);
-        if (!is_array($saved)) {
-            $saved = [];
-        }
-
-        $enabledMap = [];
-        foreach ($saved as $row) {
-            if (is_array($row) && isset($row['id'])) {
-                $enabledMap[(int)$row['id']] = (bool)($row['enabled'] ?? true);
-            }
-        }
-
-        $values = [];
-        $values = [];
-        foreach ($dataset as $id => $name) {
-            $id = (int)$id;
-
-            // IDs 0–10 ausblenden
-            if ($id >= 0 && $id <= 9) {
-                continue;
-            }
-
-            $values[] = [
-                'enabled' => $enabledMap[$id] ?? false,
-                'id'      => $id,
-                'name'    => (string)$name
-            ];
-        }
-
-        usort($values, fn($a, $b) => ($a['id'] <=> $b['id']));
-
-        $timerOptions = [
-            ['caption' => 'deaktiviert', 'value' => 0],
-            ['caption' => '1 Zeitfenster', 'value' => 1],
-            ['caption' => '2 Zeitfenster', 'value' => 2],
-            ['caption' => '3 Zeitfenster', 'value' => 3],
-            ['caption' => '4 Zeitfenster', 'value' => 4],
-            ['caption' => '5 Zeitfenster', 'value' => 5]
-        ];
-
-        $form = [
-            'elements' => [
-                // ---- Verbindung
-                [
-                    'name'    => 'IPAddress',
-                    'type'    => 'ValidationTextBox',
-                    'caption' => 'IP-Address'
-                ],
-                [
-                    'name'    => 'Port',
-                    'type'    => 'NumberSpinner',
-                    'caption' => 'Port (8888 oder 8889)'
-                ],
-                [
-                    'name'    => 'UpdateInterval',
-                    'type'    => 'IntervalBox',
-                    'caption' => 'Sekunden'
-                ],
-
-                // ---- IDListe: statt “manuell IDs eintippen” jetzt Checkbox-Auswahl
-                [
-                    'type'    => 'List',
-                    'name'    => 'IDListe',
-                    'caption' => "Überwachte ID's",
-                    'rowCount' => 15,
-
-                    'loadValuesFromConfiguration' => false,
-                    'add'    => false,
-                    'delete' => false,
-                    'sort'   => ['column' => 'id', 'direction' => 'ascending'],
-
-                    'columns' => [
-                        [
-                            'name'    => 'enabled',
-                            'caption' => 'Aktiv',
-                            'width'   => '70',
-                            'save'    => true,
-                            'edit'    => ['type' => 'CheckBox']
-                        ],
-                        [
-                            'name'    => 'id',
-                            'caption' => 'ID des Wertes',
-                            'width'   => '150',
-                            'save'    => true,
-                            'edit'    => ['type' => 'NumberSpinner']
-                        ],
-                        [
-                            'name'    => 'name',
-                            'caption' => 'Name',
-                            'width'   => 'auto',
-                            'save'    => false
-                        ]
-                    ],
-
-                    'values' => $values
-                ],
-                [
-                    'type'    => 'ExpansionPanel',
-                    'caption' => 'Timer / Zusatzfunktionen',
-                    'items'   => [
-                        [
-                        'type'    => 'CheckBox',
-                        'name'    => 'HeizungVisible',
-                            'caption' => 'Steuervariable für Heizungs-Modus aktivieren'
-                        ],
-                        [
-                            'type'    => 'CheckBox',
-                            'name'    => 'WarmwasserVisible',
-                            'caption' => 'Steuervariable für Warmwasser-Modus aktivieren'
-                        ],
-                        [
-                        'type'    => 'CheckBox',
-                        'name'    => 'KuehlungVisible',
-                        'caption' => 'Steuervariable für Kühlungs-Modus aktivieren'
-                        ],
-                        [
-                            'type'    => 'CheckBox',
-                            'name'    => 'TempsetVisible',
-                            'caption' => 'Steuervariable für Temperaturkorrektur aktivieren'
-                        ],
-                        [
-                        'type'    => 'CheckBox',
-                        'name'    => 'WWsetVisible',
-                        'caption' => 'Steuervariable für Warmwasser-Soll aktivieren'
-                        ],
-                        [
-                            'type'    => 'CheckBox',
-                            'name'    => 'RBEsetVisible',
-                            'caption' => 'Steuervariable für Raumbedieneinheit aktivieren'
-                        ],
-                        [
-                            'type'    => 'Select',
-                            'name'    => 'BW_TimerWeekVisible',
-                            'caption' => 'Timer Mo-Fr Heizung',
-                            'options' => $timerOptions
-                        ],
-                        [
-                            'type'    => 'Select',
-                            'name'    => 'BW_TimerWeekendVisible',
-                            'caption' => 'Timer Mo-Fr/Sa+So Warmwasser',
-                            'options' => $timerOptions
-                        ],
-                        [
-                            'type'    => 'Select',
-                            'name'    => 'BW_TimerDayVisible',
-                            'caption' => 'Timer Tage Warmwasser',
-                            'options' => $timerOptions
-                        ],
-                        [
-                            'type'    => 'Label',
-                            'caption' => 'JAZ & COP berechnen',
-                            'bold'    => true
-                        ],
-                        [
-                            'type'  => 'RowLayout',
-                            'items' => [
-                                [
-                                    'type'    => 'SelectVariable',
-                                    'name'    => 'kwin',
-                                    'caption' => 'Eingangsleistung zur Berechnung des COP (kW)'
-                                ],
-                                [
-                                    'type'    => 'SelectVariable',
-                                    'name'    => 'kwhin',
-                                    'caption' => 'Eingangsenergie zur Berechnung des JAZ (kWh)'
-                                ],
-                                [
-                                    'type'    => 'SelectVariable',
-                                    'name'    => 'kwhout',
-                                    'caption' => 'Externer Wärmemengenzähler für JAZ (kWh)'
-                                ],
-                                [
-                                    'type'    => 'Button',
-                                    'label'   => 'JAZ-Berechnung zurücksetzen',
-                                    'onClick' => 'WPLUX_reset_jaz($id);'
-                                ]
-                            ]
-                        ]
-                    ]
-                ]
-            ],
-
-            'actions' => [
-                [
-                    'type'    => 'Button',
-                    'caption' => 'Jetzt aktualisieren',
-                    'onClick' => 'WPLUX_Update($id);'
-                ],
-                [
-                    "type" => "Label",
-                    "caption" => "Sag danke und unterstütze den Modulentwickler:"
-                ],
-                [
-                    "type" => "RowLayout",
-                    "items" => [
-                        [
-                            "type" => "Image",
-                            "onClick" => "echo 'https://paypal.me/mbstern';",
-                           "image" => "data:image/jpeg;base64,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"
-                        ],
-                        [
-                            "type" => "Label",
-                            "caption" => ""
-                        ]
-                    ]
-                ]
-            ]
-        ];
-
-        return json_encode($form);
-    }
-
     public function Update()
     {
-        // Verbindung zur Lux
-        $IpWwc      = (string)$this->ReadPropertyString('IPAddress');
-        $WwcJavaPort = (int)$this->ReadPropertyInteger('Port');
-        $SiteTitle  = "WÄRMEPUMPE"; // falls du es später nutzt
+        //Verbindung zur Lux
+        $IpWwc = "{$this->ReadPropertyString('IPAddress')}";
+        $WwcJavaPort = "{$this->ReadPropertyInteger('Port')}";
+        $SiteTitle = "WÄRMEPUMPE";
 
         // Namen der Variablen laden (3004 Berechnungen lesen)
         require_once __DIR__ . '/java_3004.php';
 
-        // ID-Liste lesen (List-Property mit: enabled + id)
+        // Lese die ID-Liste
         $idListe = json_decode($this->ReadPropertyString('IDListe'), true);
-        if (!is_array($idListe)) {
-            $idListe = [];
-        }
-
-        // Enabled-IDs als Map für schnellen Lookup
-        $enabledIds = [];
-        foreach ($idListe as $row) {
-            $id = (int)($row['id'] ?? 0);
-            $enabled = (bool)($row['enabled'] ?? false);
-
-            if ($id > 0 && $enabled) {
-                $enabledIds[$id] = true;
-            }
-        }
 
         // Socket verbinden
         $socket = socket_create(AF_INET, SOCK_STREAM, 0);
-        $connect = @socket_connect($socket, $IpWwc, $WwcJavaPort);
+        $connect = socket_connect($socket, $IpWwc, $WwcJavaPort);
 
-        if (!$connect) {
+        // Debug senden
+        if (!$connect)
+        {
             $error_code = socket_last_error($socket);
-            $this->SendDebug(
-                "Socketverbindung",
-                "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
-                0
-            );
-            $this->LogMessage(
-                "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
-                KL_ERROR
-            );
+            $this->SendDebug("Socketverbindung", "Verbindung zum Socket fehlerhaft: " . $IpWwc . ":" . $WwcJavaPort . " Fehler: " . $error_code, 0);
+            $this->LogMessage("Verbindung zum Socket fehlerhaft: " . $IpWwc . ":" . $WwcJavaPort . " Fehler: " . $error_code, KL_ERROR);
             socket_close($socket);
             return;
         }
 
-        $this->SendDebug("Socketverbindung", "Verbindung zum Socket erfolgreich: {$IpWwc}:{$WwcJavaPort}", 0);
+        $this->SendDebug("Socketverbindung", "Verbindung zum Socket erfolgreich: " . $IpWwc . ":" . $WwcJavaPort, 0);
 
-        // Anfrage 3004 senden
-        $msg = pack('N*', 3004);
-        socket_write($socket, $msg, 4);
+        // Daten holen
+        $msg = pack('N*',3004);
+        $send=socket_write($socket, $msg, 4); //3004 senden
 
-        $msg = pack('N*', 0);
-        socket_write($socket, $msg, 4);
+        $msg = pack('N*',0);
+        $send=socket_write($socket, $msg, 4); //0 senden
 
-        // Header lesen
-        socket_recv($socket, $Test, 4, MSG_WAITALL);  // sollte 3004 zurückkommen
-        $Test = unpack('N*', $Test);
+        socket_recv($socket,$Test,4,MSG_WAITALL);  // Lesen, sollte 3004 zurückkommen
+        $Test = unpack('N*',$Test);
 
-        socket_recv($socket, $Test, 4, MSG_WAITALL);  // Status
-        $Test = unpack('N*', $Test);
+        socket_recv($socket,$Test,4,MSG_WAITALL); // Status
+        $Test = unpack('N*',$Test);
 
-        socket_recv($socket, $Test, 4, MSG_WAITALL);  // Länge der nachfolgenden Werte
-        $Test = unpack('N*', $Test);
+        socket_recv($socket,$Test,4,MSG_WAITALL); // Länge der nachfolgenden Werte
+        $Test = unpack('N*',$Test);
 
-        $JavaWerte = (int)implode($Test);
+        $JavaWerte = implode($Test);
 
-        // Daten lesen
-        $daten_raw = [];
-        $InBuff = [];
-
-        for ($i = 0; $i < $JavaWerte; ++$i) {
-            socket_recv($socket, $InBuff[$i], 4, MSG_WAITALL);
-            $daten_raw[$i] = (int)implode(unpack('N*', $InBuff[$i]));
+        for ($i = 0; $i < $JavaWerte; ++$i)//vorwärts
+        {
+            socket_recv($socket,$InBuff[$i],4,MSG_WAITALL);  // Lesen, sollte 3004 zurückkommen
+            $daten_raw[$i] = implode(unpack('N*',$InBuff[$i]));
         }
 
         socket_close($socket);
 
-        // Init für JAZ (falls 151/152 nicht vorkommen)
-        $value_out_heizung = 0;
-        $value_out_warmwasser = 0;
-
-        // Alle Werte einmal durchgehen
-        for ($i = 0; $i < $JavaWerte; ++$i) {
-
-            // --- Werte erfassen für COP/JAZ unabhängig von Auswahl ---
-            if ($i == 257) { // Wärmeleistung an Funktion senden zur Berechnung des COP
+        for ($i = 0; $i < $JavaWerte; ++$i) 
+        {
+            
+            //Hier startet der Ablauf um Werte abzugreifen, welche ohne Auswahl einer ID zur Berechnung an die Funktion gesandt werden
+            if ($i == 257) //Wärmeleistung an Funktion senden zur Berechnung des COP
+            {
                 $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
                 $this->calc_cop('cop', $value);
-            }
+            }  
 
-            if ($i == 151) { // Wärmemenge Heizung
+            if ($i == 151) //Wärmemenge Heizung erfassen zur Berechnung des JAZ
+            {
                 $value_out_heizung = $this->convertValueBasedOnID($daten_raw[$i], $i);
             }
 
-            if ($i == 152) { // Wärmemenge Warmwasser
+            if ($i == 152) //Wärmemenge Warmwasser erfassen zur Berechnung des JAZ
+            {
                 $value_out_warmwasser = $this->convertValueBasedOnID($daten_raw[$i], $i);
             }
-
-            // --- Nur ausgewählte IDs verarbeiten ---
-            if (isset($enabledIds[$i])) {
-
-                // umrechnen wenn nötig
+            
+            //Hier startet der allgemeine Ablauf zum aktualiseren der Variablen nach Auswahl der ID's durch den Anwender
+            if (in_array($i, array_column($idListe, 'id'))) 
+            {
+        
+                // Werte umrechnen wenn nötig
                 $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
 
-                // Ident aus Dataset, Fallback falls nicht vorhanden
-                $ident = $java_dataset[$i] ?? ('ID_' . $i);
+                // Direkte Erstellung oder Aktualisierung der Variable mit Ident und Positionsnummer
+                $ident = $java_dataset[$i];
+                $varid = $this->CreateOrUpdateVariable($ident, $value, $i);
 
-                // Variable anlegen/aktualisieren
-                $this->CreateOrUpdateVariable($ident, $value, $i);
+                // Debug senden
+                $this->SendDebug("Wert gesendet", "Der Wert: ".$daten_raw[$i]." der ID: ".$i." wurde erfasst, umgerechnet in: ".$value." und an die Funktion 'CreateOrUpdateVariable' gesandt", 0);
 
-                // Debug
-                $this->SendDebug(
-                    "Wert gesendet",
-                    "Der Wert: {$daten_raw[$i]} der ID: {$i} wurde erfasst, umgerechnet in: {$value} und an 'CreateOrUpdateVariable' gesandt",
-                    0
-                );
-
-            } else {
-                // Variable löschen, da nicht ausgewählt
-                if (isset($java_dataset[$i])) {
-                    $this->DeleteVariableIfExists($java_dataset[$i]);
-                }
+            }   
+            
+            else 
+            {
+            // Variable löschen, da sie nicht mehr in der ID-Liste ist
+            $this->DeleteVariableIfExists($java_dataset[$i]);
             }
         }
 
-        // JAZ berechnen
+        //Hier wird die Wärmemenge von Heizung und Warmwasser addiert und zur Berechnung des JAZ an die Funktion gesendet
         $value_out = $value_out_heizung + $value_out_warmwasser;
-        $this->calc_jaz('jaz', $value_out);
+        $this->calc_jaz('jaz', $value_out);  
     }
-
+    
     private function convertValueBasedOnID($value, $id)
     {
         // Hier erfolgt die Konvertierung der Werte basierend auf der 'id'
         switch ($id) 
         {
-            case (($id >= 10 && $id <= 28) || $id == 122 || ($id >= 136 && $id <= 137) || ($id >= 142 && $id <= 144) || ($id >= 151 && $id <= 154) || ($id >= 175 && $id <= 179) ||$id == 183 || $id == 189 || ($id >= 194 && $id <= 200) || ($id >= 208 && $id <= 209) || ($id >= 227 && $id <= 229) || ($id >= 232 && $id <= 233) || ($id >= 239 && $id <= 240)|| ($id >= 242 && $id <= 243) || $id == 251 || $id == 267):
+            case (($id >= 10 && $id <= 28) || $id == 122 || ($id >= 136 && $id <= 137) || ($id >= 142 && $id <= 144) || ($id >= 151 && $id <= 154) || ($id >= 175 && $id <= 179) ||$id == 183 || $id == 189 || ($id >= 194 && $id <= 200) || ($id >= 208 && $id <= 209) || ($id >= 227 && $id <= 229) || ($id >= 232 && $id <= 233) || ($id >= 239 && $id <= 240)|| ($id >= 242 && $id <= 243) || $id == 267):
                 $minusTest = $value * 0.1;
                 if ($minusTest > 429496000) 
                 {
@@ -1311,121 +983,121 @@ class Luxtronik extends IPSModuleStrict
         }
     }
             
-    private function CreateOrUpdateVariable(string $ident, mixed $value, int $id): void
+    private function CreateOrUpdateVariable($ident, $value, $id)
     {
         // Variable erstellen und Profil zuordnen
-        switch ($id) {
-            case (($id >= 10 && $id <= 28) || $id == 122 || $id == 136 || $id == 137 || ($id >= 142 && $id <= 144) || ($id >= 175 && $id <= 177) || $id == 189 || ($id >= 194 && $id <= 195) || ($id >= 198 && $id <= 200) || ($id >= 227 && $id <= 229) || ($id >= 232 && $id <= 233) || $id == 251 || $id == 267):
-                $this->RegisterVariableFloat($ident, $ident, '~Temperature', $id);
-                break;
+        switch ($id) 
+        {
+                case (($id >= 10 && $id <= 28) || $id == 122 || $id == 136 || $id == 137 || ($id >= 142 && $id <= 144) || ($id >= 175 && $id <= 177) || $id == 189 || ($id >= 194 && $id <= 195) || ($id >= 198 && $id <= 200) || ($id >= 227 && $id <= 229)|| ($id >= 232 && $id <= 233)|| $id == 267):
+                    $this->RegisterVariableFloat($ident, $ident, '~Temperature', $id);
+                    break;
 
-            case (($id >= 29 && $id <= 55) || ($id >= 138 && $id <= 140) || $id == 146 || ($id >= 166 && $id <= 167) || ($id >= 170 && $id <= 171) || $id == 182 || $id == 186 || ($id >= 212 && $id <= 216)):
-                $this->RegisterVariableBoolean($ident, $ident, '~Switch', $id);
-                break;
+                case (($id >= 29 && $id <= 55) || ($id >= 138 && $id <= 140) || $id == 146 || ($id >= 166 && $id <= 167) || ($id >= 170 && $id <= 171) || $id == 182 || $id == 186 || ($id >= 212 && $id <= 216)):
+                    $this->RegisterVariableBoolean($ident, $ident, '~Switch', $id);
+                    break;    
 
-            case ($id == 56 || $id == 58 || ($id >= 60 && $id <= 66)):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Std', $id);
-                break;
+                case ($id == 56 || $id == 58 || ($id >= 60 && $id <= 66)):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Std', $id);
+                    break;
+                    
+                case ($id == 57 || $id == 59):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Imp', $id);
+                    break;
+    
+                case ($id == 78):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Typ', $id);
+                    break;
+    
+                case ($id == 79):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Biv', $id);
+                    break;
+    
+                case ($id == 80):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.BZ', $id);
+                    break;
+    
+                case (($id >= 95 && $id <= 99) || ($id >= 111 && $id <= 115) || $id == 134) || ($id >= 222 && $id <= 226):
+                    $this->RegisterVariableInteger($ident, $ident, '~UnixTimestamp', $id);
+                    break;
+    
+                case (($id >= 106 && $id <= 110) || ($id >= 217 && $id <= 221)):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Off', $id);
+                    break;
+    
+                case ($id == 116 || $id == 172 || $id == 174):
+                    $this->RegisterVariableBoolean($ident, $ident, 'WPLUX.Comf', $id);
+                    break;
 
-            case ($id == 57 || $id == 59):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Imp', $id);
-                break;
+                case ($id == 117):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Men1', $id);
+                    break;
+                            
+                case ($id == 118):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Men2', $id);
+                    break;
 
-            case ($id == 78):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Typ', $id);
-                break;
+                case ($id == 119):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Men3', $id);
+                    break;
 
-            case ($id == 79):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Biv', $id);
-                break;
+                case ($id == 124):
+                    $this->RegisterVariableBoolean($ident, $ident, 'WPLUX.Akt', $id);
+                    break;
 
-            case ($id == 80):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.BZ', $id);
-                break;
+                case ($id == 147 || ($id >= 156 && $id <= 157) || ($id >= 162 && $id <= 165) || ($id >= 168 && $id <= 169)):
+                    $this->RegisterVariableFloat($ident, $ident, '~Volt', $id);
+                    break;
 
-            case ((($id >= 95 && $id <= 99) || ($id >= 111 && $id <= 115) || $id == 134) || ($id >= 222 && $id <= 226)):
-                $this->RegisterVariableInteger($ident, $ident, '~UnixTimestamp', $id);
-                break;
+                case ($id == 173 || $id == 254):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.lh', $id);
+                    break;
+    
+                case (($id >= 178 && $id <= 179) || ($id >= 196 && $id <= 197) || ($id >= 208 && $id <= 209) || ($id >= 239 && $id <= 240) || ($id >= 242 && $id <= 243)):
+                    $this->RegisterVariableFloat($ident, $ident, '~Temperature.Difference', $id);
+                    break;
+    
+                case (($id >= 180 && $id <= 181) || $id == 201 || ($id >= 210 && $id <= 211)):
+                    $this->RegisterVariableFloat($ident, $ident, 'WPLUX.Pres', $id);
+                    break;
+    
+                case ($id == 183 || $id == 241):
+                    $this->RegisterVariableFloat($ident, $ident, '~Valve.F', $id);
+                    break;
+    
+                case ($id == 184):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Fan', $id);
+                    break;
+    
+                case (($id >= 151 && $id <= 154)|| ($id >= 187 && $id <= 188)):
+                    $this->RegisterVariableFloat($ident, $ident, '~Electricity', $id);
+                    break;
+    
+                case ($id == 191):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Bet', $id);
+                    break;
 
-            case (($id >= 106 && $id <= 110) || ($id >= 217 && $id <= 221)):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Off', $id);
-                break;
+                case ($id == 193  || $id == 231|| $id == 236):
+                    $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Ver', $id);
+                    break;
+    
+                case ($id == 257):
+                    $this->RegisterVariableFloat($ident, $ident, 'WPLUX.kW', $id);
+                    break;
 
-            case ($id == 116 || $id == 172 || $id == 174):
-                $this->RegisterVariableBoolean($ident, $ident, 'WPLUX.Comf', $id);
-                break;
+                case ($id == 268):
+                    $this->RegisterVariableFloat($ident, $ident, '~Watt', $id);
+                    break;
 
-            case ($id == 117):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Men1', $id);
-                break;
-
-            case ($id == 118):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Men2', $id);
-                break;
-
-            case ($id == 119):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Men3', $id);
-                break;
-
-            case ($id == 124):
-                $this->RegisterVariableBoolean($ident, $ident, 'WPLUX.Akt', $id);
-                break;
-
-            case ($id == 147 || ($id >= 156 && $id <= 157) || ($id >= 162 && $id <= 165) || ($id >= 168 && $id <= 169)):
-                $this->RegisterVariableFloat($ident, $ident, '~Volt', $id);
-                break;
-
-            case ($id == 173 || $id == 254):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.lh', $id);
-                break;
-
-            case (($id >= 178 && $id <= 179) || ($id >= 196 && $id <= 197) || ($id >= 208 && $id <= 209) || ($id >= 239 && $id <= 240) || ($id >= 242 && $id <= 243)):
-                $this->RegisterVariableFloat($ident, $ident, '~Temperature.Difference', $id);
-                break;
-
-            case (($id >= 180 && $id <= 181) || $id == 201 || ($id >= 210 && $id <= 211)):
-                $this->RegisterVariableFloat($ident, $ident, 'WPLUX.Pres', $id);
-                break;
-
-            case ($id == 183 || $id == 241):
-                $this->RegisterVariableFloat($ident, $ident, '~Valve.F', $id);
-                break;
-
-            case ($id == 184):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Fan', $id);
-                break;
-
-            case (($id >= 151 && $id <= 154) || ($id >= 187 && $id <= 188)):
-                $this->RegisterVariableFloat($ident, $ident, '~Electricity', $id);
-                break;
-
-            case ($id == 191):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Bet', $id);
-                break;
-
-            case ($id == 193 || $id == 231 || $id == 236):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Ver', $id);
-                break;
-
-            case ($id == 257):
-                $this->RegisterVariableFloat($ident, $ident, 'WPLUX.kW', $id);
-                break;
-
-            case ($id == 268):
-                $this->RegisterVariableFloat($ident, $ident, '~Watt', $id);
-                break;
-
-            default:
-                $this->RegisterVariableString($ident, $ident, '', $id);
-                break;
+                default:
+                    // Standardprofil, falls keine spezifische Zuordnung gefunden wird
+                    $this->RegisterVariableString($ident, $ident, '', $id);
+                    break;
         }
 
-        // STRICT-KERN: Werte immer übers Modul setzen
         $this->SetValue($ident, $value);
-
-        $this->SendDebug('Variable aktualisiert', "ID: $id, Ident: $ident, Wert: $value", 0);
+        $this->SendDebug("Variable aktualisiert", "Variable erstellt/aktualisiert und Profil zugeordnet, ID: ".$id.", Name: ".$ident.", Wert: ".$value."", 0);
     }
-
+    
     private function DeleteVariableIfExists($ident)
     {
         $variableID = @IPS_GetObjectIDByIdent($ident, $this->InstanceID);
@@ -1609,75 +1281,76 @@ class Luxtronik extends IPSModuleStrict
         }        
     }
 
-    private function calc_cop(string $mode, float $value): void
+    private function calc_cop($mode, $value) //COP berechnen
     {
         $copfaktorVariableID = @$this->GetIDForIdent('copfaktor');
-        $kwInVarId = $this->ReadPropertyInteger('kwin');
-
-        if ($mode !== 'cop' || $kwInVarId === 0 || !IPS_VariableExists($kwInVarId) || $copfaktorVariableID === false) {
-            return;
+        $copVisible = $this->ReadPropertyFloat('kwin');
+        
+        if ($mode == 'cop' && $copVisible !== 0 && IPS_VariableExists($copVisible) && $copfaktorVariableID !== false) {
+            $kw_in = GetValue($this->ReadPropertyFloat('kwin'));
+            
+            if ($kw_in == 0) {
+                $this->SetValue('copfaktor', 0);
+                $this->SendDebug("COP-Faktor", "Eingangsleistung (kw_in) ist 0. COP-Faktor wurde auf 0 gesetzt.", 0);
+                return; 
+            }
+            
+            $cop = $value / $kw_in;
+            $this->SetValue('copfaktor', $cop);
+            
+            $this->SendDebug("COP-Faktor", "Faktor: ".$cop." wurde berechnet anhand der Eingangsleistung: ".$kw_in." und Wärmeleistung: ".$value."", 0);
         }
-
-        $kw_in = GetValue($kwInVarId);
-        if ((float)$kw_in == 0.0) {
-            $this->SetValue('copfaktor', 0);
-            $this->SendDebug('COP-Faktor', 'Eingangsleistung (kw_in) ist 0. COP-Faktor wurde auf 0 gesetzt.', 0);
-            return;
-        }
-
-        $cop = $value / (float)$kw_in;
-        $this->SetValue('copfaktor', $cop);
-        $this->SendDebug('COP-Faktor', "Faktor: $cop berechnet (kw_in=$kw_in, Wärmeleistung=$value)", 0);
     }
+    
+    private function calc_jaz(string $mode, float $value_out) 
+{
+    $jazVisible = $this->ReadPropertyFloat('kwhin');
+    $jazfaktorVariableID = @$this->GetIDForIdent('jazfaktor');
 
-    private function calc_jaz(string $mode, float $value_out): void
+    if ($mode == 'jaz' && $jazVisible !== 0 && IPS_VariableExists($jazVisible) && $jazfaktorVariableID !== false) 
     {
-        $kwhinVarId  = $this->ReadPropertyInteger('kwhin');
-        $kwhoutVarId = $this->ReadPropertyInteger('kwhout');
-        $jazfaktorVariableID = @$this->GetIDForIdent('jazfaktor');
+        $kwh_in = GetValue($this->ReadPropertyFloat('kwhin'));
 
-        if ($mode === 'jaz' && $kwhinVarId !== 0 && IPS_VariableExists($kwhinVarId) && $jazfaktorVariableID !== false) {
+        // Prüfen, ob $kwh_out (vom externen Wärmemengenzähler) verfügbar ist, ansonsten $value_out (vom internen) verwenden
+        $kwh_out = 0;
+        if ($this->ReadPropertyFloat('kwhout') !== 0 && IPS_VariableExists($this->ReadPropertyFloat('kwhout'))) {
+            $kwh_out = GetValue($this->ReadPropertyFloat('kwhout'));
+            $this->SendDebug("JAZ-Berechnung", "Berechnung des JAZ über externen Wärmemengenzähler", 0);
+        } else {
+            $kwh_out = $value_out;
+            $this->SendDebug("JAZ-Berechnung", "Berechnung des JAZ über internen Wärmemengenzähler", 0);
+        }
 
-            $kwh_in = (float) GetValue($kwhinVarId);
+        $this->SendDebug("JAZ-Berechnung", "Berechnungsgrundlagen: Verbrauch (Reset): " . $this->ReadAttributeFloat('start_kwh_in') . " kWh, Produktion (Reset): " . $this->ReadAttributeFloat('start_value_out') . " kWh, Verbrauch (gesamt): $kwh_in kWh, Produktion (gesamt): $kwh_out kWh", 0);
 
-            // Externen Wärmemengenzähler nutzen, falls gesetzt, sonst internen Wert
-            if ($kwhoutVarId !== 0 && IPS_VariableExists($kwhoutVarId)) {
-                $kwh_out = (float) GetValue($kwhoutVarId);
-                $this->SendDebug("JAZ-Berechnung", "Berechnung des JAZ über externen Wärmemengenzähler", 0);
-            } else {
-                $kwh_out = (float) $value_out;
-                $this->SendDebug("JAZ-Berechnung", "Berechnung des JAZ über internen Wärmemengenzähler", 0);
-            }
+        // Erstmalige Synchronisation bei Startwert 0
+        if ($this->ReadAttributeFloat('start_kwh_in') == 0 || $this->ReadAttributeFloat('start_value_out') == 0) 
+        {
+            $this->WriteAttributeFloat('start_kwh_in', $kwh_in);
+            $this->WriteAttributeFloat('start_value_out', $kwh_out);
 
-            $this->SendDebug(
-                "JAZ-Berechnung",
-                "Berechnungsgrundlagen: Verbrauch (Reset): " . $this->ReadAttributeFloat('start_kwh_in') .
-                " kWh, Produktion (Reset): " . $this->ReadAttributeFloat('start_value_out') .
-                " kWh, Verbrauch (gesamt): $kwh_in kWh, Produktion (gesamt): $kwh_out kWh",
-                0
-            );
+            $this->SendDebug("JAZ-Synch", "Die Variablen wurden synchronisiert (sollte nur einmalig nach dem Reset passieren)", 0);
+            return;
+        }
 
-            // Erst-Sync
-            if ($this->ReadAttributeFloat('start_kwh_in') == 0 || $this->ReadAttributeFloat('start_value_out') == 0) {
-                $this->WriteAttributeFloat('start_kwh_in', $kwh_in);
-                $this->WriteAttributeFloat('start_value_out', $kwh_out);
-                $this->SendDebug("JAZ-Synch", "Variablen synchronisiert (einmalig nach Reset)", 0);
-                return;
-            }
+        $kwh_in_Change = $kwh_in - $this->ReadAttributeFloat('start_kwh_in');
+        $value_out_Change = $kwh_out - $this->ReadAttributeFloat('start_value_out');
 
-            $kwh_in_Change    = $kwh_in  - $this->ReadAttributeFloat('start_kwh_in');
-            $value_out_Change = $kwh_out - $this->ReadAttributeFloat('start_value_out');
-
-            if ($kwh_in_Change != 0) {
-                $jaz = $value_out_Change / $kwh_in_Change;
-                $this->SetValue('jazfaktor', $jaz);
-                $this->SendDebug("JAZ-Faktor", "Faktor: $jaz (Verbrauch seit Reset: $kwh_in_Change kWh, Produktion seit Reset: $value_out_Change kWh)", 0);
-            } else {
-                $this->SetValue('jazfaktor', 0);
-                $this->SendDebug("JAZ-Faktor", "Noch keine Berechnung möglich (Verbrauch seit Reset unverändert)", 0);
-            }
+        // Überprüfen, ob der Wert von $kwh_in_Change nicht 0 ist, um eine Division durch 0 zu verhindern
+        if ($kwh_in_Change != 0) 
+        {
+            $jaz = $value_out_Change / $kwh_in_Change;
+            $this->SetValue('jazfaktor', $jaz);
+            $this->SendDebug("JAZ-Faktor", "Faktor: $jaz wurde berechnet anhand des Energieverbrauchs (seit Reset): $kwh_in_Change kWh und der Energieproduktion (seit Reset): $value_out_Change kWh", 0);
+        } 
+        else 
+        {
+            $this->SetValue('jazfaktor', 0);
+            $this->SendDebug("JAZ-Faktor", "JAZ-Faktor konnte noch nicht berechnet werden, da sich der Wert der Energieversorgung noch nicht geändert hat seit dem Reset", 0);
         }
     }
+}
+
 
     public function reset_jaz() //Startwerte der JAZ-Berechnung zurücksetzen
     {
