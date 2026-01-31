@@ -78,7 +78,6 @@ class Luxtronik extends IPSModuleStrict
             $this->WriteAttributeBoolean('MigratedToV4', true);
             IPS_SetProperty($this->InstanceID, 'IDListe', json_encode($new));
             IPS_ApplyChanges($this->InstanceID);
-            return;
     }
 
     public function ApplyChanges(): void
