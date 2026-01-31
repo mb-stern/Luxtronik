@@ -38,13 +38,11 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterTimer('UpdateTimer', 0, 'WPLUX_Update(' . $this->InstanceID . ');');  
     }
 
-    public function ApplyChanges(): void
+    public function Migrate(string $JSONData): string 
     {
-         //Never delete this line!
-        parent::ApplyChanges();
-        
-        //Migrationsroutine auf V4.0 (weil neu Kofiguration mit Checkboxen), wird einmalig ausgeführt um die ausgewählten ID's zu übernehmen
-        if (!$this->ReadAttributeBoolean('MigratedToV4')) {
+
+    // Diese Zeile nicht entfernen
+    parent::Migrate($JSONData);
 
             $raw = json_decode($this->ReadPropertyString('IDListe'), true);
             if (!is_array($raw)) {
@@ -81,8 +79,12 @@ class Luxtronik extends IPSModuleStrict
             IPS_SetProperty($this->InstanceID, 'IDListe', json_encode($new));
             IPS_ApplyChanges($this->InstanceID);
             return;
-        }
-        //Ende der Migrationsroutine
+    }
+
+    public function ApplyChanges(): void
+    {
+         //Never delete this line!
+        parent::ApplyChanges();
 
         //Variableprofile erstellen wenn nicht vorhanden
         require_once __DIR__ . '/variable_profile.php';
