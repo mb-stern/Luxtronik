@@ -102,6 +102,10 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 4.1 (31.01.2026)
+
+- Migration des Konfigurationsformulars von 3.x auf 4.x verbessert
+
 Version 4.0 (03.01.2026)
 
 - Umrüstung auf IPSModuleStrict und hochsetzen der Kompatibilität auf 8.1
