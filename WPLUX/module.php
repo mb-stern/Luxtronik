@@ -10,6 +10,7 @@ class Luxtronik extends IPSModuleStrict
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
         $this->RegisterPropertyInteger('Port', 8889);
+        $this->RegisterPropertyBoolean('InstanceStatus', true);
         $this->RegisterPropertyString('IDListe', '[]');
         $this->RegisterPropertyInteger('UpdateInterval', 0); 
         $this->RegisterPropertyBoolean('HeizungVisible', false);
@@ -112,6 +113,13 @@ class Luxtronik extends IPSModuleStrict
     {
          //Never delete this line!
         parent::ApplyChanges();
+
+        // Modul deaktiviert
+        if (!$this->ReadPropertyBoolean('InstanceStatus')) {
+            $this->SetTimerInterval('UpdateTimer', 0);
+            $this->SendDebug('Instanz', 'Modul ist deaktiviert', 0);
+            return;
+        }
 
         //Variableprofile erstellen wenn nicht vorhanden
         require_once __DIR__ . '/variable_profile.php';
@@ -876,6 +884,12 @@ class Luxtronik extends IPSModuleStrict
 
     public function RequestAction(string $Ident, mixed $Value): void 
     {
+
+            if (!$this->ReadPropertyBoolean('InstanceStatus')) {
+            $this->SendDebug('RequestAction', 'Aktion ignoriert, Modul ist deaktiviert', 0);
+            return;
+        }
+        
         // Parameterbereich von 'set_223' bis 'set_504'
         if (strpos($Ident, 'set_') === 0 && intval(substr($Ident, 4)) >= 223 && intval(substr($Ident, 4)) <= 504) 
         {
@@ -947,7 +961,11 @@ class Luxtronik extends IPSModuleStrict
 
         $form = [
             'elements' => [
-                // ---- Verbindung
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'InstanceStatus',
+                    'caption' => 'Modul aktiv'
+                ],
                 [
                     'name'    => 'IPAddress',
                     'type'    => 'ValidationTextBox',
