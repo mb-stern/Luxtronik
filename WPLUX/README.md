@@ -102,6 +102,10 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 4.2 (16.05.2026)
+
+- Die Instanz lässt sich nun im Konfigurationsformular deaktivieren, um bei ausgeschalteter WP Fehlermeldungen zu verhindern.
+
 Version 4.1 (31.01.2026)
 
 - Migration des Konfigurationsformulars von 3.x auf 4.x verbessert
