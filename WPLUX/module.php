@@ -114,12 +114,14 @@ class Luxtronik extends IPSModuleStrict
          //Never delete this line!
         parent::ApplyChanges();
 
-        // Modul deaktiviert
         if (!$this->ReadPropertyBoolean('InstanceStatus')) {
             $this->SetTimerInterval('UpdateTimer', 0);
+            $this->SetStatus(104); // Instanz inaktiv -> Ausrufezeichen im Objektbaum
             $this->SendDebug('Instanz', 'Modul ist deaktiviert', 0);
             return;
         }
+
+        $this->SetStatus(102); // Instanz aktiv
 
         //Variableprofile erstellen wenn nicht vorhanden
         require_once __DIR__ . '/variable_profile.php';
@@ -889,7 +891,7 @@ class Luxtronik extends IPSModuleStrict
             $this->SendDebug('RequestAction', 'Aktion ignoriert, Modul ist deaktiviert', 0);
             return;
         }
-        
+
         // Parameterbereich von 'set_223' bis 'set_504'
         if (strpos($Ident, 'set_') === 0 && intval(substr($Ident, 4)) >= 223 && intval(substr($Ident, 4)) <= 504) 
         {
