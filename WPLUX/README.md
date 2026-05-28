@@ -102,6 +102,10 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 4.3 (28.05.2026)
+
+- Schwimmbad-Modus hinzugefügt.
+
 Version 4.2 (16.05.2026)
 
 - Die Instanz lässt sich nun im Konfigurationsformular deaktivieren, um bei ausgeschalteter WP Fehlermeldungen zu verhindern.

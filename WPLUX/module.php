@@ -15,6 +15,7 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyInteger('UpdateInterval', 0); 
         $this->RegisterPropertyBoolean('HeizungVisible', false);
         $this->RegisterPropertyBoolean('KuehlungVisible', false);
+        $this->RegisterPropertyBoolean('SchwimmbadVisible', false);
         $this->RegisterPropertyBoolean('WarmwasserVisible', false);
         $this->RegisterPropertyBoolean('TempsetVisible', false);
         $this->RegisterPropertyBoolean('WWsetVisible', false);
@@ -149,6 +150,7 @@ class Luxtronik extends IPSModuleStrict
         $heizungVisible = $this->ReadPropertyBoolean('HeizungVisible');
         $kuehlungVisible = $this->ReadPropertyBoolean('KuehlungVisible');
         $warmwasserVisible = $this->ReadPropertyBoolean('WarmwasserVisible');
+        $schwimmbadVisible = $this->ReadPropertyBoolean('SchwimmbadVisible');
         $tempsetVisible = $this->ReadPropertyBoolean('TempsetVisible');
         $wwsetVisible = $this->ReadPropertyBoolean('WWsetVisible');
         $rbesetVisible = $this->ReadPropertyBoolean('RBEsetVisible');
@@ -222,9 +224,20 @@ class Luxtronik extends IPSModuleStrict
             $this->UnregisterVariable('Anpassung_WW');
         }
 
+        if ($schwimmbadVisible) 
+        {
+            $this->RegisterVariableInteger('Mode_Schwimmbad', 'Modus Schwimmbad', 'WPLUX.Wwhe', 5);
+            $this->getParameter('Mode_Schwimmbad');
+            $this->EnableAction('Mode_Schwimmbad');
+        } 
+        else 
+        {
+            $this->UnregisterVariable('Mode_Schwimmbad');
+        }
+
         if ($rbesetVisible) 
         {
-            $this->RegisterVariableFloat('Anpassung_RBE', 'Raumtemperatur Soll', 'WPLUX.Wset', 5);
+            $this->RegisterVariableFloat('Anpassung_RBE', 'Raumtemperatur Soll', 'WPLUX.Wset', 6);
             $this->getParameter('Anpassung_RBE'); 
             $Value = $this->GetValue('Anpassung_RBE'); 
             $this->EnableAction('Anpassung_RBE');
@@ -235,7 +248,7 @@ class Luxtronik extends IPSModuleStrict
         }
 
         if ($copVarId !== 0 && IPS_VariableExists($copVarId)) {
-            $created = $this->RegisterVariableFloat('copfaktor', 'COP-Faktor', 'WPLUX.Cop', 6);
+            $created = $this->RegisterVariableFloat('copfaktor', 'COP-Faktor', 'WPLUX.Cop', 7);
             if ($created) {
                 $this->SetValue('copfaktor', 0);
             }
@@ -244,7 +257,7 @@ class Luxtronik extends IPSModuleStrict
         }
 
         if ($jazVarId !== 0 && IPS_VariableExists($jazVarId)) {
-            $created = $this->RegisterVariableFloat('jazfaktor', 'JAZ-Faktor', 'WPLUX.Cop', 7);
+            $created = $this->RegisterVariableFloat('jazfaktor', 'JAZ-Faktor', 'WPLUX.Cop', 8);
             if ($created) {
                 $this->SetValue('jazfaktor', 0);
             }
@@ -901,7 +914,7 @@ class Luxtronik extends IPSModuleStrict
             $this->SendDebug("Parameter $Ident", "Folgender Wert wird an die Funktion setParameter gesendet: $Value", 0);
         }
         // Weitere spezifische Werte wie 'Mode_Heizung', 'Mode_Kuehlung' usw.
-        elseif (in_array($Ident, ['Mode_Heizung', 'Mode_Kuehlung', 'Mode_WW', 'Anpassung_WW', 'Anpassung_Temp', 'Anpassung_RBE'])) 
+        elseif (in_array($Ident, ['Mode_Heizung', 'Mode_Kuehlung', 'Mode_WW', 'Mode_Schwimmbad', 'Anpassung_WW', 'Anpassung_Temp', 'Anpassung_RBE'])) 
         {
             // Funktionen aufrufen
             $this->setParameter($Ident, $Value);
@@ -1034,6 +1047,11 @@ class Luxtronik extends IPSModuleStrict
                             'type'    => 'CheckBox',
                             'name'    => 'WarmwasserVisible',
                             'caption' => 'Steuervariable für Warmwasser-Modus aktivieren'
+                        ],
+                        [
+                            'type'    => 'CheckBox',
+                            'name'    => 'SchwimmbadVisible',
+                            'caption' => 'Steuervariable für Schwimmbad-Modus aktivieren'
                         ],
                         [
                         'type'    => 'CheckBox',
@@ -1499,6 +1517,9 @@ class Luxtronik extends IPSModuleStrict
         case 'Mode_WW':
             $parameter = 4;
             break;
+        case 'Mode_Schwimmbad':
+            $parameter = 119;
+            break;
         case 'Mode_Kuehlung':
             $parameter = 108;
             $value = ($value == 0) ? 0 : 1; // Wert für Kühlung auf 0 oder 1 setzen
@@ -1575,6 +1596,7 @@ class Luxtronik extends IPSModuleStrict
             case 'Mode_Heizung':
             case 'Mode_WW':
             case 'Mode_Kuehlung':
+            case 'Mode_Schwimmbad':
             case 'Anpassung_Temp':
             case 'Anpassung_WW':
             case 'Anpassung_RBE':
@@ -1585,6 +1607,7 @@ class Luxtronik extends IPSModuleStrict
                     'Mode_Heizung'   => 3,
                     'Mode_WW'        => 4,
                     'Mode_Kuehlung'  => 108,
+                    'Mode_Schwimmbad' => 119,
                     'Anpassung_RBE'  => 1148,
                     default          => null
                 };
