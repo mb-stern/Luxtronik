@@ -102,7 +102,7 @@ Beispiel:
 
 ### 8. Versionen
 
-Version 4.3 (20.08.2026)
+Version 4.4 (20.08.2026)
 
 - Problem behoben, dass unbekannte Variablen nicht erstellt werden konnten .
 
