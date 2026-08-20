@@ -102,6 +102,10 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 4.3 (20.08.2026)
+
+- Problem behoben, dass unbekannte Variablen nicht erstellt werden konnten .
+
 Version 4.3 (28.05.2026)
 
 - Schwimmbad-Modus hinzugefügt.
