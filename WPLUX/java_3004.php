@@ -1,278 +1,280 @@
 <?php
+
 $java_dataset = array(
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"Vorlauftemperatur_Heizkreis",
-"Ruecklauftemperatur_Heizkreis",
-"Ruecklauf_Soll_Heizkreis",
-"Ruecklauftemperatur_im_Trennspeicher",
-"Heisgastemperatur",
-"Aussentemperatur",
-"Durchschnittstemperatur_Aussen_ueber_24_h",
-"Warmwasser_Ist_Temperatur",
-"Warmwasser_Soll_Temperatur",
-"Waermequellen_Eintrittstemperatur",
-"Waermequellen_Austrittstemperatur",
-"Mischkreis_1_Vorlauftemperatur",
-"Mischkreis_1_Vorlauf_Soll_Temperatur",
-"Raumtemperatur_Raumstation_1",
-"Mischkreis_2_Vorlauftemperatur",
-"Mischkreis_2_Vorlauf_Soll_Temperatur",
-"Fuehler_Solarkollektor",
-"Fuehler_Solarspeicher",
-"Fuehler_externe_Energiequelle",
-"Eingang_Abtauende_Soledruck_Durchfluss",
-"Eingang_Brauchwarmwasserthermostat",
-"Eingang_EVU_Sperre",
-"Eingang_Hochdruck_Kaeltekreis",
-"Eingang_Motorschutz_OK",
-"Eingang_Niederdruck",
-"Eingang_Ueberwachungskontakt_fuer_Potentiostat",
-"Eingang_Schwimmbadthermostat",
-"Ausgang_Abtauventil",
-"Ausgang_Brauchwasserpumpe_Umstellventil",
-"Ausgang_Heizungsumwaelzpumpe",
-"Ausgang_Mischkreis_1_Auf",
-"Ausgang_Mischkreis_1_Zu",
-"Ausgang_Ventilation_Lueftung",
-"Ausgang_Solepumpe_Ventilator",
-"Ausgang_Verdichter_1",
-"Ausgang_Verdichter_2",
-"Ausgang_Zirkulationspumpe",
-"Ausgang_Zusatzumwaelzpumpe",
-"Ausgang_Steuersignal_Zusatzheizung_v_Heizung",
-"Ausgang_Steuersignal_Zusatzheizung_Stoersignal",
-"Ausgang_Zusatzheizung_3",
-"Ausgang_Pumpe_Mischkreis_2",
-"Ausgang_Solarladepumpe",
-"Ausgang_Schwimmbadpumpe",
-"Ausgang_Mischkreis_2_Zu",
-"Ausgang_Mischkreis_2_Auf",
-"Betriebsstunden_Verdichter_1",
-"Impulse_Verdichter_1",
-"Betriebsstunden_Verdichter_2",
-"Impulse_Verdichter_2",
-"Betriebsstunden_Zweiter_Waermeerzeuger_1",
-"Betriebsstunden_Zweiter_Waermeerzeuger_2",
-"Betriebsstunden_Zweiter_Waermeerzeuger_3",
-"Betriebsstunden_Waermepumpe",
-"Betriebsstunden_Heizung",
-"Betriebsstunden_Warmwasser",
-"Betriebsstunden_Kuehlung",
-"Waermepumpe_laeuft_seit",
-"Zweiter_Waermeerzeuger_1_laeuft_seit",
-"Zweiter_Waermeerzeuger_2_laeuft_seit",
-"Netzeinschaltverzoegerung",
-"Schaltspielsperre_Aus",
-"Schaltspielsperre_Ein",
-"Verdichter_Standzeit",
-"Heizungsregler_Mehr_Zeit",
-"Heizungsregler_Weniger_Zeit",
-"Thermische_Desinfektion_laeuft_seit",
-"Sperre_Warmwasser",
-"Waermepumpentyp",
-"Bivalenzstufe",
-"Betriebszustand",
-"SoftStand1",
-"SoftStand2",
-"SoftStand3",
-"SoftStand4",
-"SoftStand5",
-"SoftStand6",
-"SoftStand7",
-"SoftStand8",
-"SoftStand9",
-"SoftStand10",
-"IP_Adresse",
-"Subnetzmaske",
-"Broadcast_Adresse",
-"Standard_Gateway",
-"Zeitstempel_Fehler_0",
-"Zeitstempel_Fehler_1",
-"Zeitstempel_Fehler_2",
-"Zeitstempel_Fehler_3",
-"Zeitstempel_Fehler_4",
-"Fehlercode_Fehler_0",
-"Fehlercode_Fehler_1",
-"Fehlercode_Fehler_2",
-"Fehlercode_Fehler_3",
-"Fehlercode_Fehler_4",
-"Anzahl_der_Fehler",
-"Grund_Abschaltung_0",
-"Grund_Abschaltung_1",
-"Grund_Abschaltung_2",
-"Grund_Abschaltung_3",
-"Grund_Abschaltung_4",
-"Zeitstempel_Abschaltung_0",
-"Zeitstempel_Abschaltung_1",
-"Zeitstempel_Abschaltung_2",
-"Zeitstempel_Abschaltung_3",
-"Zeitstempel_Abschaltung_4",
-"Comfort_Platine_installiert",
-"Status_Zeile_1",
-"Status_Zeile_2",
-"Status_Zeile_3",
-"Zeit_seit_in_von_Wert_118",
-"Stufe_Ausheizprogramm",
-"Temperatur_Ausheizprogramm",
-"Laufzeit_Ausheizprogramm",
-"Brauchwasser_aktiv_inaktiv_Symbol",
-"Heizung_Symbol",
-"Mischkreis_1_Symbol",
-"Mischkreis_2_Symbol",
-"Einstellung_Kurzprogramm",
-"Status_Slave_1",
-"Status_Slave_2",
-"Status_Slave_3",
-"Status_Slave_4",
-"Status_Slave_5",
-"Aktuelle_Zeit_der_Waermepumpe",
-"Mischkreis_3_Symbol",
-"Mischkreis_3_Vorlauf_Soll_Temperatur",
-"Mischkreis_3_Vorlauftemperatur",
-"Ausgang_Mischkreis_3_Zu",
-"Ausgang_Mischkreis_3_Auf",
-"Pumpe_Mischkreis_3",
-"Zeit_bis_Abtauen",
-"Raumtemperatur_Raumstation_2",
-"Raumtemperatur_Raumstation_3",
-"Schaltuhr_Schwimmbad_Symbol",
-"Betriebsstunden_Schwimmbad",
-"Freigabe_Kuehlung",
-"Analoges_Eingangssignal",
-"SonderZeichen",
-"Zirkulationspumpen_Symbol",
-"WebsrvProgrammWerteBeobarten",
-"Waermemengenzaehler_Heizung",
-"Waermemengenzaehler_Brauchwasser",
-"Waermemengenzaehler_Schwimmbad",
-"Waermemengenzaehler_Gesamt",
-"Waermemengenzaehler_Durchfluss",
-"Analog_Ausgang_1",
-"Analog_Ausgang_2",
-"Sperre_zweiter_Verdichter_Heissgas",
-"Zulufttemperatur",               
-"Ablufttemperatur",                   
-"Betriebstundenzaehler_Solar ",                 
-"Analog_Ausgang_3",                             
-"Analog_Ausgang_4",                             
-"Zuluft_Ventilator_Abtaufunktion",                                
-"Abluft_Ventilator",                                
-"Ausgang_VSK",                                
-"Ausgang_FRH",                                
-"Analog_Eingang_2",                              
-"Analog_Eingang_3",                              
-"Eingang_SAX",                                  
-"Eingang_SPL",                                  
-"Lueftungsplatine_verbaut",                         
-"Durchfluss_Waermequelle",                          
-"LIN_BUS_verbaut",                             
-"Temperatur_Ansaug_Kondensator",                  
-"Temperatur_Ansaug_Verdichter",                  
-"Temperatur_Verdichter_Heizung",                                
-"Ueberhitzung",                                 
-"Ueberhitzung_Soll",                            
-"Hochdruck",                                 
-"Niederdruck",                                 
-"Ausgang_Verdichterheizung",                            
-"Steuersignal_Umwaelzpumpe",                               
-"Ventilator_Drehzahl",                               
-"EVU_2",                              
-"Sicherheits_Temperatur_Begrenzer_Fussbodenheizung",                               
-"Leistung_Sollwert",                            
-"Leistung_Istwert",                             
-"Temperatur_Vorlauf_Soll",                           
-"Software_Stand_SEC_Board",                           
-"Software_Stand_SEC_Board",                                 
-"Vierwegeventil",                                
-"Verdichterdrehzahl",                                 
-"Verdichtertemperatur_EVI_Enhanced_Vapour_Injection",                            
-"Ansaugtemperatur_EVI",                             
-"Ueberhitzung_EVI",                            
-"Ueberhitzung_EVI_Sollwert",                          
-"Kondensationstemperatur",                           
-"Fluessigtemperatur_EEV_elektronisches_Expansionsventil",                          
-"Unterkuehlung_EEV",                             
-"Druck_EVI",                          
-"Spannung_Inverter",                              
-"Temperarturfuehler_Heissgas_2",                       
-"Temperaturfuehler_Waermequelleneintritt_2",                       
-"Ansaugtemperatur_Verdampfer_2",                
-"Ansaugtemperatur_Verdichter_2",                
-"Temperatur_Verdichter_2_Heizung",                              
-"Ueberhitzung_2",                               
-"Ueberhitzung_Soll_2",                          
-"Hochdruck_2",                               
-"Niederdruck_2",                               
-"Eingang_Druckschalter_Hochdruck_2",                                 
-"Ausgang_Abtauventil_2",                                
-"Ausgang_Solepumpe_Ventilator_2",                               
-"Ausgang_Verdichter_1_2",                               
-"Ausgang_Verdichter_Heizung_2",                          
-"Grund_Abschaltung_0_im_Speicher",                         
-"Grund_Abschaltung_1_im_Speicher",                         
-"Grund_Abschaltung_2_im_Speicher",                         
-"Grund_Abschaltung_3_im_Speicher3",                         
-"Grund_Abschaltung_4_im_Speicher",                         
-"Zeitstempel_Abschaltung_0_im_Speicher",                       
-"Zeitstempel_Abschaltung_1_im_Speicher",                       
-"Zeitstempel_Abschaltung_2_im_Speicher",                       
-"Zeitstempel_Abschaltung_3_im_Speicher",                       
-"Zeitstempel_Abschaltung_4_im_Speicher",                       
-"Raumtemperatur_Istwert",                             
-"Raumtemperatur_Sollwert",                            
-"Temperatur_Brauchwasser_Oben",                     
-"Waermepumpen_Typ_2",                          
-"Verdichterfrequenz",
-"Vapourisation_Temperature",
-"Liquefaction_Temperature",
-"unbekannt",
-"unbekannt",
-"Verdichterfrequenz_Soll",
-"Freq_VD_Min",
-"Freq_VD_Max",
-"VBO_Temp_Spread_Soll",
-"VBO_Temp_Spread_Ist",
-"Steuersignal_Umwaelzpumpe_2",
-"HUP_Temp_Spread_Soll",
-"HUP_Temp_Spread_Ist",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"Unterkuehlung",
-"unbekannt",
-"unbekannt",
-"Flow_Rate",
-"unbekannt",
-"unbekannt",
-"Waermeleistung",
-"RBE_Version",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"Desired_Room_Temperature",
-"Leistungsaufnahme",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt",
-"unbekannt");
+    "unbekannt_0", // ID 0
+    "unbekannt_1", // ID 1
+    "unbekannt_2", // ID 2
+    "unbekannt_3", // ID 3
+    "unbekannt_4", // ID 4
+    "unbekannt_5", // ID 5
+    "unbekannt_6", // ID 6
+    "unbekannt_7", // ID 7
+    "unbekannt_8", // ID 8
+    "unbekannt_9", // ID 9
+    "Vorlauftemperatur_Heizkreis", // ID 10
+    "Ruecklauftemperatur_Heizkreis", // ID 11
+    "Ruecklauf_Soll_Heizkreis", // ID 12
+    "Ruecklauftemperatur_im_Trennspeicher", // ID 13
+    "Heisgastemperatur", // ID 14
+    "Aussentemperatur", // ID 15
+    "Durchschnittstemperatur_Aussen_ueber_24_h", // ID 16
+    "Warmwasser_Ist_Temperatur", // ID 17
+    "Warmwasser_Soll_Temperatur", // ID 18
+    "Waermequellen_Eintrittstemperatur", // ID 19
+    "Waermequellen_Austrittstemperatur", // ID 20
+    "Mischkreis_1_Vorlauftemperatur", // ID 21
+    "Mischkreis_1_Vorlauf_Soll_Temperatur", // ID 22
+    "Raumtemperatur_Raumstation_1", // ID 23
+    "Mischkreis_2_Vorlauftemperatur", // ID 24
+    "Mischkreis_2_Vorlauf_Soll_Temperatur", // ID 25
+    "Fuehler_Solarkollektor", // ID 26
+    "Fuehler_Solarspeicher", // ID 27
+    "Fuehler_externe_Energiequelle", // ID 28
+    "Eingang_Abtauende_Soledruck_Durchfluss", // ID 29
+    "Eingang_Brauchwarmwasserthermostat", // ID 30
+    "Eingang_EVU_Sperre", // ID 31
+    "Eingang_Hochdruck_Kaeltekreis", // ID 32
+    "Eingang_Motorschutz_OK", // ID 33
+    "Eingang_Niederdruck", // ID 34
+    "Eingang_Ueberwachungskontakt_fuer_Potentiostat", // ID 35
+    "Eingang_Schwimmbadthermostat", // ID 36
+    "Ausgang_Abtauventil", // ID 37
+    "Ausgang_Brauchwasserpumpe_Umstellventil", // ID 38
+    "Ausgang_Heizungsumwaelzpumpe", // ID 39
+    "Ausgang_Mischkreis_1_Auf", // ID 40
+    "Ausgang_Mischkreis_1_Zu", // ID 41
+    "Ausgang_Ventilation_Lueftung", // ID 42
+    "Ausgang_Solepumpe_Ventilator", // ID 43
+    "Ausgang_Verdichter_1", // ID 44
+    "Ausgang_Verdichter_2", // ID 45
+    "Ausgang_Zirkulationspumpe", // ID 46
+    "Ausgang_Zusatzumwaelzpumpe", // ID 47
+    "Ausgang_Steuersignal_Zusatzheizung_v_Heizung", // ID 48
+    "Ausgang_Steuersignal_Zusatzheizung_Stoersignal", // ID 49
+    "Ausgang_Zusatzheizung_3", // ID 50
+    "Ausgang_Pumpe_Mischkreis_2", // ID 51
+    "Ausgang_Solarladepumpe", // ID 52
+    "Ausgang_Schwimmbadpumpe", // ID 53
+    "Ausgang_Mischkreis_2_Zu", // ID 54
+    "Ausgang_Mischkreis_2_Auf", // ID 55
+    "Betriebsstunden_Verdichter_1", // ID 56
+    "Impulse_Verdichter_1", // ID 57
+    "Betriebsstunden_Verdichter_2", // ID 58
+    "Impulse_Verdichter_2", // ID 59
+    "Betriebsstunden_Zweiter_Waermeerzeuger_1", // ID 60
+    "Betriebsstunden_Zweiter_Waermeerzeuger_2", // ID 61
+    "Betriebsstunden_Zweiter_Waermeerzeuger_3", // ID 62
+    "Betriebsstunden_Waermepumpe", // ID 63
+    "Betriebsstunden_Heizung", // ID 64
+    "Betriebsstunden_Warmwasser", // ID 65
+    "Betriebsstunden_Kuehlung", // ID 66
+    "Waermepumpe_laeuft_seit", // ID 67
+    "Zweiter_Waermeerzeuger_1_laeuft_seit", // ID 68
+    "Zweiter_Waermeerzeuger_2_laeuft_seit", // ID 69
+    "Netzeinschaltverzoegerung", // ID 70
+    "Schaltspielsperre_Aus", // ID 71
+    "Schaltspielsperre_Ein", // ID 72
+    "Verdichter_Standzeit", // ID 73
+    "Heizungsregler_Mehr_Zeit", // ID 74
+    "Heizungsregler_Weniger_Zeit", // ID 75
+    "Thermische_Desinfektion_laeuft_seit", // ID 76
+    "Sperre_Warmwasser", // ID 77
+    "Waermepumpentyp", // ID 78
+    "Bivalenzstufe", // ID 79
+    "Betriebszustand", // ID 80
+    "SoftStand1", // ID 81
+    "SoftStand2", // ID 82
+    "SoftStand3", // ID 83
+    "SoftStand4", // ID 84
+    "SoftStand5", // ID 85
+    "SoftStand6", // ID 86
+    "SoftStand7", // ID 87
+    "SoftStand8", // ID 88
+    "SoftStand9", // ID 89
+    "SoftStand10", // ID 90
+    "IP_Adresse", // ID 91
+    "Subnetzmaske", // ID 92
+    "Broadcast_Adresse", // ID 93
+    "Standard_Gateway", // ID 94
+    "Zeitstempel_Fehler_0", // ID 95
+    "Zeitstempel_Fehler_1", // ID 96
+    "Zeitstempel_Fehler_2", // ID 97
+    "Zeitstempel_Fehler_3", // ID 98
+    "Zeitstempel_Fehler_4", // ID 99
+    "Fehlercode_Fehler_0", // ID 100
+    "Fehlercode_Fehler_1", // ID 101
+    "Fehlercode_Fehler_2", // ID 102
+    "Fehlercode_Fehler_3", // ID 103
+    "Fehlercode_Fehler_4", // ID 104
+    "Anzahl_der_Fehler", // ID 105
+    "Grund_Abschaltung_0", // ID 106
+    "Grund_Abschaltung_1", // ID 107
+    "Grund_Abschaltung_2", // ID 108
+    "Grund_Abschaltung_3", // ID 109
+    "Grund_Abschaltung_4", // ID 110
+    "Zeitstempel_Abschaltung_0", // ID 111
+    "Zeitstempel_Abschaltung_1", // ID 112
+    "Zeitstempel_Abschaltung_2", // ID 113
+    "Zeitstempel_Abschaltung_3", // ID 114
+    "Zeitstempel_Abschaltung_4", // ID 115
+    "Comfort_Platine_installiert", // ID 116
+    "Status_Zeile_1", // ID 117
+    "Status_Zeile_2", // ID 118
+    "Status_Zeile_3", // ID 119
+    "Zeit_seit_in_von_Wert_118", // ID 120
+    "Stufe_Ausheizprogramm", // ID 121
+    "Temperatur_Ausheizprogramm", // ID 122
+    "Laufzeit_Ausheizprogramm", // ID 123
+    "Brauchwasser_aktiv_inaktiv_Symbol", // ID 124
+    "Heizung_Symbol", // ID 125
+    "Mischkreis_1_Symbol", // ID 126
+    "Mischkreis_2_Symbol", // ID 127
+    "Einstellung_Kurzprogramm", // ID 128
+    "Status_Slave_1", // ID 129
+    "Status_Slave_2", // ID 130
+    "Status_Slave_3", // ID 131
+    "Status_Slave_4", // ID 132
+    "Status_Slave_5", // ID 133
+    "Aktuelle_Zeit_der_Waermepumpe", // ID 134
+    "Mischkreis_3_Symbol", // ID 135
+    "Mischkreis_3_Vorlauf_Soll_Temperatur", // ID 136
+    "Mischkreis_3_Vorlauftemperatur", // ID 137
+    "Ausgang_Mischkreis_3_Zu", // ID 138
+    "Ausgang_Mischkreis_3_Auf", // ID 139
+    "Pumpe_Mischkreis_3", // ID 140
+    "Zeit_bis_Abtauen", // ID 141
+    "Raumtemperatur_Raumstation_2", // ID 142
+    "Raumtemperatur_Raumstation_3", // ID 143
+    "Schaltuhr_Schwimmbad_Symbol", // ID 144
+    "Betriebsstunden_Schwimmbad", // ID 145
+    "Freigabe_Kuehlung", // ID 146
+    "Analoges_Eingangssignal", // ID 147
+    "SonderZeichen", // ID 148
+    "Zirkulationspumpen_Symbol", // ID 149
+    "WebsrvProgrammWerteBeobarten", // ID 150
+    "Waermemengenzaehler_Heizung", // ID 151
+    "Waermemengenzaehler_Brauchwasser", // ID 152
+    "Waermemengenzaehler_Schwimmbad", // ID 153
+    "Waermemengenzaehler_Gesamt", // ID 154
+    "Waermemengenzaehler_Durchfluss", // ID 155
+    "Analog_Ausgang_1", // ID 156
+    "Analog_Ausgang_2", // ID 157
+    "Sperre_zweiter_Verdichter_Heissgas", // ID 158
+    "Zulufttemperatur", // ID 159
+    "Ablufttemperatur", // ID 160
+    "Betriebstundenzaehler_Solar ", // ID 161
+    "Analog_Ausgang_3", // ID 162
+    "Analog_Ausgang_4", // ID 163
+    "Zuluft_Ventilator_Abtaufunktion", // ID 164
+    "Abluft_Ventilator", // ID 165
+    "Ausgang_VSK", // ID 166
+    "Ausgang_FRH", // ID 167
+    "Analog_Eingang_2", // ID 168
+    "Analog_Eingang_3", // ID 169
+    "Eingang_SAX", // ID 170
+    "Eingang_SPL", // ID 171
+    "Lueftungsplatine_verbaut", // ID 172
+    "Durchfluss_Waermequelle", // ID 173
+    "LIN_BUS_verbaut", // ID 174
+    "Temperatur_Ansaug_Verdampfer", // ID 175
+    "Temperatur_Ansaug_Verdichter", // ID 176
+    "Temperatur_Verdichter_Heizung", // ID 177
+    "Ueberhitzung", // ID 178
+    "Ueberhitzung_Soll", // ID 179
+    "Hochdruck", // ID 180
+    "Niederdruck", // ID 181
+    "Ausgang_Verdichterheizung", // ID 182
+    "Steuersignal_Umwaelzpumpe", // ID 183
+    "Ventilator_Drehzahl", // ID 184
+    "EVU_2", // ID 185
+    "Sicherheits_Temperatur_Begrenzer_Fussbodenheizung", // ID 186
+    "Leistung_Sollwert", // ID 187
+    "Leistung_Istwert", // ID 188
+    "Temperatur_Vorlauf_Soll", // ID 189
+    "Software_Stand_SEC_Board", // ID 190
+    "Betriebszustand_SEC_Board", // ID 191
+    "Vierwegeventil", // ID 192
+    "Verdichterdrehzahl", // ID 193
+    "Verdichtertemperatur_EVI_Enhanced_Vapour_Injection", // ID 194
+    "Ansaugtemperatur_EVI", // ID 195
+    "Ueberhitzung_EVI", // ID 196
+    "Ueberhitzung_EVI_Sollwert", // ID 197
+    "Kondensationstemperatur", // ID 198
+    "Fluessigtemperatur_EEV_elektronisches_Expansionsventil", // ID 199
+    "Unterkuehlung_EEV", // ID 200
+    "Druck_EVI", // ID 201
+    "Spannung_Inverter", // ID 202
+    "Temperarturfuehler_Heissgas_2", // ID 203
+    "Temperaturfuehler_Waermequelleneintritt_2", // ID 204
+    "Ansaugtemperatur_Verdampfer_2", // ID 205
+    "Ansaugtemperatur_Verdichter_2", // ID 206
+    "Temperatur_Verdichter_2_Heizung", // ID 207
+    "Ueberhitzung_2", // ID 208
+    "Ueberhitzung_Soll_2", // ID 209
+    "Hochdruck_2", // ID 210
+    "Niederdruck_2", // ID 211
+    "Eingang_Druckschalter_Hochdruck_2", // ID 212
+    "Ausgang_Abtauventil_2", // ID 213
+    "Ausgang_Solepumpe_Ventilator_2", // ID 214
+    "Ausgang_Verdichter_1_2", // ID 215
+    "Ausgang_Verdichter_Heizung_2", // ID 216
+    "Grund_Abschaltung_0_im_Speicher", // ID 217
+    "Grund_Abschaltung_1_im_Speicher", // ID 218
+    "Grund_Abschaltung_2_im_Speicher", // ID 219
+    "Grund_Abschaltung_3_im_Speicher3", // ID 220
+    "Grund_Abschaltung_4_im_Speicher", // ID 221
+    "Zeitstempel_Abschaltung_0_im_Speicher", // ID 222
+    "Zeitstempel_Abschaltung_1_im_Speicher", // ID 223
+    "Zeitstempel_Abschaltung_2_im_Speicher", // ID 224
+    "Zeitstempel_Abschaltung_3_im_Speicher", // ID 225
+    "Zeitstempel_Abschaltung_4_im_Speicher", // ID 226
+    "Raumtemperatur_Istwert", // ID 227
+    "Raumtemperatur_Sollwert", // ID 228
+    "Temperatur_Brauchwasser_Oben", // ID 229
+    "Waermepumpen_Typ_2", // ID 230
+    "Verdichterfrequenz", // ID 231
+    "Vapourisation_Temperature", // ID 232
+    "Liquefaction_Temperature", // ID 233
+    "unbekannt_234", // ID 234
+    "unbekannt_235", // ID 235
+    "Verdichterfrequenz_Soll", // ID 236
+    "Freq_VD_Min", // ID 237
+    "Freq_VD_Max", // ID 238
+    "VBO_Temp_Spread_Soll", // ID 239
+    "VBO_Temp_Spread_Ist", // ID 240
+    "Steuersignal_Umwaelzpumpe_2", // ID 241
+    "HUP_Temp_Spread_Soll", // ID 242
+    "HUP_Temp_Spread_Ist", // ID 243
+    "Temperatur_VLMax", // ID 244
+    "Temperatur_VLMax_2", // ID 245
+    "SEC_EVi", // ID 246
+    "SEC_EEV", // ID 247
+    "Time_ZWE3_akt", // ID 248
+    "unbekannt_249", // ID 249
+    "unbekannt_250", // ID 250
+    "Unterkuehlung", // ID 251
+    "unbekannt_252", // ID 252
+    "unbekannt_253", // ID 253
+    "Flow_Rate", // ID 254
+    "unbekannt_255", // ID 255
+    "unbekannt_256", // ID 256
+    "Waermeleistung", // ID 257
+    "RBE_Version", // ID 258
+    "unbekannt_259", // ID 259
+    "unbekannt_260", // ID 260
+    "unbekannt_261", // ID 261
+    "unbekannt_262", // ID 262
+    "unbekannt_263", // ID 263
+    "unbekannt_264", // ID 264
+    "unbekannt_265", // ID 265
+    "unbekannt_266", // ID 266
+    "Desired_Room_Temperature", // ID 267
+    "Leistungsaufnahme", // ID 268
+    "unbekannt_269", // ID 269
+    "unbekannt_270", // ID 270
+    "unbekannt_271", // ID 271
+    "unbekannt_272", // ID 272
+    "unbekannt_273", // ID 273
+    "unbekannt_274", // ID 274
+    "unbekannt_275",// ID 275
+);
