@@ -102,6 +102,10 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 4.5 (24.08.2026)
+
+- Variablenprofil für Heizstatatus ID125 hinzugefügt.
+
 Version 4.4 (20.08.2026)
 
 - Problem behoben, dass unbekannte Variablen nicht erstellt werden konnten .
