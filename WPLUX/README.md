@@ -104,7 +104,7 @@ Beispiel:
 
 Version 4.5 (24.08.2026)
 
-- Variablenprofil für Heizstatatus ID125 hinzugefügt.
+- Variablenprofil für Heizstatus ID125 hinzugefügt.
 
 Version 4.4 (20.08.2026)
 
