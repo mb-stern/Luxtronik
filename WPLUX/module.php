@@ -1402,6 +1402,10 @@ class Luxtronik extends IPSModuleStrict
             case ($id == 124):
                 $this->RegisterVariableBoolean($ident, $ident, 'WPLUX.Akt', $id);
                 break;
+                
+            case ($id == 125):
+                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.HzState', $id);
+                break;
 
             case ($id == 147 || ($id >= 156 && $id <= 157) || ($id >= 162 && $id <= 165) || ($id >= 168 && $id <= 169)):
                 $this->RegisterVariableFloat($ident, $ident, '~Volt', $id);

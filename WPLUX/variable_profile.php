@@ -169,6 +169,21 @@ IPS_SetVariableProfileValues("WPLUX.Ver", 0, 0, 1);
 IPS_SetVariableProfileDigits("WPLUX.Ver", 0);
 IPS_SetVariableProfileText("WPLUX.Ver", "", " rpm");
 
+
+// WPLUX.HzState
+if (!IPS_VariableProfileExists("WPLUX.HzState")) {
+    IPS_CreateVariableProfile("WPLUX.HzState", 1); // 1 = Integer
+    $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.HzState erstellt", 0);
+}
+IPS_SetVariableProfileValues("WPLUX.HzState", 0, 4, 1);
+IPS_SetVariableProfileDigits("WPLUX.HzState", 0);
+IPS_SetVariableProfileText("WPLUX.HzState", "", "");
+IPS_SetVariableProfileAssociation("WPLUX.HzState", 0, "Aus", "", -1);
+IPS_SetVariableProfileAssociation("WPLUX.HzState", 1, "Normal", "", -1);
+IPS_SetVariableProfileAssociation("WPLUX.HzState", 2, "Abgesenkt", "", -1);
+IPS_SetVariableProfileAssociation("WPLUX.HzState", 3, "Heizgrenze", "", -1);
+IPS_SetVariableProfileAssociation("WPLUX.HzState", 4, "Frostschutz", "", -1);
+
 // WPLUX.Bet
 if (!IPS_VariableProfileExists("WPLUX.Bet")) {
     IPS_CreateVariableProfile("WPLUX.Bet", 1); // 1 = Integer
