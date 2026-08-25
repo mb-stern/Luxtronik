@@ -125,8 +125,8 @@ class Luxtronik extends IPSModuleStrict
 
         $this->SetStatus(102); // Instanz aktiv
 
-        //Variableprofile erstellen wenn nicht vorhanden
-        require_once __DIR__ . '/variable_profile.php';
+        // Variablenprofile zentral aus dieser module.php erstellen
+        $this->CreateVariableProfiles();
 
         // Timer für Aktualisierung aktualisieren
         $this->SetTimerInterval('UpdateTimer', $this->ReadPropertyInteger('UpdateInterval') * 1000);
@@ -926,13 +926,12 @@ class Luxtronik extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
+        // Namen und IDs kommen direkt aus der zentralen ID-Konfiguration
+        // am Schluss dieser module.php. Eine separate Java-Datensatzdatei ist
+        // dafür nicht mehr erforderlich.
         $dataset = [];
-        $javaFile = __DIR__ . '/java_3004.php';
-        if (is_file($javaFile)) {
-            require_once $javaFile; // erwartet: $java_dataset
-            if (isset($java_dataset) && is_array($java_dataset)) {
-                $dataset = $java_dataset;
-            }
+        foreach (self::DATA_POINT_CONFIG as $id => $config) {
+            $dataset[(int)$id] = (string)($config['name'] ?? ('ID_' . $id));
         }
 
         $saved = json_decode($this->ReadPropertyString('IDListe'), true);
@@ -1164,8 +1163,11 @@ class Luxtronik extends IPSModuleStrict
         $WwcJavaPort = (int)$this->ReadPropertyInteger('Port');
         $SiteTitle  = "WÄRMEPUMPE"; // falls du es später nutzt
 
-        // Namen der Variablen laden (3004 Berechnungen lesen)
-        require_once __DIR__ . '/java_3004.php';
+        // Namen der Variablen direkt aus der zentralen ID-Konfiguration laden.
+        $java_dataset = [];
+        foreach (self::DATA_POINT_CONFIG as $id => $config) {
+            $java_dataset[(int)$id] = (string)($config['name'] ?? ('ID_' . $id));
+        }
 
         // ID-Liste lesen (List-Property mit: enabled + id)
         $idListe = json_decode($this->ReadPropertyString('IDListe'), true);
@@ -1291,6 +1293,7 @@ class Luxtronik extends IPSModuleStrict
     private function GetDataPointConfig(int $id): array
     {
         return self::DATA_POINT_CONFIG[$id] ?? [
+            'name'       => 'ID_' . $id,
             'type'       => 'string',
             'profile'    => '',
             'conversion' => 'factor',
@@ -1731,208 +1734,578 @@ class Luxtronik extends IPSModuleStrict
      * Typ: bool | int | float | string
      * Umrechnung: factor | signed_tenth | duration | hours | ascii | ip
      */
+
+    private function CreateVariableProfiles(): void
+    {
+        // Benötigte Variablenprofile erstellen
+
+        // WPLUX.Imp
+        if (!IPS_VariableProfileExists("WPLUX.Imp")) {
+            IPS_CreateVariableProfile("WPLUX.Imp", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Imp erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Imp", 0, 0, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Imp", 0);
+        IPS_SetVariableProfileText("WPLUX.Imp", "", " impulse");
+
+        // WPLUX.Typ
+        if (!IPS_VariableProfileExists("WPLUX.Typ")) {
+            IPS_CreateVariableProfile("WPLUX.Typ", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Typ erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Typ", 0, 0, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Typ", 0);
+        IPS_SetVariableProfileText("WPLUX.Typ", "", "");
+
+        // WPLUX.Biv
+        if (!IPS_VariableProfileExists("WPLUX.Biv")) {
+            IPS_CreateVariableProfile("WPLUX.Biv", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Biv erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Biv", 1, 3, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Biv", 0);
+        IPS_SetVariableProfileText("WPLUX.Biv", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Biv", 1, "ein Verdichter darf laufen", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Biv", 2, "zwei Verdichter dürfen laufen", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Biv", 3, "zusätzlicher Wärmeerzeuger darf mitlaufen", "", -1);
+
+        // WPLUX.BZ
+        if (!IPS_VariableProfileExists("WPLUX.BZ")) {
+            IPS_CreateVariableProfile("WPLUX.BZ", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.BZ erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.BZ", 0, 7, 1);
+        IPS_SetVariableProfileDigits("WPLUX.BZ", 0);
+        IPS_SetVariableProfileText("WPLUX.BZ", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.BZ", 0, "Heizen", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.BZ", 1, "Warmwasser", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.BZ", 2, "Schwimmbad / Photovoltaik", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.BZ", 3, "EVU", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.BZ", 4, "Abtauen", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.BZ", 5, "Keine Anforderung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.BZ", 6, "Heizen ext. Energiequelle", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.BZ", 7, "Kühlbetrieb ", "", -1);
+
+        // WPLUX.Off
+        if (!IPS_VariableProfileExists("WPLUX.Off")) {
+            IPS_CreateVariableProfile("WPLUX.Off", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Off erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Off", 1, 9, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Off", 0);
+        IPS_SetVariableProfileText("WPLUX.Off", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Off", 1, "Wärmepumpe Störung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Off", 2, "Anlagen Störung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Off", 3, "Betriebsart Zweiter Wärmeerzeuger", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Off", 4, "EVU-Sperre", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Off", 5, "Lauftabtau (nur LW-Geräte)", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Off", 6, "Temperatur Einsatzgrenze maximal", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Off", 7, "Temperatur Einsatzgrenze minimal", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Off", 8, "Untere Einsatzgrenze", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Off", 9, "Keine Anforderung ", "", -1);
+
+        // WPLUX.Comf
+        if (!IPS_VariableProfileExists("WPLUX.Comf")) {
+            IPS_CreateVariableProfile("WPLUX.Comf", 0); // 0 = Bool
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Comf erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Comf", 0, 1, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Comf", 0);
+        IPS_SetVariableProfileText("WPLUX.Comf", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Comf", 0, "nicht verbaut", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Comf", 1, "verbaut", "", -1);
+
+        // WPLUX.Men1
+        if (!IPS_VariableProfileExists("WPLUX.Men1")) {
+            IPS_CreateVariableProfile("WPLUX.Men1", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Men1 erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Men1", 0, 7, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Men1", 0);
+        IPS_SetVariableProfileText("WPLUX.Men1", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Men1", 0, "Wärmepumpe läuft", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men1", 1, "Wärmepumpe steht", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men1", 2, "Wärmepumpe kommt", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men1", 3, "Fehlercode Speicherplatz 0", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men1", 4, "Abtauen", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men1", 5, "Warte auf LIN-Verbindung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men1", 6, "Verdichter heizt auf", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men1", 7, "Pumpenvorlauf ", "", -1);
+
+        // WPLUX.Men2
+        if (!IPS_VariableProfileExists("WPLUX.Men2")) {
+            IPS_CreateVariableProfile("WPLUX.Men2", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Men2 erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Men2", 0, 1, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Men2", 0);
+        IPS_SetVariableProfileText("WPLUX.Men2", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Men2", 0, "seit :", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men2", 1, "in : ", "", -1);
+
+        // WPLUX.Men3
+        if (!IPS_VariableProfileExists("WPLUX.Men3")) {
+            IPS_CreateVariableProfile("WPLUX.Men3", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Men3 erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Men3", 0, 17, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Men3", 0);
+        IPS_SetVariableProfileText("WPLUX.Men3", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 0, "Heizbetrieb", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 1, "Keine Anforderung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 2, "Netz-Einschaltverzögerung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 3, "Schaltspielsperre", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 4, "Sperrzeit", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 5, "Brauchwasser", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 6, "Info Ausheizprogramm", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 7, "Abtauen", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 8, "Pumpenvorlauf", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 9, "Thermische Desinfektion", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 11, "Heizbetrieb", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 12, "Schwimmbad / Photovoltaik", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 13, "Heizen ext. Energiequelle", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 14, "Brauchwasser ext. Energiequelle", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 16, "Durchflussüberachung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Men3", 17, "Zweiter Wärmeerzeuger 1 Betrieb ", "", -1);
+
+        // WPLUX.Akt
+        if (!IPS_VariableProfileExists("WPLUX.Akt")) {
+            IPS_CreateVariableProfile("WPLUX.Akt", 0); // 0 = Bool
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Akt erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Akt", 0, 1, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Akt", 0);
+        IPS_SetVariableProfileText("WPLUX.Akt", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Akt", 0, "inaktiv", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Akt", 1, "aktiv", "", -1);
+
+        // WPLUX.Pres
+        if (!IPS_VariableProfileExists("WPLUX.Pres")) {
+            IPS_CreateVariableProfile("WPLUX.Pres", 2); // 2 = Float
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Pres erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Pres", 0, 0, 0.1);
+        IPS_SetVariableProfileDigits("WPLUX.Pres", 1);
+        IPS_SetVariableProfileText("WPLUX.Pres", "", " bar");
+
+        // WPLUX.Fan
+        if (!IPS_VariableProfileExists("WPLUX.Fan")) {
+            IPS_CreateVariableProfile("WPLUX.Fan", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Fan erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Fan", 0, 0, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Fan", 0);
+        IPS_SetVariableProfileText("WPLUX.Fan", "", " rpm");
+
+        // WPLUX.Ver
+        if (!IPS_VariableProfileExists("WPLUX.Ver")) {
+            IPS_CreateVariableProfile("WPLUX.Ver", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Ver erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Ver", 0, 0, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Ver", 0);
+        IPS_SetVariableProfileText("WPLUX.Ver", "", " rpm");
+
+
+        // WPLUX.HzState
+        if (!IPS_VariableProfileExists("WPLUX.HzState")) {
+            IPS_CreateVariableProfile("WPLUX.HzState", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.HzState erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.HzState", 0, 4, 1);
+        IPS_SetVariableProfileDigits("WPLUX.HzState", 0);
+        IPS_SetVariableProfileText("WPLUX.HzState", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.HzState", 0, "Aus", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.HzState", 1, "Normal", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.HzState", 2, "Abgesenkt", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.HzState", 3, "Heizgrenze", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.HzState", 4, "Frostschutz", "", -1);
+
+        // WPLUX.Bet
+        if (!IPS_VariableProfileExists("WPLUX.Bet")) {
+            IPS_CreateVariableProfile("WPLUX.Bet", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Bet erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Bet", 0, 12, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Bet", 0);
+        IPS_SetVariableProfileText("WPLUX.Bet", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 0, "Aus", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 1, "Kühlung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 2, "Heizung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 3, "Störung", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 4, "Übergang", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 5, "Abtauen", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 6, "Warte", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 7, "Warte", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 8, "Übergang", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 9, "Stop", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 10, "Manuell ", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 11, "Simulation Start", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Bet", 12, "EVU Sperre", "", -1);
+
+        // WPLUX.lh
+        if (!IPS_VariableProfileExists("WPLUX.lh")) {
+            IPS_CreateVariableProfile("WPLUX.lh", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.lh erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.lh", 0, 0, 1);
+        IPS_SetVariableProfileDigits("WPLUX.lh", 0);
+        IPS_SetVariableProfileText("WPLUX.lh", "", " l/h");
+
+        // WPLUX.Wwhe
+        if (!IPS_VariableProfileExists("WPLUX.Wwhe")) {
+            IPS_CreateVariableProfile("WPLUX.Wwhe", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Wwhe erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Wwhe", 0, 4, 0);
+        IPS_SetVariableProfileDigits("WPLUX.Wwhe", 0);
+        IPS_SetVariableProfileText("WPLUX.Wwhe", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 0, "Automatik", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 1, "Zus. Wärmeerzeugun", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 2, "Party", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 3, "Ferien", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 4, "Aus", "", -1);
+
+        // WPLUX.Kue
+        if (!IPS_VariableProfileExists("WPLUX.Kue")) {
+            IPS_CreateVariableProfile("WPLUX.Kue", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Kue erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Kue", 0, 1, 0);
+        IPS_SetVariableProfileDigits("WPLUX.Kue", 0);
+        IPS_SetVariableProfileText("WPLUX.Kue", "", "");
+        IPS_SetVariableProfileAssociation("WPLUX.Kue", 0, "Aus", "", -1);
+        IPS_SetVariableProfileAssociation("WPLUX.Kue", 1, "Automatik", "", -1);
+
+        // WPLUX.Tset
+        if (!IPS_VariableProfileExists("WPLUX.Tset")) {
+            IPS_CreateVariableProfile("WPLUX.Tset", 2); // 2 = Float
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Tset erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Tset", -5, 5, 0.5);
+        IPS_SetVariableProfileDigits("WPLUX.Tset", 1);
+        IPS_SetVariableProfileText("WPLUX.Tset", "", " °C");
+
+        // WPLUX.Wset
+        if (!IPS_VariableProfileExists("WPLUX.Wset")) {
+            IPS_CreateVariableProfile("WPLUX.Wset", 2); // 2 = Float
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Wset erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Wset", 30, 65, 0.5);
+        IPS_SetVariableProfileDigits("WPLUX.Wset", 1);
+        IPS_SetVariableProfileText("WPLUX.Wset", "", " °C");
+
+        // WPLUX.Std
+        if (!IPS_VariableProfileExists("WPLUX.Std")) {
+            IPS_CreateVariableProfile("WPLUX.Std", 1); // 1 = Integer
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Std erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Std", 0, 0, 1);
+        IPS_SetVariableProfileDigits("WPLUX.Std", 0);
+        IPS_SetVariableProfileText("WPLUX.Std", "", " Std.");
+
+        // WPLUX.kW
+        if (!IPS_VariableProfileExists("WPLUX.kW")) {
+            IPS_CreateVariableProfile("WPLUX.kW", 2); // 2 = Float
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.kW erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.kW", 0, 0, 0.01);
+        IPS_SetVariableProfileDigits("WPLUX.kW", 2);
+        IPS_SetVariableProfileText("WPLUX.kW", "", " kW");
+
+        // WPLUX.Cop
+        if (!IPS_VariableProfileExists("WPLUX.Cop")) {
+            IPS_CreateVariableProfile("WPLUX.Cop", 2); // 2 = Float
+            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Cop erstellt", 0);
+        }
+        IPS_SetVariableProfileValues("WPLUX.Cop", 0, 0, 0.1);
+        IPS_SetVariableProfileDigits("WPLUX.Cop", 1);
+        IPS_SetVariableProfileText("WPLUX.Cop", "", "");
+    }
+
+    /*
+     * ============================================================================
+     * ZENTRALE ID-KONFIGURATION – JEDE ID GENAU EINE ZEILE
+     * ============================================================================
+     * Name, Variablentyp, Profil, Umrechnung, Faktor und Nachkommastellen stehen
+     * damit für jede Luxtronik-Java-ID vollständig an genau einer Stelle.
+     */
     private const DATA_POINT_CONFIG = [
-        10 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        11 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        12 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        13 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        14 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        15 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        16 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        17 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        18 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        19 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        20 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        21 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        22 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        23 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        24 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        25 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        26 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        27 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        28 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        29 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        30 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        31 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        32 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        33 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        34 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        35 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        36 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        37 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        38 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        39 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        40 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        41 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        42 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        43 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        44 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        45 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        46 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        47 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        48 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        49 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        50 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        51 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        52 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        53 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        54 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        55 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        56 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
-        57 => ['type' => 'int', 'profile' => 'WPLUX.Imp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        58 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
-        59 => ['type' => 'int', 'profile' => 'WPLUX.Imp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        60 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
-        61 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
-        62 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
-        63 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
-        64 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
-        65 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
-        66 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
-        67 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        68 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        69 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        70 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        71 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        72 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        73 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        74 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        75 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        76 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        77 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        78 => ['type' => 'int', 'profile' => 'WPLUX.Typ', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        79 => ['type' => 'int', 'profile' => 'WPLUX.Biv', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        80 => ['type' => 'int', 'profile' => 'WPLUX.BZ', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        81 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        82 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        83 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        84 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        85 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        86 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        87 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        88 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        89 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        90 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
-        91 => ['type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
-        92 => ['type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
-        93 => ['type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
-        94 => ['type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
-        95 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        96 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        97 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        98 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        99 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        106 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        107 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        108 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        109 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        110 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        111 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        112 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        113 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        114 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        115 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        116 => ['type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        117 => ['type' => 'int', 'profile' => 'WPLUX.Men1', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        118 => ['type' => 'int', 'profile' => 'WPLUX.Men2', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        119 => ['type' => 'int', 'profile' => 'WPLUX.Men3', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        120 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        122 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        123 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        124 => ['type' => 'bool', 'profile' => 'WPLUX.Akt', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        125 => ['type' => 'int', 'profile' => 'WPLUX.HzState', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        134 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        136 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        137 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        138 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        139 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        140 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        141 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        142 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        143 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        144 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        146 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        147 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        151 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        152 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        153 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        154 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        156 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        157 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        158 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        161 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        162 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        163 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        164 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        165 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        166 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        167 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        168 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        169 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        170 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        171 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        172 => ['type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        173 => ['type' => 'int', 'profile' => 'WPLUX.lh', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        174 => ['type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        175 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        176 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        177 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        178 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        179 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        180 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        181 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        182 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        183 => ['type' => 'float', 'profile' => '~Valve.F', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        184 => ['type' => 'int', 'profile' => 'WPLUX.Fan', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        186 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        187 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        188 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        189 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        191 => ['type' => 'int', 'profile' => 'WPLUX.Bet', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        193 => ['type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        194 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        195 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        196 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        197 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        198 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        199 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        200 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        201 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        208 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        209 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        210 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        211 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        212 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        213 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        214 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        215 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        216 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        217 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        218 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        219 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        220 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        221 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        222 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        223 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        224 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        225 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        226 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        227 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        228 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        229 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        231 => ['type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        232 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        233 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        236 => ['type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        239 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        240 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        241 => ['type' => 'float', 'profile' => '~Valve.F', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        242 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        243 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        251 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        254 => ['type' => 'int', 'profile' => 'WPLUX.lh', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        257 => ['type' => 'float', 'profile' => 'WPLUX.kW', 'conversion' => 'factor', 'factor' => 0.001, 'decimals' => 2],
-        267 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        268 => ['type' => 'float', 'profile' => '~Watt', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        0 => ['name' => 'unbekannt_0', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        1 => ['name' => 'unbekannt_1', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        2 => ['name' => 'unbekannt_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        3 => ['name' => 'unbekannt_3', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        4 => ['name' => 'unbekannt_4', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        5 => ['name' => 'unbekannt_5', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        6 => ['name' => 'unbekannt_6', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        7 => ['name' => 'unbekannt_7', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        8 => ['name' => 'unbekannt_8', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        9 => ['name' => 'unbekannt_9', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        10 => ['name' => 'Vorlauftemperatur_Heizkreis', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        11 => ['name' => 'Ruecklauftemperatur_Heizkreis', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        12 => ['name' => 'Ruecklauf_Soll_Heizkreis', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        13 => ['name' => 'Ruecklauftemperatur_im_Trennspeicher', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        14 => ['name' => 'Heisgastemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        15 => ['name' => 'Aussentemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        16 => ['name' => 'Durchschnittstemperatur_Aussen_ueber_24_h', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        17 => ['name' => 'Warmwasser_Ist_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        18 => ['name' => 'Warmwasser_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        19 => ['name' => 'Waermequellen_Eintrittstemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        20 => ['name' => 'Waermequellen_Austrittstemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        21 => ['name' => 'Mischkreis_1_Vorlauftemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        22 => ['name' => 'Mischkreis_1_Vorlauf_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        23 => ['name' => 'Raumtemperatur_Raumstation_1', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        24 => ['name' => 'Mischkreis_2_Vorlauftemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        25 => ['name' => 'Mischkreis_2_Vorlauf_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        26 => ['name' => 'Fuehler_Solarkollektor', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        27 => ['name' => 'Fuehler_Solarspeicher', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        28 => ['name' => 'Fuehler_externe_Energiequelle', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        29 => ['name' => 'Eingang_Abtauende_Soledruck_Durchfluss', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        30 => ['name' => 'Eingang_Brauchwarmwasserthermostat', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        31 => ['name' => 'Eingang_EVU_Sperre', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        32 => ['name' => 'Eingang_Hochdruck_Kaeltekreis', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        33 => ['name' => 'Eingang_Motorschutz_OK', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        34 => ['name' => 'Eingang_Niederdruck', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        35 => ['name' => 'Eingang_Ueberwachungskontakt_fuer_Potentiostat', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        36 => ['name' => 'Eingang_Schwimmbadthermostat', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        37 => ['name' => 'Ausgang_Abtauventil', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        38 => ['name' => 'Ausgang_Brauchwasserpumpe_Umstellventil', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        39 => ['name' => 'Ausgang_Heizungsumwaelzpumpe', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        40 => ['name' => 'Ausgang_Mischkreis_1_Auf', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        41 => ['name' => 'Ausgang_Mischkreis_1_Zu', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        42 => ['name' => 'Ausgang_Ventilation_Lueftung', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        43 => ['name' => 'Ausgang_Solepumpe_Ventilator', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        44 => ['name' => 'Ausgang_Verdichter_1', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        45 => ['name' => 'Ausgang_Verdichter_2', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        46 => ['name' => 'Ausgang_Zirkulationspumpe', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        47 => ['name' => 'Ausgang_Zusatzumwaelzpumpe', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        48 => ['name' => 'Ausgang_Steuersignal_Zusatzheizung_v_Heizung', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        49 => ['name' => 'Ausgang_Steuersignal_Zusatzheizung_Stoersignal', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        50 => ['name' => 'Ausgang_Zusatzheizung_3', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        51 => ['name' => 'Ausgang_Pumpe_Mischkreis_2', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        52 => ['name' => 'Ausgang_Solarladepumpe', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        53 => ['name' => 'Ausgang_Schwimmbadpumpe', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        54 => ['name' => 'Ausgang_Mischkreis_2_Zu', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        55 => ['name' => 'Ausgang_Mischkreis_2_Auf', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        56 => ['name' => 'Betriebsstunden_Verdichter_1', 'type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        57 => ['name' => 'Impulse_Verdichter_1', 'type' => 'int', 'profile' => 'WPLUX.Imp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        58 => ['name' => 'Betriebsstunden_Verdichter_2', 'type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        59 => ['name' => 'Impulse_Verdichter_2', 'type' => 'int', 'profile' => 'WPLUX.Imp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        60 => ['name' => 'Betriebsstunden_Zweiter_Waermeerzeuger_1', 'type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        61 => ['name' => 'Betriebsstunden_Zweiter_Waermeerzeuger_2', 'type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        62 => ['name' => 'Betriebsstunden_Zweiter_Waermeerzeuger_3', 'type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        63 => ['name' => 'Betriebsstunden_Waermepumpe', 'type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        64 => ['name' => 'Betriebsstunden_Heizung', 'type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        65 => ['name' => 'Betriebsstunden_Warmwasser', 'type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        66 => ['name' => 'Betriebsstunden_Kuehlung', 'type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        67 => ['name' => 'Waermepumpe_laeuft_seit', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        68 => ['name' => 'Zweiter_Waermeerzeuger_1_laeuft_seit', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        69 => ['name' => 'Zweiter_Waermeerzeuger_2_laeuft_seit', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        70 => ['name' => 'Netzeinschaltverzoegerung', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        71 => ['name' => 'Schaltspielsperre_Aus', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        72 => ['name' => 'Schaltspielsperre_Ein', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        73 => ['name' => 'Verdichter_Standzeit', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        74 => ['name' => 'Heizungsregler_Mehr_Zeit', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        75 => ['name' => 'Heizungsregler_Weniger_Zeit', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        76 => ['name' => 'Thermische_Desinfektion_laeuft_seit', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        77 => ['name' => 'Sperre_Warmwasser', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        78 => ['name' => 'Waermepumpentyp', 'type' => 'int', 'profile' => 'WPLUX.Typ', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        79 => ['name' => 'Bivalenzstufe', 'type' => 'int', 'profile' => 'WPLUX.Biv', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        80 => ['name' => 'Betriebszustand', 'type' => 'int', 'profile' => 'WPLUX.BZ', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        81 => ['name' => 'SoftStand1', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        82 => ['name' => 'SoftStand2', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        83 => ['name' => 'SoftStand3', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        84 => ['name' => 'SoftStand4', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        85 => ['name' => 'SoftStand5', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        86 => ['name' => 'SoftStand6', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        87 => ['name' => 'SoftStand7', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        88 => ['name' => 'SoftStand8', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        89 => ['name' => 'SoftStand9', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        90 => ['name' => 'SoftStand10', 'type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        91 => ['name' => 'IP_Adresse', 'type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
+        92 => ['name' => 'Subnetzmaske', 'type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
+        93 => ['name' => 'Broadcast_Adresse', 'type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
+        94 => ['name' => 'Standard_Gateway', 'type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
+        95 => ['name' => 'Zeitstempel_Fehler_0', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        96 => ['name' => 'Zeitstempel_Fehler_1', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        97 => ['name' => 'Zeitstempel_Fehler_2', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        98 => ['name' => 'Zeitstempel_Fehler_3', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        99 => ['name' => 'Zeitstempel_Fehler_4', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        100 => ['name' => 'Fehlercode_Fehler_0', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        101 => ['name' => 'Fehlercode_Fehler_1', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        102 => ['name' => 'Fehlercode_Fehler_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        103 => ['name' => 'Fehlercode_Fehler_3', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        104 => ['name' => 'Fehlercode_Fehler_4', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        105 => ['name' => 'Anzahl_der_Fehler', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        106 => ['name' => 'Grund_Abschaltung_0', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        107 => ['name' => 'Grund_Abschaltung_1', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        108 => ['name' => 'Grund_Abschaltung_2', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        109 => ['name' => 'Grund_Abschaltung_3', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        110 => ['name' => 'Grund_Abschaltung_4', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        111 => ['name' => 'Zeitstempel_Abschaltung_0', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        112 => ['name' => 'Zeitstempel_Abschaltung_1', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        113 => ['name' => 'Zeitstempel_Abschaltung_2', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        114 => ['name' => 'Zeitstempel_Abschaltung_3', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        115 => ['name' => 'Zeitstempel_Abschaltung_4', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        116 => ['name' => 'Comfort_Platine_installiert', 'type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        117 => ['name' => 'Status_Zeile_1', 'type' => 'int', 'profile' => 'WPLUX.Men1', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        118 => ['name' => 'Status_Zeile_2', 'type' => 'int', 'profile' => 'WPLUX.Men2', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        119 => ['name' => 'Status_Zeile_3', 'type' => 'int', 'profile' => 'WPLUX.Men3', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        120 => ['name' => 'Zeit_seit_in_von_Wert_118', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        121 => ['name' => 'Stufe_Ausheizprogramm', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        122 => ['name' => 'Temperatur_Ausheizprogramm', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        123 => ['name' => 'Laufzeit_Ausheizprogramm', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        124 => ['name' => 'Brauchwasser_aktiv_inaktiv_Symbol', 'type' => 'bool', 'profile' => 'WPLUX.Akt', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        125 => ['name' => 'Heizung_Symbol', 'type' => 'int', 'profile' => 'WPLUX.HzState', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        126 => ['name' => 'Mischkreis_1_Symbol', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        127 => ['name' => 'Mischkreis_2_Symbol', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        128 => ['name' => 'Einstellung_Kurzprogramm', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        129 => ['name' => 'Status_Slave_1', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        130 => ['name' => 'Status_Slave_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        131 => ['name' => 'Status_Slave_3', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        132 => ['name' => 'Status_Slave_4', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        133 => ['name' => 'Status_Slave_5', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        134 => ['name' => 'Aktuelle_Zeit_der_Waermepumpe', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        135 => ['name' => 'Mischkreis_3_Symbol', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        136 => ['name' => 'Mischkreis_3_Vorlauf_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        137 => ['name' => 'Mischkreis_3_Vorlauftemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        138 => ['name' => 'Ausgang_Mischkreis_3_Zu', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        139 => ['name' => 'Ausgang_Mischkreis_3_Auf', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        140 => ['name' => 'Pumpe_Mischkreis_3', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        141 => ['name' => 'Zeit_bis_Abtauen', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        142 => ['name' => 'Raumtemperatur_Raumstation_2', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        143 => ['name' => 'Raumtemperatur_Raumstation_3', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        144 => ['name' => 'Schaltuhr_Schwimmbad_Symbol', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        145 => ['name' => 'Betriebsstunden_Schwimmbad', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        146 => ['name' => 'Freigabe_Kuehlung', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        147 => ['name' => 'Analoges_Eingangssignal', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        148 => ['name' => 'SonderZeichen', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        149 => ['name' => 'Zirkulationspumpen_Symbol', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        150 => ['name' => 'WebsrvProgrammWerteBeobarten', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        151 => ['name' => 'Waermemengenzaehler_Heizung', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        152 => ['name' => 'Waermemengenzaehler_Brauchwasser', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        153 => ['name' => 'Waermemengenzaehler_Schwimmbad', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        154 => ['name' => 'Waermemengenzaehler_Gesamt', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        155 => ['name' => 'Waermemengenzaehler_Durchfluss', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        156 => ['name' => 'Analog_Ausgang_1', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        157 => ['name' => 'Analog_Ausgang_2', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        158 => ['name' => 'Sperre_zweiter_Verdichter_Heissgas', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        159 => ['name' => 'Zulufttemperatur', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        160 => ['name' => 'Ablufttemperatur', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        161 => ['name' => 'Betriebstundenzaehler_Solar', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        162 => ['name' => 'Analog_Ausgang_3', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        163 => ['name' => 'Analog_Ausgang_4', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        164 => ['name' => 'Zuluft_Ventilator_Abtaufunktion', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        165 => ['name' => 'Abluft_Ventilator', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        166 => ['name' => 'Ausgang_VSK', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        167 => ['name' => 'Ausgang_FRH', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        168 => ['name' => 'Analog_Eingang_2', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        169 => ['name' => 'Analog_Eingang_3', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        170 => ['name' => 'Eingang_SAX', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        171 => ['name' => 'Eingang_SPL', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        172 => ['name' => 'Lueftungsplatine_verbaut', 'type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        173 => ['name' => 'Durchfluss_Waermequelle', 'type' => 'int', 'profile' => 'WPLUX.lh', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        174 => ['name' => 'LIN_BUS_verbaut', 'type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        175 => ['name' => 'Temperatur_Ansaug_Verdampfer', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        176 => ['name' => 'Temperatur_Ansaug_Verdichter', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        177 => ['name' => 'Temperatur_Verdichter_Heizung', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        178 => ['name' => 'Ueberhitzung', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        179 => ['name' => 'Ueberhitzung_Soll', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        180 => ['name' => 'Hochdruck', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        181 => ['name' => 'Niederdruck', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        182 => ['name' => 'Ausgang_Verdichterheizung', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        183 => ['name' => 'Steuersignal_Umwaelzpumpe', 'type' => 'float', 'profile' => '~Valve.F', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        184 => ['name' => 'Ventilator_Drehzahl', 'type' => 'int', 'profile' => 'WPLUX.Fan', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        185 => ['name' => 'EVU_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        186 => ['name' => 'Sicherheits_Temperatur_Begrenzer_Fussbodenheizung', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        187 => ['name' => 'Leistung_Sollwert', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        188 => ['name' => 'Leistung_Istwert', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        189 => ['name' => 'Temperatur_Vorlauf_Soll', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        190 => ['name' => 'Software_Stand_SEC_Board', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        191 => ['name' => 'Betriebszustand_SEC_Board', 'type' => 'int', 'profile' => 'WPLUX.Bet', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        192 => ['name' => 'Vierwegeventil', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        193 => ['name' => 'Verdichterdrehzahl', 'type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        194 => ['name' => 'Verdichtertemperatur_EVI_Enhanced_Vapour_Injection', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        195 => ['name' => 'Ansaugtemperatur_EVI', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        196 => ['name' => 'Ueberhitzung_EVI', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        197 => ['name' => 'Ueberhitzung_EVI_Sollwert', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        198 => ['name' => 'Kondensationstemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        199 => ['name' => 'Fluessigtemperatur_EEV_elektronisches_Expansionsventil', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        200 => ['name' => 'Unterkuehlung_EEV', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        201 => ['name' => 'Druck_EVI', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        202 => ['name' => 'Spannung_Inverter', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        203 => ['name' => 'Temperarturfuehler_Heissgas_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        204 => ['name' => 'Temperaturfuehler_Waermequelleneintritt_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        205 => ['name' => 'Ansaugtemperatur_Verdampfer_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        206 => ['name' => 'Ansaugtemperatur_Verdichter_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        207 => ['name' => 'Temperatur_Verdichter_2_Heizung', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        208 => ['name' => 'Ueberhitzung_2', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        209 => ['name' => 'Ueberhitzung_Soll_2', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        210 => ['name' => 'Hochdruck_2', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        211 => ['name' => 'Niederdruck_2', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        212 => ['name' => 'Eingang_Druckschalter_Hochdruck_2', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        213 => ['name' => 'Ausgang_Abtauventil_2', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        214 => ['name' => 'Ausgang_Solepumpe_Ventilator_2', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        215 => ['name' => 'Ausgang_Verdichter_1_2', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        216 => ['name' => 'Ausgang_Verdichter_Heizung_2', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        217 => ['name' => 'Grund_Abschaltung_0_im_Speicher', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        218 => ['name' => 'Grund_Abschaltung_1_im_Speicher', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        219 => ['name' => 'Grund_Abschaltung_2_im_Speicher', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        220 => ['name' => 'Grund_Abschaltung_3_im_Speicher3', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        221 => ['name' => 'Grund_Abschaltung_4_im_Speicher', 'type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        222 => ['name' => 'Zeitstempel_Abschaltung_0_im_Speicher', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        223 => ['name' => 'Zeitstempel_Abschaltung_1_im_Speicher', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        224 => ['name' => 'Zeitstempel_Abschaltung_2_im_Speicher', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        225 => ['name' => 'Zeitstempel_Abschaltung_3_im_Speicher', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        226 => ['name' => 'Zeitstempel_Abschaltung_4_im_Speicher', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        227 => ['name' => 'Raumtemperatur_Istwert', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        228 => ['name' => 'Raumtemperatur_Sollwert', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        229 => ['name' => 'Temperatur_Brauchwasser_Oben', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        230 => ['name' => 'Waermepumpen_Typ_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        231 => ['name' => 'Verdichterfrequenz', 'type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        232 => ['name' => 'Vapourisation_Temperature', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        233 => ['name' => 'Liquefaction_Temperature', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        234 => ['name' => 'unbekannt_234', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        235 => ['name' => 'unbekannt_235', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        236 => ['name' => 'Verdichterfrequenz_Soll', 'type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        237 => ['name' => 'Freq_VD_Min', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        238 => ['name' => 'Freq_VD_Max', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        239 => ['name' => 'VBO_Temp_Spread_Soll', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        240 => ['name' => 'VBO_Temp_Spread_Ist', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        241 => ['name' => 'Steuersignal_Umwaelzpumpe_2', 'type' => 'float', 'profile' => '~Valve.F', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        242 => ['name' => 'HUP_Temp_Spread_Soll', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        243 => ['name' => 'HUP_Temp_Spread_Ist', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        244 => ['name' => 'Temperatur_VLMax', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        245 => ['name' => 'Temperatur_VLMax_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        246 => ['name' => 'SEC_EVi', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        247 => ['name' => 'SEC_EEV', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        248 => ['name' => 'Time_ZWE3_akt', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        249 => ['name' => 'unbekannt_249', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        250 => ['name' => 'unbekannt_250', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        251 => ['name' => 'Unterkuehlung', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        252 => ['name' => 'unbekannt_252', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        253 => ['name' => 'unbekannt_253', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        254 => ['name' => 'Flow_Rate', 'type' => 'int', 'profile' => 'WPLUX.lh', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        255 => ['name' => 'unbekannt_255', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        256 => ['name' => 'unbekannt_256', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        257 => ['name' => 'Waermeleistung', 'type' => 'float', 'profile' => 'WPLUX.kW', 'conversion' => 'factor', 'factor' => 0.001, 'decimals' => 2],
+        258 => ['name' => 'RBE_Version', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        259 => ['name' => 'unbekannt_259', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        260 => ['name' => 'unbekannt_260', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        261 => ['name' => 'unbekannt_261', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        262 => ['name' => 'unbekannt_262', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        263 => ['name' => 'unbekannt_263', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        264 => ['name' => 'unbekannt_264', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        265 => ['name' => 'unbekannt_265', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        266 => ['name' => 'unbekannt_266', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        267 => ['name' => 'Desired_Room_Temperature', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        268 => ['name' => 'Leistungsaufnahme', 'type' => 'float', 'profile' => '~Watt', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        269 => ['name' => 'unbekannt_269', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        270 => ['name' => 'unbekannt_270', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        271 => ['name' => 'unbekannt_271', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        272 => ['name' => 'unbekannt_272', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        273 => ['name' => 'unbekannt_273', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        274 => ['name' => 'unbekannt_274', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        275 => ['name' => 'unbekannt_275', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
     ];
 }
