@@ -1807,7 +1807,9 @@ class Luxtronik extends IPSModuleStrict
             return;
         }
 
-        $cop = $value / (float)$kw_in;
+        // Bereits VOR dem Vergleich auf die tatsächlich angezeigte Genauigkeit runden.
+        // So ändert sich die Variable nicht wegen unsichtbarer Nachkommastellen.
+        $cop = round($value / (float)$kw_in, 1);
         $this->SetValueIfChanged('copfaktor', $cop);
         $this->SendDebug('COP-Faktor', "Faktor: $cop berechnet (kw_in=$kw_in, Wärmeleistung=$value)", 0);
     }
@@ -1851,7 +1853,9 @@ class Luxtronik extends IPSModuleStrict
             $value_out_Change = $kwh_out - $this->ReadAttributeFloat('start_value_out');
 
             if ($kwh_in_Change != 0) {
-                $jaz = $value_out_Change / $kwh_in_Change;
+                // Bereits VOR dem Vergleich auf die tatsächlich angezeigte Genauigkeit runden.
+                // So ändert sich die Variable nicht wegen unsichtbarer Nachkommastellen.
+                $jaz = round($value_out_Change / $kwh_in_Change, 1);
                 $this->SetValueIfChanged('jazfaktor', $jaz);
                 $this->SendDebug("JAZ-Faktor", "Faktor: $jaz (Verbrauch seit Reset: $kwh_in_Change kWh, Produktion seit Reset: $value_out_Change kWh)", 0);
             } else {
@@ -1867,6 +1871,17 @@ class Luxtronik extends IPSModuleStrict
         $this->WriteAttributeFloat('start_value_out', 0);
         $this->SendDebug("JAZ-Reset", "Der Reset der Start-Werte zur JAZ-Berechnung wurde durchgeführt", 0);
     }
+
+    /*
+     * ================================================================
+     * ZENTRALE ID-KONFIGURATION – JEDE ID GENAU EINE ZEILE
+     * ================================================================
+     * Format:
+     * ID => [Typ, Profil, Umrechnung, Faktor, Nachkommastellen]
+     *
+     * Typ: bool | int | float | string
+     * Umrechnung: factor | signed_tenth | duration | hours | ascii | ip
+     */
 
     private function CreateVariableProfiles(): void
     {
