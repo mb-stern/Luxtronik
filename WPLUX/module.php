@@ -1288,6 +1288,16 @@ class Luxtronik extends IPSModuleStrict
         // JAZ berechnen
         $value_out = $value_out_heizung + $value_out_warmwasser;
         $this->calc_jaz('jaz', $value_out);
+
+        /*
+         * Sollwerte / Betriebsarten ebenfalls zyklisch von der Luxtronik
+         * einlesen. Damit werden Änderungen, die direkt an der Luxtronik
+         * vorgenommen wurden, auch in IP-Symcon übernommen.
+         *
+         * Wichtig: Eine einzige 3003-Abfrage pro Update-Zyklus, nicht eine
+         * neue Socket-Verbindung je Sollwert.
+         */
+        $this->RefreshControlValues();
     }
 
     private function GetDataPointConfig(int $id): array
@@ -1464,6 +1474,140 @@ class Luxtronik extends IPSModuleStrict
             
             // Debug-Ausgabe
             $this->SendDebug("Variable gelöscht", "Variable wurde gelöscht da die ID nicht mehr in der ID-Liste vorhanden ist - Variablen-ID: ".$variableID."  Name: ".$ident."", 0);       
+        }
+    }
+
+    /**
+     * Liest die konfigurierten Sollwerte/Betriebsarten mit EINER 3003-Abfrage
+     * und übernimmt nur tatsächlich geänderte Werte nach IP-Symcon.
+     */
+    private function RefreshControlValues(): void
+    {
+        $targets = [];
+
+        if ($this->ReadPropertyBoolean('HeizungVisible')) {
+            $targets['Mode_Heizung'] = ['index' => 3, 'conversion' => 'raw'];
+        }
+
+        if ($this->ReadPropertyBoolean('WarmwasserVisible')) {
+            $targets['Mode_WW'] = ['index' => 4, 'conversion' => 'raw'];
+        }
+
+        if ($this->ReadPropertyBoolean('KuehlungVisible')) {
+            $targets['Mode_Kuehlung'] = ['index' => 108, 'conversion' => 'raw'];
+        }
+
+        if ($this->ReadPropertyBoolean('SchwimmbadVisible')) {
+            $targets['Mode_Schwimmbad'] = ['index' => 119, 'conversion' => 'raw'];
+        }
+
+        if ($this->ReadPropertyBoolean('TempsetVisible')) {
+            $targets['Anpassung_Temp'] = ['index' => 1, 'conversion' => 'signed_tenth'];
+        }
+
+        if ($this->ReadPropertyBoolean('WWsetVisible')) {
+            $targets['Anpassung_WW'] = ['index' => 105, 'conversion' => 'tenth'];
+        }
+
+        if ($this->ReadPropertyBoolean('RBEsetVisible')) {
+            $targets['Anpassung_RBE'] = ['index' => 1148, 'conversion' => 'tenth'];
+        }
+
+        if ($targets === []) {
+            return;
+        }
+
+        $ipWwc = $this->ReadPropertyString('IPAddress');
+        $wwcJavaPort = $this->ReadPropertyInteger('Port');
+
+        $socket = socket_create(AF_INET, SOCK_STREAM, 0);
+        if ($socket === false) {
+            return;
+        }
+
+        $connect = @socket_connect($socket, $ipWwc, $wwcJavaPort);
+
+        if (!$connect) {
+            $errorCode = socket_last_error($socket);
+            $this->SendDebug(
+                'Sollwerte empfangen',
+                "3003-Verbindung fehlgeschlagen: {$ipWwc}:{$wwcJavaPort}, Fehler: {$errorCode}",
+                0
+            );
+            socket_close($socket);
+            return;
+        }
+
+        socket_write($socket, pack('N*', 3003), 4);
+        socket_write($socket, pack('N*', 0), 4);
+
+        $buffer = '';
+        if (socket_recv($socket, $buffer, 4, MSG_WAITALL) !== 4) {
+            socket_close($socket);
+            return;
+        }
+
+        $buffer = '';
+        if (socket_recv($socket, $buffer, 4, MSG_WAITALL) !== 4) {
+            socket_close($socket);
+            return;
+        }
+
+        $header = unpack('Nvalue', $buffer);
+        $count = (int)($header['value'] ?? 0);
+
+        $datenRaw = [];
+        for ($i = 0; $i < $count; ++$i) {
+            $buffer = '';
+
+            if (socket_recv($socket, $buffer, 4, MSG_WAITALL) !== 4) {
+                break;
+            }
+
+            $unpacked = unpack('Nvalue', $buffer);
+            $datenRaw[$i] = (int)($unpacked['value'] ?? 0);
+        }
+
+        socket_close($socket);
+
+        foreach ($targets as $ident => $target) {
+            $index = (int)$target['index'];
+
+            if (!array_key_exists($index, $datenRaw)) {
+                $this->SendDebug(
+                    'Sollwerte empfangen',
+                    "Index {$index} für {$ident} wurde von 3003 nicht geliefert",
+                    0
+                );
+                continue;
+            }
+
+            $value = $datenRaw[$index];
+
+            switch ($target['conversion']) {
+                case 'signed_tenth':
+                    if ($value > 429496000) {
+                        $value -= 4294967296;
+                    }
+                    $value *= 0.1;
+                    break;
+
+                case 'tenth':
+                    $value *= 0.1;
+                    break;
+
+                case 'raw':
+                default:
+                    break;
+            }
+
+            if ($this->SetValueIfChanged($ident, $value)) {
+                $this->SendDebug(
+                    'Sollwerte empfangen',
+                    "{$ident} wurde von der Luxtronik übernommen: {$value}",
+                    0
+                );
+            }
         }
     }
 
