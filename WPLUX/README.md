@@ -188,7 +188,6 @@ Version 3.2 (20.02.2024)
 Version 3.1 (17.02.2024)
 - Anpassen der Debug- und der Fehler-Ausgabe.
 
-
 Version 3.0 (15.02.2024)
 - Modul von WPLUX Symcon in Luxtronik umbenannt um die Store-Kompatibilität zu erreichen. Dies erfordert leider eine Neuinstallation des Moduls und das Transferieren der Variablen-Werte durch den Anwender.
 - Code massiv umgebaut um die Store-Kompatibilität zu ereichen
@@ -196,7 +195,6 @@ Version 3.0 (15.02.2024)
 - Umgestaltung des Konfigurationsformulars, die aktivierbaren Variablen zur Steuerung der Luxtronic werden nun in einem ExpansionPanel dargestellt.
 - Variable 95 - 115 umbenannt da der lange Name zu Fehler führte (Variablen müssen manuell im Baum gelöscht werden wenn sie bereits vorhanden sind)
 - Variable 20 umbenannt wegen ungültigem Sonderzeichen (Variablen müssen manuell im Baum gelöscht werden wenn sie bereits vorhanden sind)
- 
 
 Version 2.4 (11.02.2024)
 - Erstellung der Variablenprofile von Create() in ApplyChanges() verschoben, damit die Profile bei jeder Änderung auf Vorhandensein geprüft und ggf. erstellt werden.
