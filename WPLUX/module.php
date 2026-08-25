@@ -1411,6 +1411,16 @@ class Luxtronik extends IPSModuleStrict
                 break;
         }
 
+        /*
+         * Vor dem Vergleich auf die in der zentralen ID-Konfiguration
+         * vorgegebene Genauigkeit runden. Dadurch ändern versteckte
+         * Nachkommastellen (z.B. Hochdruck 12.341 -> 12.344) nicht mehr
+         * den Aktualisierungszeitpunkt, solange sichtbar 12.3 bleibt.
+         */
+        if ($type === 'float') {
+            $value = round((float)$value, (int)$config['decimals']);
+        }
+
         // Nur bei einer tatsächlichen Wertänderung nach IP-Symcon schreiben.
         if ($this->SetValueIfChanged($ident, $value)) {
             $this->SendDebug(
