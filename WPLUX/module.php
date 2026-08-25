@@ -1868,17 +1868,6 @@ class Luxtronik extends IPSModuleStrict
         $this->SendDebug("JAZ-Reset", "Der Reset der Start-Werte zur JAZ-Berechnung wurde durchgeführt", 0);
     }
 
-    /*
-     * ================================================================
-     * ZENTRALE ID-KONFIGURATION – JEDE ID GENAU EINE ZEILE
-     * ================================================================
-     * Format:
-     * ID => [Typ, Profil, Umrechnung, Faktor, Nachkommastellen]
-     *
-     * Typ: bool | int | float | string
-     * Umrechnung: factor | signed_tenth | duration | hours | ascii | ip
-     */
-
     private function CreateVariableProfiles(): void
     {
         // Benötigte Variablenprofile erstellen
