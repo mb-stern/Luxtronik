@@ -1318,18 +1318,23 @@ class Luxtronik extends IPSModuleStrict
         $conversion = (string)$config['conversion'];
 
         switch ($conversion) {
-            case 'signed_tenth':
+            case 'signed':
                 /*
-                 * Originale Luxtronik-Logik für negative signed 32-bit Werte
-                 * beibehalten und anschließend mit 0.1 skalieren.
+                 * Luxtronik-Minuskorrektur:
+                 * als unsigned 32-bit empfangene negative Werte zuerst
+                 * wieder in den vorzeichenbehafteten Wert zurückwandeln.
+                 *
+                 * Die eigentliche Skalierung kommt danach sauber aus
+                 * 'factor' in der zentralen ID-Konfiguration.
                  */
-                $minusTest = $value * 0.1;
-
-                if ($minusTest > 429496000) {
+                if ($value > 2147483647) {
                     $value -= 4294967296;
                 }
 
-                return round($value * 0.1, 1);
+                $factor = (float)($config['factor'] ?? 1.0);
+                $decimals = (int)($config['decimals'] ?? 1);
+
+                return round($value * $factor, $decimals);
 
             case 'duration':
                 $time = (int)$value;
@@ -1502,7 +1507,7 @@ class Luxtronik extends IPSModuleStrict
         }
 
         if ($this->ReadPropertyBoolean('TempsetVisible')) {
-            $targets['Anpassung_Temp'] = ['index' => 1, 'conversion' => 'signed_tenth'];
+            $targets['Anpassung_Temp'] = ['index' => 1, 'conversion' => 'signed'];
         }
 
         if ($this->ReadPropertyBoolean('WWsetVisible')) {
@@ -1585,7 +1590,7 @@ class Luxtronik extends IPSModuleStrict
             $value = $datenRaw[$index];
 
             switch ($target['conversion']) {
-                case 'signed_tenth':
+                case 'signed':
                     if ($value > 429496000) {
                         $value -= 4294967296;
                     }
@@ -1880,7 +1885,7 @@ class Luxtronik extends IPSModuleStrict
      * ID => [Typ, Profil, Umrechnung, Faktor, Nachkommastellen]
      *
      * Typ: bool | int | float | string
-     * Umrechnung: factor | signed_tenth | duration | hours | ascii | ip
+     * Umrechnung: factor | signed | duration | hours | ascii | ip
      */
 
     private function CreateVariableProfiles(): void
@@ -2189,25 +2194,25 @@ class Luxtronik extends IPSModuleStrict
         7 => ['name' => 'unbekannt_7', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         8 => ['name' => 'unbekannt_8', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         9 => ['name' => 'unbekannt_9', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        10 => ['name' => 'Vorlauftemperatur_Heizkreis', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        11 => ['name' => 'Ruecklauftemperatur_Heizkreis', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        12 => ['name' => 'Ruecklauf_Soll_Heizkreis', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        13 => ['name' => 'Ruecklauftemperatur_im_Trennspeicher', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        14 => ['name' => 'Heisgastemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        15 => ['name' => 'Aussentemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        16 => ['name' => 'Durchschnittstemperatur_Aussen_ueber_24_h', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        17 => ['name' => 'Warmwasser_Ist_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        18 => ['name' => 'Warmwasser_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        19 => ['name' => 'Waermequellen_Eintrittstemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        20 => ['name' => 'Waermequellen_Austrittstemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        21 => ['name' => 'Mischkreis_1_Vorlauftemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        22 => ['name' => 'Mischkreis_1_Vorlauf_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        23 => ['name' => 'Raumtemperatur_Raumstation_1', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        24 => ['name' => 'Mischkreis_2_Vorlauftemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        25 => ['name' => 'Mischkreis_2_Vorlauf_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        26 => ['name' => 'Fuehler_Solarkollektor', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        27 => ['name' => 'Fuehler_Solarspeicher', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        28 => ['name' => 'Fuehler_externe_Energiequelle', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        10 => ['name' => 'Vorlauftemperatur_Heizkreis', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        11 => ['name' => 'Ruecklauftemperatur_Heizkreis', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        12 => ['name' => 'Ruecklauf_Soll_Heizkreis', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        13 => ['name' => 'Ruecklauftemperatur_im_Trennspeicher', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        14 => ['name' => 'Heisgastemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        15 => ['name' => 'Aussentemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        16 => ['name' => 'Durchschnittstemperatur_Aussen_ueber_24_h', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        17 => ['name' => 'Warmwasser_Ist_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        18 => ['name' => 'Warmwasser_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        19 => ['name' => 'Waermequellen_Eintrittstemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        20 => ['name' => 'Waermequellen_Austrittstemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        21 => ['name' => 'Mischkreis_1_Vorlauftemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        22 => ['name' => 'Mischkreis_1_Vorlauf_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        23 => ['name' => 'Raumtemperatur_Raumstation_1', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        24 => ['name' => 'Mischkreis_2_Vorlauftemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        25 => ['name' => 'Mischkreis_2_Vorlauf_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        26 => ['name' => 'Fuehler_Solarkollektor', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        27 => ['name' => 'Fuehler_Solarspeicher', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        28 => ['name' => 'Fuehler_externe_Energiequelle', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         29 => ['name' => 'Eingang_Abtauende_Soledruck_Durchfluss', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         30 => ['name' => 'Eingang_Brauchwarmwasserthermostat', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         31 => ['name' => 'Eingang_EVU_Sperre', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
@@ -2301,7 +2306,7 @@ class Luxtronik extends IPSModuleStrict
         119 => ['name' => 'Status_Zeile_3', 'type' => 'int', 'profile' => 'WPLUX.Men3', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         120 => ['name' => 'Zeit_seit_in_von_Wert_118', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
         121 => ['name' => 'Stufe_Ausheizprogramm', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        122 => ['name' => 'Temperatur_Ausheizprogramm', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        122 => ['name' => 'Temperatur_Ausheizprogramm', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         123 => ['name' => 'Laufzeit_Ausheizprogramm', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
         124 => ['name' => 'Brauchwasser_aktiv_inaktiv_Symbol', 'type' => 'bool', 'profile' => 'WPLUX.Akt', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         125 => ['name' => 'Heizung_Symbol', 'type' => 'int', 'profile' => 'WPLUX.HzState', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
@@ -2315,25 +2320,25 @@ class Luxtronik extends IPSModuleStrict
         133 => ['name' => 'Status_Slave_5', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         134 => ['name' => 'Aktuelle_Zeit_der_Waermepumpe', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         135 => ['name' => 'Mischkreis_3_Symbol', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        136 => ['name' => 'Mischkreis_3_Vorlauf_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        137 => ['name' => 'Mischkreis_3_Vorlauftemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        136 => ['name' => 'Mischkreis_3_Vorlauf_Soll_Temperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        137 => ['name' => 'Mischkreis_3_Vorlauftemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         138 => ['name' => 'Ausgang_Mischkreis_3_Zu', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         139 => ['name' => 'Ausgang_Mischkreis_3_Auf', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         140 => ['name' => 'Pumpe_Mischkreis_3', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         141 => ['name' => 'Zeit_bis_Abtauen', 'type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
-        142 => ['name' => 'Raumtemperatur_Raumstation_2', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        143 => ['name' => 'Raumtemperatur_Raumstation_3', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        144 => ['name' => 'Schaltuhr_Schwimmbad_Symbol', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        142 => ['name' => 'Raumtemperatur_Raumstation_2', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        143 => ['name' => 'Raumtemperatur_Raumstation_3', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        144 => ['name' => 'Schaltuhr_Schwimmbad_Symbol', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         145 => ['name' => 'Betriebsstunden_Schwimmbad', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         146 => ['name' => 'Freigabe_Kuehlung', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         147 => ['name' => 'Analoges_Eingangssignal', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
         148 => ['name' => 'SonderZeichen', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         149 => ['name' => 'Zirkulationspumpen_Symbol', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         150 => ['name' => 'WebsrvProgrammWerteBeobarten', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        151 => ['name' => 'Waermemengenzaehler_Heizung', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        152 => ['name' => 'Waermemengenzaehler_Brauchwasser', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        153 => ['name' => 'Waermemengenzaehler_Schwimmbad', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        154 => ['name' => 'Waermemengenzaehler_Gesamt', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        151 => ['name' => 'Waermemengenzaehler_Heizung', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        152 => ['name' => 'Waermemengenzaehler_Brauchwasser', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        153 => ['name' => 'Waermemengenzaehler_Schwimmbad', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        154 => ['name' => 'Waermemengenzaehler_Gesamt', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         155 => ['name' => 'Waermemengenzaehler_Durchfluss', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         156 => ['name' => 'Analog_Ausgang_1', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
         157 => ['name' => 'Analog_Ausgang_2', 'type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
@@ -2354,32 +2359,32 @@ class Luxtronik extends IPSModuleStrict
         172 => ['name' => 'Lueftungsplatine_verbaut', 'type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         173 => ['name' => 'Durchfluss_Waermequelle', 'type' => 'int', 'profile' => 'WPLUX.lh', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         174 => ['name' => 'LIN_BUS_verbaut', 'type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        175 => ['name' => 'Temperatur_Ansaug_Verdampfer', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        176 => ['name' => 'Temperatur_Ansaug_Verdichter', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        177 => ['name' => 'Temperatur_Verdichter_Heizung', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        178 => ['name' => 'Ueberhitzung', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        179 => ['name' => 'Ueberhitzung_Soll', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        175 => ['name' => 'Temperatur_Ansaug_Verdampfer', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        176 => ['name' => 'Temperatur_Ansaug_Verdichter', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        177 => ['name' => 'Temperatur_Verdichter_Heizung', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        178 => ['name' => 'Ueberhitzung', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        179 => ['name' => 'Ueberhitzung_Soll', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         180 => ['name' => 'Hochdruck', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
         181 => ['name' => 'Niederdruck', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
         182 => ['name' => 'Ausgang_Verdichterheizung', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        183 => ['name' => 'Steuersignal_Umwaelzpumpe', 'type' => 'float', 'profile' => '~Valve.F', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        183 => ['name' => 'Steuersignal_Umwaelzpumpe', 'type' => 'float', 'profile' => '~Valve.F', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         184 => ['name' => 'Ventilator_Drehzahl', 'type' => 'int', 'profile' => 'WPLUX.Fan', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         185 => ['name' => 'EVU_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         186 => ['name' => 'Sicherheits_Temperatur_Begrenzer_Fussbodenheizung', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         187 => ['name' => 'Leistung_Sollwert', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
         188 => ['name' => 'Leistung_Istwert', 'type' => 'float', 'profile' => '~Electricity', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
-        189 => ['name' => 'Temperatur_Vorlauf_Soll', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        189 => ['name' => 'Temperatur_Vorlauf_Soll', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         190 => ['name' => 'Software_Stand_SEC_Board', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         191 => ['name' => 'Betriebszustand_SEC_Board', 'type' => 'int', 'profile' => 'WPLUX.Bet', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         192 => ['name' => 'Vierwegeventil', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         193 => ['name' => 'Verdichterdrehzahl', 'type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        194 => ['name' => 'Verdichtertemperatur_EVI_Enhanced_Vapour_Injection', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        195 => ['name' => 'Ansaugtemperatur_EVI', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        196 => ['name' => 'Ueberhitzung_EVI', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        197 => ['name' => 'Ueberhitzung_EVI_Sollwert', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        198 => ['name' => 'Kondensationstemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        199 => ['name' => 'Fluessigtemperatur_EEV_elektronisches_Expansionsventil', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        200 => ['name' => 'Unterkuehlung_EEV', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        194 => ['name' => 'Verdichtertemperatur_EVI_Enhanced_Vapour_Injection', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        195 => ['name' => 'Ansaugtemperatur_EVI', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        196 => ['name' => 'Ueberhitzung_EVI', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        197 => ['name' => 'Ueberhitzung_EVI_Sollwert', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        198 => ['name' => 'Kondensationstemperatur', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        199 => ['name' => 'Fluessigtemperatur_EEV_elektronisches_Expansionsventil', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        200 => ['name' => 'Unterkuehlung_EEV', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         201 => ['name' => 'Druck_EVI', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
         202 => ['name' => 'Spannung_Inverter', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         203 => ['name' => 'Temperarturfuehler_Heissgas_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
@@ -2387,8 +2392,8 @@ class Luxtronik extends IPSModuleStrict
         205 => ['name' => 'Ansaugtemperatur_Verdampfer_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         206 => ['name' => 'Ansaugtemperatur_Verdichter_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         207 => ['name' => 'Temperatur_Verdichter_2_Heizung', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        208 => ['name' => 'Ueberhitzung_2', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        209 => ['name' => 'Ueberhitzung_Soll_2', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        208 => ['name' => 'Ueberhitzung_2', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        209 => ['name' => 'Ueberhitzung_Soll_2', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         210 => ['name' => 'Hochdruck_2', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
         211 => ['name' => 'Niederdruck_2', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
         212 => ['name' => 'Eingang_Druckschalter_Hochdruck_2', 'type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
@@ -2406,23 +2411,23 @@ class Luxtronik extends IPSModuleStrict
         224 => ['name' => 'Zeitstempel_Abschaltung_2_im_Speicher', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         225 => ['name' => 'Zeitstempel_Abschaltung_3_im_Speicher', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         226 => ['name' => 'Zeitstempel_Abschaltung_4_im_Speicher', 'type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        227 => ['name' => 'Raumtemperatur_Istwert', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        228 => ['name' => 'Raumtemperatur_Sollwert', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        229 => ['name' => 'Temperatur_Brauchwasser_Oben', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        227 => ['name' => 'Raumtemperatur_Istwert', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        228 => ['name' => 'Raumtemperatur_Sollwert', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        229 => ['name' => 'Temperatur_Brauchwasser_Oben', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         230 => ['name' => 'Waermepumpen_Typ_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         231 => ['name' => 'Verdichterfrequenz', 'type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        232 => ['name' => 'Vapourisation_Temperature', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        233 => ['name' => 'Liquefaction_Temperature', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        232 => ['name' => 'Vapourisation_Temperature', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        233 => ['name' => 'Liquefaction_Temperature', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         234 => ['name' => 'unbekannt_234', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         235 => ['name' => 'unbekannt_235', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         236 => ['name' => 'Verdichterfrequenz_Soll', 'type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         237 => ['name' => 'Freq_VD_Min', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         238 => ['name' => 'Freq_VD_Max', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        239 => ['name' => 'VBO_Temp_Spread_Soll', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        240 => ['name' => 'VBO_Temp_Spread_Ist', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        239 => ['name' => 'VBO_Temp_Spread_Soll', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        240 => ['name' => 'VBO_Temp_Spread_Ist', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         241 => ['name' => 'Steuersignal_Umwaelzpumpe_2', 'type' => 'float', 'profile' => '~Valve.F', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        242 => ['name' => 'HUP_Temp_Spread_Soll', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
-        243 => ['name' => 'HUP_Temp_Spread_Ist', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        242 => ['name' => 'HUP_Temp_Spread_Soll', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
+        243 => ['name' => 'HUP_Temp_Spread_Ist', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         244 => ['name' => 'Temperatur_VLMax', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         245 => ['name' => 'Temperatur_VLMax_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         246 => ['name' => 'SEC_EVi', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
@@ -2430,7 +2435,7 @@ class Luxtronik extends IPSModuleStrict
         248 => ['name' => 'Time_ZWE3_akt', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         249 => ['name' => 'unbekannt_249', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         250 => ['name' => 'unbekannt_250', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        251 => ['name' => 'Unterkuehlung', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        251 => ['name' => 'Unterkuehlung', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         252 => ['name' => 'unbekannt_252', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         253 => ['name' => 'unbekannt_253', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         254 => ['name' => 'Flow_Rate', 'type' => 'int', 'profile' => 'WPLUX.lh', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
@@ -2446,7 +2451,7 @@ class Luxtronik extends IPSModuleStrict
         264 => ['name' => 'unbekannt_264', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         265 => ['name' => 'unbekannt_265', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         266 => ['name' => 'unbekannt_266', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        267 => ['name' => 'Desired_Room_Temperature', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        267 => ['name' => 'Desired_Room_Temperature', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed', 'factor' => 0.1, 'decimals' => 1],
         268 => ['name' => 'Leistungsaufnahme', 'type' => 'float', 'profile' => '~Watt', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         269 => ['name' => 'unbekannt_269', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
         270 => ['name' => 'unbekannt_270', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
