@@ -4,6 +4,7 @@ class Luxtronik extends IPSModuleStrict
 {
     private $updateTimer;
 
+
     public function Create(): void
     {
         parent::Create();
@@ -250,7 +251,7 @@ class Luxtronik extends IPSModuleStrict
         if ($copVarId !== 0 && IPS_VariableExists($copVarId)) {
             $created = $this->RegisterVariableFloat('copfaktor', 'COP-Faktor', 'WPLUX.Cop', 7);
             if ($created) {
-                $this->SetValue('copfaktor', 0);
+                $this->SetValueIfChanged('copfaktor', 0);
             }
         } else {
             $this->UnregisterVariable('copfaktor');
@@ -259,7 +260,7 @@ class Luxtronik extends IPSModuleStrict
         if ($jazVarId !== 0 && IPS_VariableExists($jazVarId)) {
             $created = $this->RegisterVariableFloat('jazfaktor', 'JAZ-Faktor', 'WPLUX.Cop', 8);
             if ($created) {
-                $this->SetValue('jazfaktor', 0);
+                $this->SetValueIfChanged('jazfaktor', 0);
             }
         } else {
             $this->UnregisterVariable('jazfaktor');
@@ -327,7 +328,7 @@ class Luxtronik extends IPSModuleStrict
             {
                 $this->RegisterVariableInteger($id, $name, '~UnixTimestampTime', $position++);
                 $this->EnableAction($id);
-                // holt Wert von der Lux und schreibt intern per $this->SetValue(...)
+                // holt Wert von der Lux und schreibt intern per $this->SetValueIfChanged(...)
                 $this->getParameter($id);
             }
         } 
@@ -997,43 +998,6 @@ class Luxtronik extends IPSModuleStrict
                     'caption' => 'Sekunden'
                 ],
 
-                // ---- IDListe: statt “manuell IDs eintippen” jetzt Checkbox-Auswahl
-                [
-                    'type'    => 'List',
-                    'name'    => 'IDListe',
-                    'caption' => "Überwachte ID's",
-                    'rowCount' => 15,
-
-                    'loadValuesFromConfiguration' => false,
-                    'add'    => false,
-                    'delete' => false,
-                    'sort'   => ['column' => 'id', 'direction' => 'ascending'],
-
-                    'columns' => [
-                        [
-                            'name'    => 'enabled',
-                            'caption' => 'Aktiv',
-                            'width'   => '70',
-                            'save'    => true,
-                            'edit'    => ['type' => 'CheckBox']
-                        ],
-                        [
-                            'name'    => 'id',
-                            'caption' => 'ID des Wertes',
-                            'width'   => '150',
-                            'save'    => true,
-                            'edit'    => ['type' => 'NumberSpinner']
-                        ],
-                        [
-                            'name'    => 'name',
-                            'caption' => 'Name',
-                            'width'   => 'auto',
-                            'save'    => false
-                        ]
-                    ],
-
-                    'values' => $values
-                ],
                 [
                     'type'    => 'ExpansionPanel',
                     'caption' => 'Timer / Zusatzfunktionen',
@@ -1122,7 +1086,45 @@ class Luxtronik extends IPSModuleStrict
                             ]
                         ]
                     ]
-                ]
+                ],
+
+                // ---- ID-Konfiguration bewusst ganz unten wie beim GoodWe-Modul
+                [
+                    'type'    => 'List',
+                    'name'    => 'IDListe',
+                    'caption' => "Überwachte ID's",
+                    'rowCount' => 15,
+
+                    'loadValuesFromConfiguration' => false,
+                    'add'    => false,
+                    'delete' => false,
+                    'sort'   => ['column' => 'id', 'direction' => 'ascending'],
+
+                    'columns' => [
+                        [
+                            'name'    => 'enabled',
+                            'caption' => 'Aktiv',
+                            'width'   => '70',
+                            'save'    => true,
+                            'edit'    => ['type' => 'CheckBox']
+                        ],
+                        [
+                            'name'    => 'id',
+                            'caption' => 'ID des Wertes',
+                            'width'   => '150',
+                            'save'    => true,
+                            'edit'    => ['type' => 'NumberSpinner']
+                        ],
+                        [
+                            'name'    => 'name',
+                            'caption' => 'Name',
+                            'width'   => 'auto',
+                            'save'    => false
+                        ]
+                    ],
+
+                    'values' => $values
+                ],
             ],
 
             'actions' => [
@@ -1286,180 +1288,167 @@ class Luxtronik extends IPSModuleStrict
         $this->calc_jaz('jaz', $value_out);
     }
 
+    private function GetDataPointConfig(int $id): array
+    {
+        return self::DATA_POINT_CONFIG[$id] ?? [
+            'type'       => 'string',
+            'profile'    => '',
+            'conversion' => 'factor',
+            'factor'     => 1.0,
+            'decimals'   => 1
+        ];
+    }
+
     private function convertValueBasedOnID($value, $id)
     {
-        // Hier erfolgt die Konvertierung der Werte basierend auf der 'id'
-        switch ($id) 
-        {
-            case (($id >= 10 && $id <= 28) || $id == 122 || ($id >= 136 && $id <= 137) || ($id >= 142 && $id <= 144) || ($id >= 151 && $id <= 154) || ($id >= 175 && $id <= 179) ||$id == 183 || $id == 189 || ($id >= 194 && $id <= 200) || ($id >= 208 && $id <= 209) || ($id >= 227 && $id <= 229) || ($id >= 232 && $id <= 233) || ($id >= 239 && $id <= 240)|| ($id >= 242 && $id <= 243) || $id == 251 || $id == 267):
+        $config = $this->GetDataPointConfig((int)$id);
+        $conversion = (string)$config['conversion'];
+
+        switch ($conversion) {
+            case 'signed_tenth':
+                /*
+                 * Originale Luxtronik-Logik für negative signed 32-bit Werte
+                 * beibehalten und anschließend mit 0.1 skalieren.
+                 */
                 $minusTest = $value * 0.1;
-                if ($minusTest > 429496000) 
-                {
+
+                if ($minusTest > 429496000) {
                     $value -= 4294967296;
-                    $value *= 0.1; 
-                } 
-                else 
-                {
-                    $value *= 0.1; 
                 }
-                return round($value, 1); 
 
-            case (($id >= 67 && $id <= 77) || $id == 120 || $id == 123 || $id == 141|| $id == 158 || $id == 161): //Laufzeit umrechnen und in Stunden und Minuten ausgeben
-                $time = $value;
-                $hours = floor($time / (60 * 60));
-                $time -= $hours * (60 * 60);
-                $minutes = floor($time / 60);
-                $time -= $minutes * 60;
-                $value = "{$hours}h {$minutes}m";
-                return ($value); 
-            
-                case ($id == 56 || $id == 58 || ($id >= 60 && $id <= 66)): //Laufzeit umrechnen und in Stunden ausgeben
-                $time = $value;
-                $hours = floor($time / (60 * 60));
-                $time -= $hours * (60 * 60);
-                $value = $hours;
-                return ($value);
+                return round($value * 0.1, 1);
 
-                case ($id >= 81 && $id <= 90):
-                $ascii = $value;
-                $value = chr($ascii); // Konvertiert die Dezimalzahl in ASCII Zeichen
-                return ($value);
-                
-                case ($id >= 91 && $id <= 94):
-                $decimalValue = $value;
-                $value = long2ip($decimalValue); // Konvertiert die Dezimalzahl in eine IP-Adresse
-                return ($value);
+            case 'duration':
+                $time = (int)$value;
+                $hours = (int)floor($time / 3600);
+                $time -= $hours * 3600;
+                $minutes = (int)floor($time / 60);
 
-            case ($id == 147 || ($id >= 156 && $id <= 157) || ($id >= 162 && $id <= 165) || ($id >= 168 && $id <= 169) || ($id >= 180 && $id <= 181) || ($id >= 187 && $id <= 188) || $id == 201 || ($id >= 210 && $id <= 211) || $id == 58):
-                return round($value * 0.01, 1);
+                return "{$hours}h {$minutes}m";
 
-            case ($id == 257):
-                return round($value * 0.001, 2);
+            case 'hours':
+                return (int)floor(((int)$value) / 3600);
 
-            
-            
+            case 'ascii':
+                return chr((int)$value);
+
+            case 'ip':
+                return long2ip((int)$value);
+
+            case 'factor':
             default:
-                return round($value * 1, 1); // Standardmäßig Konvertierung
+                $factor = (float)($config['factor'] ?? 1.0);
+                $decimals = (int)($config['decimals'] ?? 1);
+
+                return round($value * $factor, $decimals);
         }
     }
-            
+
     private function CreateOrUpdateVariable(string $ident, mixed $value, int $id): void
     {
-        // Variable erstellen und Profil zuordnen
-        switch ($id) {
-            case (($id >= 10 && $id <= 28) || $id == 122 || $id == 136 || $id == 137 || ($id >= 142 && $id <= 144) || ($id >= 175 && $id <= 177) || $id == 189 || ($id >= 194 && $id <= 195) || ($id >= 198 && $id <= 200) || ($id >= 227 && $id <= 229) || ($id >= 232 && $id <= 233) || $id == 251 || $id == 267):
-                $this->RegisterVariableFloat($ident, $ident, '~Temperature', $id);
+        $config = $this->GetDataPointConfig($id);
+        $type = (string)$config['type'];
+        $profile = (string)$config['profile'];
+
+        /*
+         * Variablentyp und Profil kommen ausschließlich aus der zentralen
+         * DATA_POINT_CONFIG-Konfiguration am Schluss der Klasse.
+         */
+        switch ($type) {
+            case 'bool':
+                $this->RegisterVariableBoolean(
+                    $ident,
+                    $ident,
+                    $profile,
+                    $id
+                );
                 break;
 
-            case (($id >= 29 && $id <= 55) || ($id >= 138 && $id <= 140) || $id == 146 || ($id >= 166 && $id <= 167) || ($id >= 170 && $id <= 171) || $id == 182 || $id == 186 || ($id >= 212 && $id <= 216)):
-                $this->RegisterVariableBoolean($ident, $ident, '~Switch', $id);
+            case 'int':
+                $this->RegisterVariableInteger(
+                    $ident,
+                    $ident,
+                    $profile,
+                    $id
+                );
                 break;
 
-            case ($id == 56 || $id == 58 || ($id >= 60 && $id <= 66)):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Std', $id);
+            case 'float':
+                $this->RegisterVariableFloat(
+                    $ident,
+                    $ident,
+                    $profile,
+                    $id
+                );
                 break;
 
-            case ($id == 57 || $id == 59):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Imp', $id);
-                break;
-
-            case ($id == 78):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Typ', $id);
-                break;
-
-            case ($id == 79):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Biv', $id);
-                break;
-
-            case ($id == 80):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.BZ', $id);
-                break;
-
-            case ((($id >= 95 && $id <= 99) || ($id >= 111 && $id <= 115) || $id == 134) || ($id >= 222 && $id <= 226)):
-                $this->RegisterVariableInteger($ident, $ident, '~UnixTimestamp', $id);
-                break;
-
-            case (($id >= 106 && $id <= 110) || ($id >= 217 && $id <= 221)):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Off', $id);
-                break;
-
-            case ($id == 116 || $id == 172 || $id == 174):
-                $this->RegisterVariableBoolean($ident, $ident, 'WPLUX.Comf', $id);
-                break;
-
-            case ($id == 117):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Men1', $id);
-                break;
-
-            case ($id == 118):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Men2', $id);
-                break;
-
-            case ($id == 119):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Men3', $id);
-                break;
-
-            case ($id == 124):
-                $this->RegisterVariableBoolean($ident, $ident, 'WPLUX.Akt', $id);
-                break;
-                
-            case ($id == 125):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.HzState', $id);
-                break;
-
-            case ($id == 147 || ($id >= 156 && $id <= 157) || ($id >= 162 && $id <= 165) || ($id >= 168 && $id <= 169)):
-                $this->RegisterVariableFloat($ident, $ident, '~Volt', $id);
-                break;
-
-            case ($id == 173 || $id == 254):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.lh', $id);
-                break;
-
-            case (($id >= 178 && $id <= 179) || ($id >= 196 && $id <= 197) || ($id >= 208 && $id <= 209) || ($id >= 239 && $id <= 240) || ($id >= 242 && $id <= 243)):
-                $this->RegisterVariableFloat($ident, $ident, '~Temperature.Difference', $id);
-                break;
-
-            case (($id >= 180 && $id <= 181) || $id == 201 || ($id >= 210 && $id <= 211)):
-                $this->RegisterVariableFloat($ident, $ident, 'WPLUX.Pres', $id);
-                break;
-
-            case ($id == 183 || $id == 241):
-                $this->RegisterVariableFloat($ident, $ident, '~Valve.F', $id);
-                break;
-
-            case ($id == 184):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Fan', $id);
-                break;
-
-            case (($id >= 151 && $id <= 154) || ($id >= 187 && $id <= 188)):
-                $this->RegisterVariableFloat($ident, $ident, '~Electricity', $id);
-                break;
-
-            case ($id == 191):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Bet', $id);
-                break;
-
-            case ($id == 193 || $id == 231 || $id == 236):
-                $this->RegisterVariableInteger($ident, $ident, 'WPLUX.Ver', $id);
-                break;
-
-            case ($id == 257):
-                $this->RegisterVariableFloat($ident, $ident, 'WPLUX.kW', $id);
-                break;
-
-            case ($id == 268):
-                $this->RegisterVariableFloat($ident, $ident, '~Watt', $id);
-                break;
-
+            case 'string':
             default:
-                $this->RegisterVariableString($ident, $ident, '', $id);
+                $this->RegisterVariableString(
+                    $ident,
+                    $ident,
+                    $profile,
+                    $id
+                );
                 break;
         }
 
-        // STRICT-KERN: Werte immer übers Modul setzen
-        $this->SetValue($ident, $value);
+        // Nur bei einer tatsächlichen Wertänderung nach IP-Symcon schreiben.
+        if ($this->SetValueIfChanged($ident, $value)) {
+            $this->SendDebug(
+                'Variable aktualisiert',
+                "ID: $id, Ident: $ident, neuer Wert: $value",
+                0
+            );
+        }
+    }
 
-        $this->SendDebug('Variable aktualisiert', "ID: $id, Ident: $ident, Wert: $value", 0);
+    /**
+     * Schreibt einen Wert nur dann in eine Modulvariable, wenn er sich
+     * gegenüber dem aktuell in IP-Symcon gespeicherten Wert geändert hat.
+     *
+     * Dadurch bleibt VariableUpdated unverändert, solange von der Luxtronik
+     * lediglich derselbe Wert erneut geliefert wird.
+     */
+    private function SetValueIfChanged(string $ident, mixed $value): bool
+    {
+        $variableID = @$this->GetIDForIdent($ident);
+
+        if ($variableID === false || !IPS_VariableExists($variableID)) {
+            return false;
+        }
+
+        $variable = IPS_GetVariable($variableID);
+
+        // Den neuen Wert passend zum tatsächlichen Variablentyp vergleichen.
+        switch ((int)$variable['VariableType']) {
+            case VARIABLETYPE_BOOLEAN:
+                $newValue = (bool)$value;
+                break;
+
+            case VARIABLETYPE_INTEGER:
+                $newValue = (int)$value;
+                break;
+
+            case VARIABLETYPE_FLOAT:
+                $newValue = (float)$value;
+                break;
+
+            case VARIABLETYPE_STRING:
+            default:
+                $newValue = (string)$value;
+                break;
+        }
+
+        $oldValue = GetValue($variableID);
+
+        if ($oldValue === $newValue) {
+            return false;
+        }
+
+        // Nur bei tatsächlicher Wertänderung aktualisieren.
+        $this->SetValue($ident, $newValue);
+        return true;
     }
 
     private function DeleteVariableIfExists($ident)
@@ -1634,16 +1623,21 @@ class Luxtronik extends IPSModuleStrict
                     $value *= 0.1;
                 }
         
-                // Wert setzen und Debug-Info senden
-                $this->SetValue($mode, $value);
-                $this->SendDebug("Parameter $mode", "Wert des Parameters $mode: $value von der Lux geholt und in Variable gespeichert", 0);
+                // Nur bei einer tatsächlichen Änderung schreiben.
+                if ($this->SetValueIfChanged($mode, $value)) {
+                    $this->SendDebug(
+                        "Parameter $mode",
+                        "Neuer Wert des Parameters $mode: $value von der Lux geholt und gespeichert",
+                        0
+                    );
+                }
                 break;
         
             default: // Hier werden die ganzen Timer geholt
                 if (strpos($mode, 'set_') === 0) {
                     $index = (int) substr($mode, 4);
                     if ($index >= 223 && $index <= 505) {
-                        $this->SetValue($mode, $datenRaw[$index] - 3600);
+                        $this->SetValueIfChanged($mode, $datenRaw[$index] - 3600);
                     }
                 }
                 break;
@@ -1661,13 +1655,13 @@ class Luxtronik extends IPSModuleStrict
 
         $kw_in = GetValue($kwInVarId);
         if ((float)$kw_in == 0.0) {
-            $this->SetValue('copfaktor', 0);
+            $this->SetValueIfChanged('copfaktor', 0);
             $this->SendDebug('COP-Faktor', 'Eingangsleistung (kw_in) ist 0. COP-Faktor wurde auf 0 gesetzt.', 0);
             return;
         }
 
         $cop = $value / (float)$kw_in;
-        $this->SetValue('copfaktor', $cop);
+        $this->SetValueIfChanged('copfaktor', $cop);
         $this->SendDebug('COP-Faktor', "Faktor: $cop berechnet (kw_in=$kw_in, Wärmeleistung=$value)", 0);
     }
 
@@ -1711,10 +1705,10 @@ class Luxtronik extends IPSModuleStrict
 
             if ($kwh_in_Change != 0) {
                 $jaz = $value_out_Change / $kwh_in_Change;
-                $this->SetValue('jazfaktor', $jaz);
+                $this->SetValueIfChanged('jazfaktor', $jaz);
                 $this->SendDebug("JAZ-Faktor", "Faktor: $jaz (Verbrauch seit Reset: $kwh_in_Change kWh, Produktion seit Reset: $value_out_Change kWh)", 0);
             } else {
-                $this->SetValue('jazfaktor', 0);
+                $this->SetValueIfChanged('jazfaktor', 0);
                 $this->SendDebug("JAZ-Faktor", "Noch keine Berechnung möglich (Verbrauch seit Reset unverändert)", 0);
             }
         }
@@ -1726,4 +1720,219 @@ class Luxtronik extends IPSModuleStrict
         $this->WriteAttributeFloat('start_value_out', 0);
         $this->SendDebug("JAZ-Reset", "Der Reset der Start-Werte zur JAZ-Berechnung wurde durchgeführt", 0);
     }
+
+    /*
+     * ================================================================
+     * ZENTRALE ID-KONFIGURATION – JEDE ID GENAU EINE ZEILE
+     * ================================================================
+     * Format:
+     * ID => [Typ, Profil, Umrechnung, Faktor, Nachkommastellen]
+     *
+     * Typ: bool | int | float | string
+     * Umrechnung: factor | signed_tenth | duration | hours | ascii | ip
+     */
+    private const DATA_POINT_CONFIG = [
+        10 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        11 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        12 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        13 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        14 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        15 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        16 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        17 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        18 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        19 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        20 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        21 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        22 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        23 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        24 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        25 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        26 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        27 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        28 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        29 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        30 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        31 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        32 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        33 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        34 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        35 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        36 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        37 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        38 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        39 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        40 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        41 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        42 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        43 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        44 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        45 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        46 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        47 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        48 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        49 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        50 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        51 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        52 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        53 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        54 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        55 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        56 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        57 => ['type' => 'int', 'profile' => 'WPLUX.Imp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        58 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        59 => ['type' => 'int', 'profile' => 'WPLUX.Imp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        60 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        61 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        62 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        63 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        64 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        65 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        66 => ['type' => 'int', 'profile' => 'WPLUX.Std', 'conversion' => 'hours', 'factor' => 1, 'decimals' => 1],
+        67 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        68 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        69 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        70 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        71 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        72 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        73 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        74 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        75 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        76 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        77 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        78 => ['type' => 'int', 'profile' => 'WPLUX.Typ', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        79 => ['type' => 'int', 'profile' => 'WPLUX.Biv', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        80 => ['type' => 'int', 'profile' => 'WPLUX.BZ', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        81 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        82 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        83 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        84 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        85 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        86 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        87 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        88 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        89 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        90 => ['type' => 'string', 'profile' => '', 'conversion' => 'ascii', 'factor' => 1, 'decimals' => 1],
+        91 => ['type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
+        92 => ['type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
+        93 => ['type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
+        94 => ['type' => 'string', 'profile' => '', 'conversion' => 'ip', 'factor' => 1, 'decimals' => 1],
+        95 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        96 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        97 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        98 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        99 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        106 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        107 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        108 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        109 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        110 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        111 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        112 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        113 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        114 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        115 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        116 => ['type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        117 => ['type' => 'int', 'profile' => 'WPLUX.Men1', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        118 => ['type' => 'int', 'profile' => 'WPLUX.Men2', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        119 => ['type' => 'int', 'profile' => 'WPLUX.Men3', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        120 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        122 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        123 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        124 => ['type' => 'bool', 'profile' => 'WPLUX.Akt', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        125 => ['type' => 'int', 'profile' => 'WPLUX.HzState', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        134 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        136 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        137 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        138 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        139 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        140 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        141 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        142 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        143 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        144 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        146 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        147 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        151 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        152 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        153 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        154 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        156 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        157 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        158 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        161 => ['type' => 'string', 'profile' => '', 'conversion' => 'duration', 'factor' => 1, 'decimals' => 1],
+        162 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        163 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        164 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        165 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        166 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        167 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        168 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        169 => ['type' => 'float', 'profile' => '~Volt', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        170 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        171 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        172 => ['type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        173 => ['type' => 'int', 'profile' => 'WPLUX.lh', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        174 => ['type' => 'bool', 'profile' => 'WPLUX.Comf', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        175 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        176 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        177 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        178 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        179 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        180 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        181 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        182 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        183 => ['type' => 'float', 'profile' => '~Valve.F', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        184 => ['type' => 'int', 'profile' => 'WPLUX.Fan', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        186 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        187 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        188 => ['type' => 'float', 'profile' => '~Electricity', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        189 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        191 => ['type' => 'int', 'profile' => 'WPLUX.Bet', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        193 => ['type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        194 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        195 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        196 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        197 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        198 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        199 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        200 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        201 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        208 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        209 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        210 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        211 => ['type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
+        212 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        213 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        214 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        215 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        216 => ['type' => 'bool', 'profile' => '~Switch', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        217 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        218 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        219 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        220 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        221 => ['type' => 'int', 'profile' => 'WPLUX.Off', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        222 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        223 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        224 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        225 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        226 => ['type' => 'int', 'profile' => '~UnixTimestamp', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        227 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        228 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        229 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        231 => ['type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        232 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        233 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        236 => ['type' => 'int', 'profile' => 'WPLUX.Ver', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        239 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        240 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        241 => ['type' => 'float', 'profile' => '~Valve.F', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        242 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        243 => ['type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        251 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        254 => ['type' => 'int', 'profile' => 'WPLUX.lh', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        257 => ['type' => 'float', 'profile' => 'WPLUX.kW', 'conversion' => 'factor', 'factor' => 0.001, 'decimals' => 2],
+        267 => ['type' => 'float', 'profile' => '~Temperature', 'conversion' => 'signed_tenth', 'factor' => 1, 'decimals' => 1],
+        268 => ['type' => 'float', 'profile' => '~Watt', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+    ];
 }
