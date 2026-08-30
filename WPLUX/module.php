@@ -902,9 +902,11 @@ class Luxtronik extends IPSModuleStrict
     {
 
             if (!$this->ReadPropertyBoolean('InstanceStatus')) {
-            $this->SendDebug('RequestAction', 'Aktion ignoriert, Modul ist deaktiviert', 0);
-            return;
-        }
+                $message = 'Aktion nicht möglich: Die Instanz ist deaktiviert.';
+                $this->SendDebug('RequestAction', $message, 0);
+                echo $message;
+                return;
+            }
 
         // Parameterbereich von 'set_223' bis 'set_504'
         if (strpos($Ident, 'set_') === 0 && intval(substr($Ident, 4)) >= 223 && intval(substr($Ident, 4)) <= 504) 
