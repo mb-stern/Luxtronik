@@ -907,7 +907,6 @@ class Luxtronik extends IPSModuleStrict
                 echo $message;
                 return;
             }
-        }
 
         // Parameterbereich von 'set_223' bis 'set_504'
         if (strpos($Ident, 'set_') === 0 && intval(substr($Ident, 4)) >= 223 && intval(substr($Ident, 4)) <= 504) 
