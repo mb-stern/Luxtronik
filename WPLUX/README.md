@@ -104,7 +104,7 @@ Beispiel:
 
 Version 4.6 (25.08.2026)
 - Aktualisierungsdatum der Variablen ändern sich nur noch, wenn sich die Daten ändern.
-- Variablenprofile werden nicht merhr vom Modul überschrieben.
+- Variablenprofile werden nicht mehr vom Modul überschrieben.
 - Interner Umbau zwecks zentraler Wartung der IDs.
 
 Version 4.5 (24.08.2026)
