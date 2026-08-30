@@ -908,8 +908,8 @@ class Luxtronik extends IPSModuleStrict
                 return;
             }
 
-        // Parameterbereich von 'set_223' bis 'set_504'
-        if (strpos($Ident, 'set_') === 0 && intval(substr($Ident, 4)) >= 223 && intval(substr($Ident, 4)) <= 504) 
+        // Parameterbereich von 'set_223' bis 'set_505'
+        if (strpos($Ident, 'set_') === 0 && intval(substr($Ident, 4)) >= 223 && intval(substr($Ident, 4)) <= 505) 
         {
             // Funktionen aufrufen
             $this->setParameter($Ident, $Value);
@@ -948,7 +948,6 @@ class Luxtronik extends IPSModuleStrict
             }
         }
 
-        $values = [];
         $values = [];
         foreach ($dataset as $id => $name) {
             $id = (int)$id;
