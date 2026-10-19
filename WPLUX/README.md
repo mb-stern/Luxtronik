@@ -102,6 +102,11 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 4.7 (19.10.2026)
+- Socket-Abfragen und Prüfung der Steuerwerte verbessert.
+- Heizungs-Timer, zusätzliche IDs und Deaktivierung korrigiert.
+- Temperaturwerte 203–207 und SDK-Kompatibilität korrigiert.
+
 Version 4.6 (25.08.2026)
 - Aktualisierungsdatum der Variablen ändern sich nur noch, wenn sich die Daten ändern.
 - Variablenprofile werden nicht mehr vom Modul überschrieben.

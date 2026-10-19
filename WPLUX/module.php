@@ -2,6 +2,9 @@
 
 class Luxtronik extends IPSModuleStrict
 {
+    private const SOCKET_TIMEOUT = 5.0;
+    private const MAX_RESPONSE_VALUES = 65536;
+
     private $updateTimer;
 
 
@@ -912,16 +915,18 @@ class Luxtronik extends IPSModuleStrict
         if (strpos($Ident, 'set_') === 0 && intval(substr($Ident, 4)) >= 223 && intval(substr($Ident, 4)) <= 505) 
         {
             // Funktionen aufrufen
-            $this->setParameter($Ident, $Value);
-            $this->getParameter($Ident);
+            if ($this->setParameter($Ident, $Value)) {
+                $this->getParameter($Ident);
+            }
             $this->SendDebug("Parameter $Ident", "Folgender Wert wird an die Funktion setParameter gesendet: $Value", 0);
         }
         // Weitere spezifische Werte wie 'Mode_Heizung', 'Mode_Kuehlung' usw.
         elseif (in_array($Ident, ['Mode_Heizung', 'Mode_Kuehlung', 'Mode_WW', 'Mode_Schwimmbad', 'Anpassung_WW', 'Anpassung_Temp', 'Anpassung_RBE'])) 
         {
             // Funktionen aufrufen
-            $this->setParameter($Ident, $Value);
-            $this->getParameter($Ident);
+            if ($this->setParameter($Ident, $Value)) {
+                $this->getParameter($Ident);
+            }
             $this->SendDebug("Parameter $Ident", "Folgender Wert wird an die Funktion setParameter gesendet: $Value", 0);
         }
     }
@@ -944,7 +949,11 @@ class Luxtronik extends IPSModuleStrict
         $enabledMap = [];
         foreach ($saved as $row) {
             if (is_array($row) && isset($row['id'])) {
-                $enabledMap[(int)$row['id']] = (bool)($row['enabled'] ?? true);
+                $id = (int)$row['id'];
+                $enabledMap[$id] = (bool)($row['enabled'] ?? true);
+                if ($id > 0 && !isset($dataset[$id])) {
+                    $dataset[$id] = 'ID_' . $id;
+                }
             }
         }
 
@@ -1039,8 +1048,26 @@ class Luxtronik extends IPSModuleStrict
                         ],
                         [
                             'type'    => 'Select',
+                            'name'    => 'HZ_TimerWeekVisible',
+                            'caption' => 'Timer Woche Heizung',
+                            'options' => array_slice($timerOptions, 0, 4)
+                        ],
+                        [
+                            'type'    => 'Select',
+                            'name'    => 'HZ_TimerWeekendVisible',
+                            'caption' => 'Timer Mo-Fr/Sa+So Heizung',
+                            'options' => array_slice($timerOptions, 0, 4)
+                        ],
+                        [
+                            'type'    => 'Select',
+                            'name'    => 'HZ_TimerDayVisible',
+                            'caption' => 'Timer Tage Heizung',
+                            'options' => array_slice($timerOptions, 0, 4)
+                        ],
+                        [
+                            'type'    => 'Select',
                             'name'    => 'BW_TimerWeekVisible',
-                            'caption' => 'Timer Mo-Fr Heizung',
+                            'caption' => 'Timer Woche Warmwasser',
                             'options' => $timerOptions
                         ],
                         [
@@ -1157,12 +1184,11 @@ class Luxtronik extends IPSModuleStrict
         return json_encode($form);
     }
 
-    public function Update()
+    public function Update(): void
     {
-        // Verbindung zur Lux
-        $IpWwc      = (string)$this->ReadPropertyString('IPAddress');
-        $WwcJavaPort = (int)$this->ReadPropertyInteger('Port');
-        $SiteTitle  = "WÄRMEPUMPE"; // falls du es später nutzt
+        if (!$this->ReadPropertyBoolean('InstanceStatus')) {
+            return;
+        }
 
         // Namen der Variablen direkt aus der zentralen ID-Konfiguration laden.
         $java_dataset = [];
@@ -1187,56 +1213,11 @@ class Luxtronik extends IPSModuleStrict
             }
         }
 
-        // Socket verbinden
-        $socket = socket_create(AF_INET, SOCK_STREAM, 0);
-        $connect = @socket_connect($socket, $IpWwc, $WwcJavaPort);
-
-        if (!$connect) {
-            $error_code = socket_last_error($socket);
-            $this->SendDebug(
-                "Socketverbindung",
-                "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
-                0
-            );
-            $this->LogMessage(
-                "Verbindung zum Socket fehlerhaft: {$IpWwc}:{$WwcJavaPort} Fehler: {$error_code}",
-                KL_ERROR
-            );
-            socket_close($socket);
+        $daten_raw = $this->ReadData(3004);
+        if ($daten_raw === null) {
             return;
         }
-
-        $this->SendDebug("Socketverbindung", "Verbindung zum Socket erfolgreich: {$IpWwc}:{$WwcJavaPort}", 0);
-
-        // Anfrage 3004 senden
-        $msg = pack('N*', 3004);
-        socket_write($socket, $msg, 4);
-
-        $msg = pack('N*', 0);
-        socket_write($socket, $msg, 4);
-
-        // Header lesen
-        socket_recv($socket, $Test, 4, MSG_WAITALL);  // sollte 3004 zurückkommen
-        $Test = unpack('N*', $Test);
-
-        socket_recv($socket, $Test, 4, MSG_WAITALL);  // Status
-        $Test = unpack('N*', $Test);
-
-        socket_recv($socket, $Test, 4, MSG_WAITALL);  // Länge der nachfolgenden Werte
-        $Test = unpack('N*', $Test);
-
-        $JavaWerte = (int)implode($Test);
-
-        // Daten lesen
-        $daten_raw = [];
-        $InBuff = [];
-
-        for ($i = 0; $i < $JavaWerte; ++$i) {
-            socket_recv($socket, $InBuff[$i], 4, MSG_WAITALL);
-            $daten_raw[$i] = (int)implode(unpack('N*', $InBuff[$i]));
-        }
-
-        socket_close($socket);
+        $JavaWerte = count($daten_raw);
 
         // Init für JAZ (falls 151/152 nicht vorkommen)
         $value_out_heizung = 0;
@@ -1280,9 +1261,7 @@ class Luxtronik extends IPSModuleStrict
 
             } else {
                 // Variable löschen, da nicht ausgewählt
-                if (isset($java_dataset[$i])) {
-                    $this->DeleteVariableIfExists($java_dataset[$i]);
-                }
+                $this->DeleteVariableIfExists($java_dataset[$i] ?? ('ID_' . $i));
             }
         }
 
@@ -1299,6 +1278,109 @@ class Luxtronik extends IPSModuleStrict
          * neue Socket-Verbindung je Sollwert.
          */
         $this->RefreshControlValues();
+    }
+
+    /** Eine vollständige Antwort lesen, bevor Modulvariablen verändert werden. */
+    private function ReadData(int $command): ?array
+    {
+        return $this->Exchange($command, [0]);
+    }
+
+    /** Zeitgrenze gilt für die gesamte Verbindung, auch bei langsamen Teilantworten. */
+    private function Exchange(int $command, array $arguments): ?array
+    {
+        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($socket === false) {
+            $this->LogMessage('Socket konnte nicht erstellt werden.', KL_ERROR);
+            return null;
+        }
+
+        try {
+            $deadline = microtime(true) + self::SOCKET_TIMEOUT;
+            if (!socket_set_nonblock($socket)) {
+                throw new RuntimeException('Socket konnte nicht auf nichtblockierend gestellt werden.');
+            }
+            $ip = $this->ReadPropertyString('IPAddress');
+            $port = $this->ReadPropertyInteger('Port');
+            if (!@socket_connect($socket, $ip, $port)) {
+                $error = socket_last_error($socket);
+                if (!in_array($error, [SOCKET_EINPROGRESS, SOCKET_EALREADY, SOCKET_EWOULDBLOCK], true)) {
+                    throw new RuntimeException('Verbindung fehlgeschlagen: ' . socket_strerror($error));
+                }
+                $this->WaitForSocket($socket, false, $deadline);
+                $error = socket_get_option($socket, SOL_SOCKET, SO_ERROR);
+                if ($error !== 0) {
+                    throw new RuntimeException('Verbindung fehlgeschlagen: ' . socket_strerror((int)$error));
+                }
+            }
+
+            $request = pack('N*', $command, ...$arguments);
+            while ($request !== '') {
+                $this->WaitForSocket($socket, false, $deadline);
+                $written = @socket_write($socket, $request);
+                if ($written === false || $written === 0) {
+                    throw new RuntimeException('Anfrage konnte nicht vollständig gesendet werden.');
+                }
+                $request = substr($request, $written);
+            }
+
+            $header = array_values(unpack('N*', $this->ReadSocketBytes($socket, $command === 3004 ? 12 : 8, $deadline)));
+            if ($header[0] !== $command) {
+                throw new RuntimeException('Unerwartetes Antwortkommando: ' . $header[0]);
+            }
+            if ($command === 3002) {
+                return [$header[1]];
+            }
+            $count = $header[$command === 3004 ? 2 : 1];
+            if ($count > self::MAX_RESPONSE_VALUES) {
+                throw new RuntimeException('Ungültige Anzahl von Antwortwerten: ' . $count);
+            }
+            if ($count === 0) {
+                return [];
+            }
+            return array_values(unpack('N*', $this->ReadSocketBytes($socket, $count * 4, $deadline)));
+        } catch (RuntimeException | ValueError $error) {
+            $message = "Kommando $command: " . $error->getMessage();
+            $this->SendDebug('Socketverbindung', $message, 0);
+            $this->LogMessage($message, KL_ERROR);
+            return null;
+        } finally {
+            socket_close($socket);
+        }
+    }
+
+    private function WaitForSocket(Socket $socket, bool $read, float $deadline): void
+    {
+        $remaining = $deadline - microtime(true);
+        if ($remaining <= 0) {
+            throw new RuntimeException('Zeitüberschreitung bei der Socket-Abfrage.');
+        }
+        $seconds = (int)$remaining;
+        $microseconds = (int)(($remaining - $seconds) * 1000000);
+        $readSockets = $read ? [$socket] : [];
+        $writeSockets = $read ? [] : [$socket];
+        $exceptSockets = [];
+        $ready = @socket_select($readSockets, $writeSockets, $exceptSockets, $seconds, $microseconds);
+        if ($ready === false) {
+            throw new RuntimeException('Socket-Abfrage fehlgeschlagen.');
+        }
+        if ($ready === 0) {
+            throw new RuntimeException('Zeitüberschreitung bei der Socket-Abfrage.');
+        }
+    }
+
+    private function ReadSocketBytes(Socket $socket, int $length, float $deadline): string
+    {
+        $data = '';
+        while (strlen($data) < $length) {
+            $this->WaitForSocket($socket, true, $deadline);
+            $received = @socket_recv($socket, $buffer, $length - strlen($data), 0);
+            if ($received === false || $received === 0) {
+                throw new RuntimeException('Antwort ist unvollständig oder die Verbindung wurde unterbrochen.');
+            }
+            $data .= $buffer;
+        }
+        return $data;
     }
 
     private function GetDataPointConfig(int $id): array
@@ -1369,9 +1451,20 @@ class Luxtronik extends IPSModuleStrict
         $type = (string)$config['type'];
         $profile = (string)$config['profile'];
 
+        // Ein Typwechsel würde bestehende Variablen samt ID löschen.
+        // Alte Stringvariablen behalten, aber bereits korrekt skalierte Werte schreiben.
+        if ($id >= 203 && $id <= 207) {
+            $existingID = @$this->GetIDForIdent($ident);
+            if ($existingID !== false && IPS_VariableExists($existingID)
+                && IPS_GetVariable($existingID)['VariableType'] === VARIABLETYPE_STRING) {
+                $type = 'string';
+                $profile = '';
+            }
+        }
+
         /*
-         * Variablentyp und Profil kommen ausschließlich aus der zentralen
-         * DATA_POINT_CONFIG-Konfiguration am Schluss der Klasse.
+         * Variablentyp und Profil kommen aus der zentralen DATA_POINT_CONFIG,
+         * mit Bestandsschutz für die oben geprüften Stringvariablen.
          */
         switch ($type) {
             case 'bool':
@@ -1533,58 +1626,10 @@ class Luxtronik extends IPSModuleStrict
             return;
         }
 
-        $ipWwc = $this->ReadPropertyString('IPAddress');
-        $wwcJavaPort = $this->ReadPropertyInteger('Port');
-
-        $socket = socket_create(AF_INET, SOCK_STREAM, 0);
-        if ($socket === false) {
+        $datenRaw = $this->ReadData(3003);
+        if ($datenRaw === null) {
             return;
         }
-
-        $connect = @socket_connect($socket, $ipWwc, $wwcJavaPort);
-
-        if (!$connect) {
-            $errorCode = socket_last_error($socket);
-            $this->SendDebug(
-                'Sollwerte empfangen',
-                "3003-Verbindung fehlgeschlagen: {$ipWwc}:{$wwcJavaPort}, Fehler: {$errorCode}",
-                0
-            );
-            socket_close($socket);
-            return;
-        }
-
-        socket_write($socket, pack('N*', 3003), 4);
-        socket_write($socket, pack('N*', 0), 4);
-
-        $buffer = '';
-        if (socket_recv($socket, $buffer, 4, MSG_WAITALL) !== 4) {
-            socket_close($socket);
-            return;
-        }
-
-        $buffer = '';
-        if (socket_recv($socket, $buffer, 4, MSG_WAITALL) !== 4) {
-            socket_close($socket);
-            return;
-        }
-
-        $header = unpack('Nvalue', $buffer);
-        $count = (int)($header['value'] ?? 0);
-
-        $datenRaw = [];
-        for ($i = 0; $i < $count; ++$i) {
-            $buffer = '';
-
-            if (socket_recv($socket, $buffer, 4, MSG_WAITALL) !== 4) {
-                break;
-            }
-
-            $unpacked = unpack('Nvalue', $buffer);
-            $datenRaw[$i] = (int)($unpacked['value'] ?? 0);
-        }
-
-        socket_close($socket);
 
         foreach ($targets as $ident => $target) {
             $index = (int)$target['index'];
@@ -1602,7 +1647,7 @@ class Luxtronik extends IPSModuleStrict
 
             switch ($target['conversion']) {
                 case 'minus_correction':
-                    if ($value > 429496000) {
+                    if ($value > 2147483647) {
                         $value -= 4294967296;
                     }
                     $value *= 0.1;
@@ -1627,126 +1672,56 @@ class Luxtronik extends IPSModuleStrict
         }
     }
 
-    private function setParameter($type, $value) //Parameter setzen, 3002
-{
-    // IP-Adresse und Port aus den Konfigurationseinstellungen lesen
-    $ipWwc = $this->ReadPropertyString('IPAddress');
-    $wwcJavaPort = $this->ReadPropertyInteger('Port');
-
-    // Verbindung zum Socket herstellen
-    $socket = socket_create(AF_INET, SOCK_STREAM, 0);
-    $connect = socket_connect($socket, $ipWwc, $wwcJavaPort);
-
-    if (!$connect)
+    private function setParameter(string $type, mixed $value): bool
     {
-        $error_code = socket_last_error($socket);
-        $this->SendDebug("Socketverbindung", "Verbindung zum Socket fehlerhaft: " . $ipWwc . ":" . $wwcJavaPort . " Fehler: " . $error_code, 0);
-        $this->LogMessage("Verbindung zum Socket fehlerhaft: " . $ipWwc . ":" . $wwcJavaPort . " Fehler: " . $error_code, KL_ERROR);
-        socket_close($socket);
-        return;
-    }
+        if ((!is_int($value) && !is_float($value)) || !is_finite((float)$value)) {
+            throw new InvalidArgumentException('Der Parameterwert muss eine endliche Zahl sein.');
+        }
 
-    // Daten senden
-    $msg = pack('N*', 3002); // 3002 senden aktivieren
-    socket_write($socket, $msg, 4);
+        $temperatureParameters = [
+            'Anpassung_Temp' => [1, -5, 5],
+            'Anpassung_WW' => [105, 30, 65],
+            'Anpassung_RBE' => [1148, 0, 35]
+        ];
+        $modeParameters = [
+            'Mode_Heizung' => [3, 4],
+            'Mode_WW' => [4, 4],
+            'Mode_Schwimmbad' => [119, 4],
+            'Mode_Kuehlung' => [108, 1]
+        ];
 
-    // Parameter je nach Typ festlegen
-    $parameter = 0;
-
-    switch ($type) 
-    {
-        case 'Anpassung_Temp':
-            $parameter = 1;
-            if ($value >= -5 && $value <= 5) $value *= 10; // Wert für Temperaturkorrektur
-            break;
-        case 'Anpassung_WW':
-            $parameter = 105;
-            if ($value >= 30 && $value <= 65) $value *= 10; // Wert für Warmwasserkorrektur
-            break;
-        case 'Anpassung_RBE':
-            $parameter = 1148;
-            if ($value >= 0 && $value <= 35) $value *= 10; // Wert für Raumbedieneinheit
-            break;
-        case 'Mode_Heizung':
-            $parameter = 3;
-            break;
-        case 'Mode_WW':
-            $parameter = 4;
-            break;
-        case 'Mode_Schwimmbad':
-            $parameter = 119;
-            break;
-        case 'Mode_Kuehlung':
-            $parameter = 108;
-            $value = ($value == 0) ? 0 : 1; // Wert für Kühlung auf 0 oder 1 setzen
-            break;
-        
-        default: //Hier werden die ganzen Timer gespeichert
-            if (strpos($type, 'set_') === 0) 
-            {
-                $parameter = (int) substr($type, 4);
-                if ($parameter >= 223 && $parameter <= 505 && $value >= -3600 && $value <= 82800) 
-                {
-                    $value += 3600; // Unix-Zeit korrigieren
-                }
+        // Vor dem Verbindungsaufbau validieren; ungültige Werte niemals senden.
+        if (isset($temperatureParameters[$type])) {
+            [$parameter, $min, $max] = $temperatureParameters[$type];
+            if ($value < $min || $value > $max) {
+                throw new InvalidArgumentException("$type muss zwischen $min und $max liegen.");
             }
-            break;
+            $rawValue = (int)round($value * 10);
+        } elseif (isset($modeParameters[$type])) {
+            [$parameter, $max] = $modeParameters[$type];
+            if ($value < 0 || $value > $max || floor($value) != $value) {
+                throw new InvalidArgumentException("Ungültige Betriebsart für $type.");
+            }
+            $rawValue = (int)$value;
+        } elseif (preg_match('/^set_([0-9]+)$/D', $type, $matches)) {
+            $parameter = (int)$matches[1];
+            if ($parameter < 223 || $parameter > 505 || $value < -3600 || $value > 82800 || floor($value) != $value) {
+                throw new InvalidArgumentException('Ungültiger Timerparameter oder Zeitwert.');
+            }
+            $rawValue = (int)$value + 3600;
+        } else {
+            throw new InvalidArgumentException("Unbekannter Parameter: $type");
+        }
+
+        return $this->Exchange(3002, [$parameter, $rawValue]) !== null;
     }
 
-        // SetParameter senden
-        $msg = pack('N*', $parameter);
-        socket_write($socket, $msg, 4);
-
-        // Wert senden
-        $msg = pack('N*', $value);
-        socket_write($socket, $msg, 4);
-
-        // Daten vom Socket empfangen und verarbeiten
-        socket_recv($socket, $test, 4, MSG_WAITALL);  // Lesen, sollte 3002 zurückkommen
-        socket_recv($socket, $test, 4, MSG_WAITALL); // Lesen, sollte Status zurückkommen
-
-        // Socket schließen
-        socket_close($socket);
-
-        // Debug senden
-        $this->SendDebug("Socketverbindung", "Der Parameter: $parameter mit dem Wert: $value wurde an den Socket gesendet", 0);
-    }
-
-    private function getParameter($mode) //Parameter holen, 3003
+    private function getParameter(string $mode): void
     {
-        $ipWwc = $this->ReadPropertyString('IPAddress');
-        $wwcJavaPort = $this->ReadPropertyInteger('Port');
-
-        $socket = socket_create(AF_INET, SOCK_STREAM, 0);
-        $connect = socket_connect($socket, $ipWwc, $wwcJavaPort);
-
-        if (!$connect)
-        {
-            $error_code = socket_last_error($socket);
-            $this->SendDebug("Socketverbindung", "Verbindung zum Socket fehlerhaft: " . $ipWwc . ":" . $wwcJavaPort . " Fehler: " . $error_code, 0);
-            $this->LogMessage("Verbindung zum Socket fehlerhaft: " . $ipWwc . ":" . $wwcJavaPort . " Fehler: " . $error_code, KL_ERROR);
-            socket_close($socket);
+        $datenRaw = $this->ReadData(3003);
+        if ($datenRaw === null) {
             return;
         }
-
-        $msg = pack('N*', 3003);
-        socket_write($socket, $msg, 4);
-
-        $msg = pack('N*', 0);
-        socket_write($socket, $msg, 4);
-
-        socket_recv($socket, $test, 4, MSG_WAITALL);
-        socket_recv($socket, $test, 4, MSG_WAITALL);
-        $test = unpack('N*', $test);
-        $javaWerte = implode($test);
-
-        for ($i = 0; $i < $javaWerte; ++$i) 
-        {
-            socket_recv($socket, $inBuff[$i], 4, MSG_WAITALL);
-            $datenRaw[$i] = implode(unpack('N*', $inBuff[$i]));
-        }
-
-        socket_close($socket);
 
         switch ($mode) {
             case 'Mode_Heizung':
@@ -1778,7 +1753,7 @@ class Luxtronik extends IPSModuleStrict
         
                 // Berechnungen basierend auf dem Modus durchführen
                 if ($mode === 'Anpassung_Temp') {
-                    if ($value > 429496000) {
+                    if ($value > 2147483647) {
                         $value -= 4294967296;
                     }
                     $value *= 0.1;
@@ -1799,7 +1774,7 @@ class Luxtronik extends IPSModuleStrict
             default: // Hier werden die ganzen Timer geholt
                 if (strpos($mode, 'set_') === 0) {
                     $index = (int) substr($mode, 4);
-                    if ($index >= 223 && $index <= 505) {
+                    if ($index >= 223 && $index <= 505 && isset($datenRaw[$index])) {
                         $this->SetValueIfChanged($mode, $datenRaw[$index] - 3600);
                     }
                 }
@@ -1881,7 +1856,7 @@ class Luxtronik extends IPSModuleStrict
         }
     }
 
-    public function reset_jaz() //Startwerte der JAZ-Berechnung zurücksetzen
+    public function reset_jaz(): void //Startwerte der JAZ-Berechnung zurücksetzen
     {
         $this->WriteAttributeFloat('start_kwh_in', 0);
         $this->WriteAttributeFloat('start_value_out', 0);
@@ -2391,11 +2366,11 @@ class Luxtronik extends IPSModuleStrict
         200 => ['name' => 'Unterkuehlung_EEV', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'minus_correction', 'factor' => 0.1, 'decimals' => 1],
         201 => ['name' => 'Druck_EVI', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
         202 => ['name' => 'Spannung_Inverter', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        203 => ['name' => 'Temperarturfuehler_Heissgas_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        204 => ['name' => 'Temperaturfuehler_Waermequelleneintritt_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        205 => ['name' => 'Ansaugtemperatur_Verdampfer_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        206 => ['name' => 'Ansaugtemperatur_Verdichter_2', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
-        207 => ['name' => 'Temperatur_Verdichter_2_Heizung', 'type' => 'string', 'profile' => '', 'conversion' => 'factor', 'factor' => 1, 'decimals' => 1],
+        203 => ['name' => 'Temperarturfuehler_Heissgas_2', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'minus_correction', 'factor' => 0.1, 'decimals' => 1],
+        204 => ['name' => 'Temperaturfuehler_Waermequelleneintritt_2', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'minus_correction', 'factor' => 0.1, 'decimals' => 1],
+        205 => ['name' => 'Ansaugtemperatur_Verdampfer_2', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'minus_correction', 'factor' => 0.1, 'decimals' => 1],
+        206 => ['name' => 'Ansaugtemperatur_Verdichter_2', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'minus_correction', 'factor' => 0.1, 'decimals' => 1],
+        207 => ['name' => 'Temperatur_Verdichter_2_Heizung', 'type' => 'float', 'profile' => '~Temperature', 'conversion' => 'minus_correction', 'factor' => 0.1, 'decimals' => 1],
         208 => ['name' => 'Ueberhitzung_2', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'minus_correction', 'factor' => 0.1, 'decimals' => 1],
         209 => ['name' => 'Ueberhitzung_Soll_2', 'type' => 'float', 'profile' => '~Temperature.Difference', 'conversion' => 'minus_correction', 'factor' => 0.1, 'decimals' => 1],
         210 => ['name' => 'Hochdruck_2', 'type' => 'float', 'profile' => 'WPLUX.Pres', 'conversion' => 'factor', 'factor' => 0.01, 'decimals' => 1],
