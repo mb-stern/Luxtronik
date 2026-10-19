@@ -1,7 +1,11 @@
 <?php
 
+require_once __DIR__ . '/ModbusSHI.php';
+
 class Luxtronik extends IPSModuleStrict
 {
+    use LuxtronikModbusSHI;
+
     private const SOCKET_TIMEOUT = 5.0;
     private const MAX_RESPONSE_VALUES = 65536;
 
@@ -11,6 +15,11 @@ class Luxtronik extends IPSModuleStrict
     public function Create(): void
     {
         parent::Create();
+
+        $this->RegisterPropertyString('CommunicationMode', 'java');
+        $this->RegisterPropertyInteger('ModbusPort', 502);
+        $this->RegisterPropertyInteger('ModbusUnitID', 1);
+        $this->RegisterPropertyInteger('ModbusTimeout', 500);
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
         $this->RegisterPropertyInteger('Port', 8889);
@@ -118,6 +127,11 @@ class Luxtronik extends IPSModuleStrict
     {
          //Never delete this line!
         parent::ApplyChanges();
+
+        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
+            $this->ApplyChangesModbus();
+            return;
+        }
 
         if (!$this->ReadPropertyBoolean('InstanceStatus')) {
             $this->SetTimerInterval('UpdateTimer', 0);
@@ -903,6 +917,9 @@ class Luxtronik extends IPSModuleStrict
 
     public function RequestAction(string $Ident, mixed $Value): void 
     {
+        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
+            throw new RuntimeException('Modbus/SHI-Testbetrieb ist ausschließlich lesend. Steuerung und Timer sind deaktiviert.');
+        }
 
             if (!$this->ReadPropertyBoolean('InstanceStatus')) {
                 $message = 'Aktion nicht möglich: Die Instanz ist deaktiviert.';
@@ -1181,11 +1198,16 @@ class Luxtronik extends IPSModuleStrict
             ]
         ];
 
-        return json_encode($form);
+        return json_encode($this->AddModbusForm($form));
     }
 
     public function Update(): void
     {
+        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
+            $this->UpdateModbus();
+            return;
+        }
+
         if (!$this->ReadPropertyBoolean('InstanceStatus')) {
             return;
         }

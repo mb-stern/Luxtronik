@@ -102,6 +102,10 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 4.8 (19.10.2026) – SHI-Testversion
+- Optionaler Modbus-/SHI-Lesebetrieb; Java bleibt Standard.
+- Vorhandene Idents bleiben erhalten. [Hinweise für Tester](SHI-TEST.md).
+
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.
 - Heizungs-Timer, zusätzliche IDs und Deaktivierung korrigiert.

@@ -313,6 +313,11 @@ $tests['temperature scaling handles signed values and preserves legacy variable 
     check($legacy->GetIDForIdent($ident) === $oldID && GetValue($oldID) === '-2.5', 'Legacy variable replaced');
 };
 
+// Other suites may reuse the fixtures and include these Java compatibility tests.
+if (realpath($_SERVER['SCRIPT_FILENAME']) !== __FILE__) {
+    return;
+}
+
 $failed = 0;
 foreach ($tests as $name => $test) {
     try {

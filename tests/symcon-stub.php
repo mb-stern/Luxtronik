@@ -9,6 +9,14 @@ const VARIABLETYPE_STRING = 3;
 
 $GLOBALS['testVariables'] = [];
 $GLOBALS['testNextID'] = 10000;
+$GLOBALS['testProfiles'] = [];
+
+function IPS_VariableProfileExists(string $name): bool { return isset($GLOBALS['testProfiles'][$name]); }
+function IPS_CreateVariableProfile(string $name, int $type): void { $GLOBALS['testProfiles'][$name] = $type; }
+function IPS_SetVariableProfileValues(string $name, float $min, float $max, float $step): void {}
+function IPS_SetVariableProfileDigits(string $name, int $digits): void {}
+function IPS_SetVariableProfileText(string $name, string $prefix, string $suffix): void {}
+function IPS_SetVariableProfileAssociation(string $name, float $value, string $text, string $icon, int $color): void {}
 
 function IPS_VariableExists(int $id): bool
 {
@@ -42,6 +50,9 @@ class IPSModuleStrict
     public array $attributes = [];
     public array $errors = [];
     public int $writes = 0;
+    public int $status = 0;
+    public array $timers = [];
+    public array $actions = [];
 
     public function __construct()
     {
@@ -62,37 +73,43 @@ class IPSModuleStrict
     protected function ReadAttributeFloat(string $name): float { return $this->attributes[$name]; }
     protected function WriteAttributeFloat(string $name, float $value): void { $this->attributes[$name] = $value; }
     protected function RegisterTimer(string $name, int $interval, string $script): void {}
+    protected function SetTimerInterval(string $name, int $interval): void { $this->timers[$name] = $interval; }
+    protected function SetStatus(int $status): void { $this->status = $status; }
+    public function EnableAction(string $ident): bool { $this->actions[$ident] = true; return true; }
+    protected function DisableAction(string $ident): bool { $this->actions[$ident] = false; return true; }
     protected function SendDebug(string $name, mixed $value, int $format): void {}
     protected function LogMessage(string $message, int $severity): void { $this->errors[] = $message; }
     public function GetIDForIdent(string $ident): int|false { return IPS_GetObjectIDByIdent($ident, $this->InstanceID); }
 
     protected function RegisterVariableBoolean(string $ident, string $name, string $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_BOOLEAN, false);
+        return $this->register($ident, VARIABLETYPE_BOOLEAN, false, $name, $profile);
     }
     public function RegisterVariableInteger(string $ident, string $name, string $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_INTEGER, 0);
+        return $this->register($ident, VARIABLETYPE_INTEGER, 0, $name, $profile);
     }
     public function RegisterVariableFloat(string $ident, string $name, string $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_FLOAT, 0.0);
+        return $this->register($ident, VARIABLETYPE_FLOAT, 0.0, $name, $profile);
     }
     public function RegisterVariableString(string $ident, string $name, string $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_STRING, '');
+        return $this->register($ident, VARIABLETYPE_STRING, '', $name, $profile);
     }
-    private function register(string $ident, int $type, mixed $initial): bool
+    private function register(string $ident, int $type, mixed $initial, string $name, string $profile): bool
     {
         $id = $this->GetIDForIdent($ident);
         if ($id !== false && IPS_GetVariable($id)['VariableType'] === $type) {
+            $GLOBALS['testVariables'][$id]['profile'] = $profile;
             return false;
         }
         if ($id !== false) {
             unset($GLOBALS['testVariables'][$id]);
         }
         $GLOBALS['testVariables'][++$GLOBALS['testNextID']] = [
-            'ident' => $ident, 'instance' => $this->InstanceID, 'type' => $type, 'value' => $initial
+            'ident' => $ident, 'instance' => $this->InstanceID, 'type' => $type, 'value' => $initial,
+            'name' => $name, 'profile' => $profile
         ];
         return true;
     }

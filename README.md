@@ -20,6 +20,10 @@ Die Regressionstests benötigen PHP CLI mit den Erweiterungen `sockets` und `pcn
 php tests/regression.php
 ```
 
+Die optionale SHI-Testversion lässt sich mit `php tests/modbus.php` prüfen.
+Dieser Aufruf enthält zusätzlich alle Java-Regressionstests.
+[Einrichtung und Hinweise für SHI-Tester](WPLUX/SHI-TEST.md).
+
 Die Tests verwenden eine vereinfachte Symcon-API und einen lokalen TCP-Simulator.
 Sie prüfen unter anderem Schreibwerte, Zeitgrenzen, unvollständige Antworten,
 Temperaturumrechnung und Konfigurationsformulare. Sie ersetzen keinen Test unter
