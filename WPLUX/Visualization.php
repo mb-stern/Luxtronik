@@ -3116,7 +3116,6 @@ window.SymconHeatPump = {
 
             // Only the measured DHW temperature belongs in the tank; the setpoint is in the top button.
             const dhwReadings = group('gDHWTemperatures', svg.querySelector('#gDHW'));
-            node(dhwReadings, 'text', {class:'sm', x:925, y:687}, 'Ist');
             fittedText(dhwReadings, {id:'textDHWIst', class:'md', x:1055, y:710, 'text-anchor':'end'}, formatted(cfg.tankTempWWMiddle) || '—', 130);
             const boilerPower = group('gBoilerHeaterPower', svg.querySelector('#gDHW'));
             const total = heaterWatts;
@@ -3124,7 +3123,7 @@ window.SymconHeatPump = {
                 const active = typeof total === 'number' && total > 0;
                 node(boilerPower, 'path', {id:'pathBoilerHeatBolt', d:'M945 782L934 804H944L939 824L958 798H948L954 782Z',
                     fill:'#ffc51b', class:active ? 'wp-boiler-heater-active' : '', opacity:active ? 1 : .35});
-                fittedText(boilerPower, {id:'textBoilerHeaterPower', class:'sm', x:1055, y:813, 'text-anchor':'end'}, heaterPowerText, 110);
+                fittedText(boilerPower, {id:'textBoilerHeaterPower', class:'md', x:1055, y:813, 'text-anchor':'end'}, heaterPowerText, 110);
                 node(boilerPower,'title',{},heaterPowerDescription);
             }
             let heaterStyle = svg.querySelector('#boilerHeaterStyle');
