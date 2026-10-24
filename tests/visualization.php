@@ -85,7 +85,7 @@ $tests['visualization retains all existing property defaults and the complete so
     check(invoke($module, 'BuildCardConfig')['heatingCircuitMixed1'] === false, 'Circuit name incorrectly enables a mixer');
     foreach (['LuxtronikInstanceID', 'ManualConfiguration'] as $removed) check(!array_key_exists($removed, $module->properties), 'Separate source/manual mode retained');
 };
-$tests['visualization settings expose only external additions and layout; footer lives in the native list'] = static function (): void {
+$tests['visualization settings expose only external additions and layout without a footer'] = static function (): void {
     $module = new Luxtronik();
     $module->properties['IDListe'] = '[{"id":15,"enabled":true,"visualizationFooter":true},{"id":300,"enabled":false,"visualizationFooter":true}]';
     $form = json_decode($module->GetConfigurationForm(), true, 512, JSON_THROW_ON_ERROR);
@@ -105,12 +105,12 @@ $tests['visualization settings expose only external additions and layout; footer
         check(!isset($fields[$property]), 'Unwanted assignment UI: ' . $property);
     }
     $rows = array_column($fields['IDListe']['values'], null, 'id');
-    check($rows[15]['enabled'] && $rows[15]['visualizationFooter'] && $rows[300]['visualizationFooter'], 'Footer flags lost');
-    check(count(array_filter($fields['IDListe']['columns'], fn($c) => $c['name'] === 'visualizationFooter')) === 1, 'Footer checkbox missing');
+    check($rows[15]['enabled'] && !$rows[300]['enabled'], 'Native selection changed');
+    check(count(array_filter($fields['IDListe']['columns'], fn($c) => $c['name'] === 'visualizationFooter')) === 0, 'Footer checkbox retained');
     $module->properties['CommunicationMode'] = 'modbus';
     $fields = fields(json_decode($module->GetConfigurationForm(), true));
     check(isset(array_column($fields['IDListe']['columns'], null, 'name')['interface']), 'Protocol support column lost');
-    check(isset(array_column($fields['IDListe']['columns'], null, 'name')['visualizationFooter']), 'Footer lost in SHI');
+    check(!isset(array_column($fields['IDListe']['columns'], null, 'name')['visualizationFooter']), 'Footer retained in SHI');
 };
 $tests['own instance wins, fallbacks survive and converted values are never rescaled'] = static function (): void {
     $module = new Luxtronik();
@@ -144,23 +144,6 @@ $tests['DHW actual is middle; duplicate sensors and missing fields retain their 
     check($config['tankTempWWUp'] === '' && $config['tankTempWWDown'] === '' && $config['tankTempWWMiddle'] !== '', 'Missing sensor not hidden');
     visualizationVariable($module, 'SEC_EEV', 247.0);
     check(invoke($module, 'BuildCardConfig')['expansionValveOpening'] === '', 'Unconfirmed EEV mapping introduced');
-};
-$tests['footer checkbox activates the existing Java value path without an extra device query'] = static function (): void {
-    $values = array_fill(0, 16, 0); $values[15] = 4294967261;
-    withServer([[pack('N*', 3004, 0), frame(3004, $values)]], static function (Luxtronik $module): void {
-        $module->properties['IDListe'] = '[{"id":15,"enabled":false,"visualizationFooter":true}]';
-        $module->Update();
-        $id = $module->GetIDForIdent('Aussentemperatur');
-        check($id !== false && GetValue($id) === -3.5, 'Footer selection did not enable native data');
-        $payload = visualizationPayload($module);
-        check($payload['config']['instanceFooter'][0]['variableId'] === $id, 'Footer uses wrong object');
-        check($payload['data']['instanceFooter15']['value'] === -3.5, 'Footer scaled value twice');
-        $module->GetVisualizationTile();
-        check(isset($module->messages[$id][VM_UPDATE]), 'Footer value not subscribed');
-        $GLOBALS['testVariables'][$id]['value'] = -2.5;
-        $module->MessageSink(1, $id, VM_UPDATE, []);
-        check(end($module->updates)['data']['instanceFooter15']['value'] === -2.5, 'Footer live update missing');
-    });
 };
 $tests['live messages refresh only registered variables and update removed/recreated Idents'] = static function (): void {
     $module = new Luxtronik();
@@ -255,7 +238,7 @@ $tests['integer legacy setpoints reject fractions instead of silently truncating
 };
 $tests['graphic is full-view only and labels and payload are safely embedded'] = static function (): void {
     $module = new Luxtronik();
-    $module->properties['AdditionalLabel000'] = '</script><script>bad()</script>';
+    $module->properties['HeatingCircuitName1'] = '</script><script>bad()</script>';
     $html = $module->GetVisualizationTile();
     check(str_contains($html, 'SymconHeatPump.init(') && !str_contains($html, 'id="wp-compact-view"') && !str_contains($html, 'wp-view-toggle'), 'Incorrect view controls');
     check(!str_contains($html, '</script><script>bad()'), 'Label escaped script context');
@@ -425,7 +408,7 @@ $tests['empty ID list supplies the whole graphic internally without creating mea
         check(end($module->updates)['data']['mixerActual1']['value']===25.1,'Internal live update requires VM_UPDATE');
         check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Later scan created objects');
         $GLOBALS['testInternalVisualizationUpdate']=end($module->updates);
-        check($payload['config']['instanceFooter']===[],'Automatic points added to footer');
+        check(!isset($payload['config']['instanceFooter'], $payload['config']['externalFooter']),'Footer configuration retained');
     });
 };
 
@@ -520,11 +503,9 @@ $tests['integer heater associations preserve arbitrary raw values in legacy and 
         if ($modern) $GLOBALS['testVariables'][$id]['presentation']=['PRESENTATION'=>'{52D9E126-D7D2-2CBB-5E62-4CF7BA7C5D82}',
             'OPTIONS'=>json_encode([['Value'=>10,'Caption'=>'Aus'],['Value'=>20,'Caption'=>'Automatik'],['Value'=>30,'Caption'=>'Ein']])];
         $module->properties['VisualizationHeaterSwitch1']=$id;
-        $module->properties['AdditionalValue000']=$id;
         $control=invoke($module,'BuildControlData')['heaterSwitches'][0];
         check($control['configured'] && $control['currentValue']===20 && $control['stateLabel']==='Automatik','Integer mode not recognized');
         check(array_column($control['options'],'value')===[10,20,30],'Association values changed or collapsed to Boolean');
-        check(invoke($module,'BuildVisualizationData')['externalFooter0']['formatted']==='Automatik','Read-only picker lost association label');
         $GLOBALS['testRequestedActions']=[];
         $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>30]);
         check($GLOBALS['testRequestedActions']===[[$id,30]],'Integer action did not use the actual association value');
@@ -686,7 +667,7 @@ $tests['configured mixers resolve their branch sensors outputs and pumps without
     check(invoke($module,'BuildCardConfig')['mixers']===[],'Direct branch retains mixer');
 };
 
-$tests['configuration panels precede the native list and external footer entries have no slot limit'] = static function (): void {
+$tests['configuration panels precede the native list without footer settings'] = static function (): void {
     $module=new Luxtronik();
     foreach (['java','modbus'] as $mode) {
         $module->properties['CommunicationMode']=$mode;
@@ -695,63 +676,14 @@ $tests['configuration panels precede the native list and external footer entries
         foreach ($form['elements'] as $index=>$element) $positions[$element['name']??$element['caption']??'']=$index;
         check($positions['Modbus TCP / SHI']<$positions['HTML-SDK / Visualisierung'] && $positions['HTML-SDK / Visualisierung']<$positions['IDListe'],'Panels remain below the ID selection');
         $all=fields($form);
-        $list=$all['VisualizationExternalFooter'];
-        check($list['type']==='List' && $list['add'] && $list['delete'] && $list['changeOrder'],'Footer list cannot grow or be reordered');
-        check($list['columns'][1]['edit']['type']==='SelectVariable' && !isset($list['columns'][1]['edit']['validVariableTypes']),'Footer picker excludes supported types');
+        check(!isset($all['VisualizationExternalFooter']),'Footer settings retained');
         $captions=json_encode($form,JSON_UNESCAPED_UNICODE);
-        check(str_contains($captions,'Innentemperaturen') && str_contains($captions,'Externe Variablen für Fußzeile'),'Section captions wrong');
+        check(str_contains($captions,'Innentemperaturen') && !str_contains($captions,'Fußzeile'),'Section captions wrong');
         check(!str_contains($captions,'Bis zu drei Innentemperaturen') && !str_contains($captions,'Drei optionale Fremdvariablen'),'Old limited section captions retained');
     }
 };
 
-$tests['external footer preserves arbitrary rows typed values labels live updates and removal'] = static function (): void {
-    $module=new Luxtronik(); $external=new Luxtronik(); $rows=[];
-    for ($i=0;$i<27;++$i) {
-        $id=visualizationVariable($external,'External'.$i,$i===0?0:$i+0.5);
-        $rows[]=['label'=>$i===0?'':'Messung '.$i,'variableID'=>$id];
-    }
-    $rows[]=['label'=>'Anderer Name','variableID'=>$rows[0]['variableID']];
-    $rows[]=['label'=>'Noch offen','variableID'=>0];
-    $module->properties['VisualizationExternalFooter']=json_encode($rows);
-    $data=invoke($module,'BuildVisualizationData');
-    $config=invoke($module,'BuildCardConfig');
-    check(count($config['externalFooter'])===28 && $data['externalFooter0']['value']===0,'External values limited or zero lost');
-    check($config['externalFooter'][0]['label']==='External0' && $config['externalFooter'][27]['label']==='Anderer Name','Default or duplicate-source labels lost');
-    check($data['externalFooter26']['value']===26.5,'Values after slot 10 lost or rescaled');
-    $list=fields(json_decode($module->GetConfigurationForm(),true))['VisualizationExternalFooter'];
-    check($list['values']===$rows,'Incomplete rows or list order lost on reopening');
-    $module->GetVisualizationTile();
-    $id=$rows[26]['variableID'];
-    check(isset($module->messages[$id][VM_UPDATE]),'New footer variable not subscribed');
-    $GLOBALS['testVariables'][$id]['value']=31.5;
-    $module->MessageSink(1,$id,VM_UPDATE,[]);
-    check(end($module->updates)['data']['externalFooter26']['value']===31.5,'External footer not live');
-    unset($GLOBALS['testVariables'][$id]);
-    $module->MessageSink(1,$id,VM_DELETE,[]);
-    check(!isset(end($module->updates)['data']['externalFooter26']),'Deleted external variable retained');
-    $module->properties['VisualizationExternalFooter']='[]';
-    invoke($module,'RefreshVisualization',true);
-    check(invoke($module,'BuildCardConfig')['externalFooter']===[] && !isset($module->messages[$rows[0]['variableID']][VM_UPDATE]),'Removed selections remain subscribed');
-};
 
-$tests['legacy external footer selections migrate once and a saved empty list never resurrects them'] = static function (): void {
-    $module=new Luxtronik();$external=new Luxtronik();
-    $first=visualizationVariable($external,'Legacy',12.5);
-    $last=visualizationVariable($external,'LegacyLast',20.0);
-    $module->properties['AdditionalValue000']=$first;
-    $module->properties['AdditionalLabel000']='Bisheriger Name';
-    $module->properties['AdditionalValue009']=$last;
-    $expected=[['label'=>'Bisheriger Name','variableID'=>$first],['label'=>'','variableID'=>$last]];
-    check(invoke($module,'VisualizationExternalFooterRows')===$expected,'Existing slots not shown before first save');
-    $old=['configuration'=>['AdditionalValue000'=>$first,'AdditionalLabel000'=>'Bisheriger Name','AdditionalValue009'=>$last],'attributes'=>['marker'=>42]];
-    $migrated=json_decode($module->Migrate(json_encode($old)),true);
-    check(json_decode($migrated['configuration']['VisualizationExternalFooter'],true)===$expected && $migrated['attributes']===$old['attributes'],'Migration changes assignments or attributes');
-    check($module->Migrate(json_encode($migrated))==='','Footer migration repeats');
-    $module->properties['VisualizationExternalFooter']='[]';
-    check(invoke($module,'GetVisualizationExternalFooter')===[],'Empty list revives old slots');
-    $old['configuration']['VisualizationExternalFooter']='[]';
-    check($module->Migrate(json_encode($old))==='','Migration revives cleared list');
-};
 
 $tests['solar falls back to hot water without a buffer while retaining the saved destination'] = static function (): void {
     $module=new Luxtronik();
@@ -877,6 +809,132 @@ $tests['SHI graphic uses its current internal snapshot and shared numeric contro
     $GLOBALS['testHybridVisualizationMissing']=visualizationPayload($module);
 };
 
+$tests['heater power sums active legacy and modern power associations instead of enum indexes'] = static function (): void {
+    $module=new Luxtronik();$external=new Luxtronik();
+    $GLOBALS['testProfiles']['HeaterStagesPower']=['Type'=>1,'Suffix'=>'','Associations'=>[
+        ['Value'=>0,'Name'=>'Aus'],['Value'=>1,'Name'=>'1.500,0 W'],['Value'=>2,'Name'=>'3 kW']]];
+    $a=visualizationVariable($external,'AssociationPower',1,'HeaterStagesPower');
+    $b=visualizationVariable($external,'ModernAssociationPower',20);
+    $GLOBALS['testVariables'][$b]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'Aus'],['Value'=>20,'Caption'=>'Stufe 2 (2,5 kW)']])];
+    $c=visualizationVariable($external,'MeasuredPower',0.5);
+    $GLOBALS['testVariables'][$c]['presentation']=['SUFFIX'=>"\u{00A0}Kilowatt\u{202F}"];
+    $module->properties['HeaterRod1']=$a;$module->properties['HeaterRod2']=$b;$module->properties['HeaterRod3']=$c;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===4500.0,'Association labels or units not summed');
+    check(invoke($module,'BuildControlData')['heaterSwitches'][0]['powerWatts']===1500.0,'Menu uses enum index instead of associated power');
+    $module->GetVisualizationTile();
+    $GLOBALS['testVariables'][$a]['value']=2;$module->MessageSink(1,$a,VM_UPDATE,[]);
+    check(end($module->updates)['data']['heaterRodTotalPower']['value']==6000.0,'Live stage power not updated');
+    $GLOBALS['testVariables'][$a]['value']=0;$module->MessageSink(2,$a,VM_UPDATE,[]);
+    check(end($module->updates)['data']['heaterRodTotalPower']['value']==3000.0,'Declared off association not zero');
+    $GLOBALS['testVariables'][$b]['presentation']['OPTIONS']=json_encode([['Value'=>20,'Caption'=>'2000 Watt']]);
+    $module->MessageSink(3,$b,VM_CHANGEPROFILEACTION,[]);
+    check(end($module->updates)['data']['heaterRodTotalPower']['value']==2500.0,'Changed presentation association not refreshed');
+};
+$tests['heater switch power associations work without a meter while commands retain their original typed values'] = static function (): void {
+    $module=new Luxtronik();$external=new Luxtronik();
+    $id=visualizationVariable($external,'PowerSwitch',0);
+    $external->EnableAction('PowerSwitch');
+    $GLOBALS['testVariables'][$id]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'Aus'],['Value'=>2,'Caption'=>'3 kW']])];
+    $module->properties['VisualizationHeaterSwitch1']=$id;
+    $module->properties['VisualizationHeaterOffValue1']='0';$module->properties['VisualizationHeaterOnValue1']='2';
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===0.0,'Declared switch off power unavailable');
+    $GLOBALS['testRequestedActions']=[];
+    $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>2]);
+    check($GLOBALS['testRequestedActions']===[[$id,2]],'Associated watts sent as command value');
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===0.0,'Unreported switch result optimistically used');
+    $module->GetVisualizationTile();$GLOBALS['testVariables'][$id]['value']=2;
+    $module->MessageSink(1,$id,VM_UPDATE,[]);
+    check(end($module->updates)['data']['heaterRodTotalPower']['value']==3000.0,'Reported switch association not used for power');
+    check(end($module->updates)['controls']['heaterSwitches'][0]['powerWatts']==3000.0,'Menu and sum use different power');
+    $GLOBALS['testHeaterAssociationsHtml']=$module->GetVisualizationTile();
+    $GLOBALS['testVariables'][$id]['value']=0;$module->MessageSink(2,$id,VM_UPDATE,[]);
+    $GLOBALS['testHeaterAssociationsUpdate']=visualizationPayload($module);
+    $module->properties['VisualizationHeaterSwitch2']=$id;
+    $GLOBALS['testVariables'][$id]['value']=2;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===3000.0,'Same switch power counted twice');
+    $meter=visualizationVariable($external,'RealPower',0.0);$GLOBALS['testVariables'][$meter]['presentation']=['SUFFIX'=>' W'];
+    $module->properties['VisualizationHeaterSwitch2']=0;$module->properties['HeaterRod1']=$meter;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===0.0,'Explicit zero meter overridden by switch association');
+    $GLOBALS['testVariables'][$meter]['value']=-1.0;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===null,'Invalid explicit meter masked by switch association');
+};
+$tests['power captions support typed associations but do not turn plain states energy or ranges into watts'] = static function (): void {
+    $module=new Luxtronik();$external=new Luxtronik();
+    $switch=visualizationVariable($external,'BareSwitch',1);$module->properties['VisualizationHeaterSwitch1']=$switch;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===null,'Bare integer switch counted as watts');
+    $bool=visualizationVariable($external,'BooleanPower',true);
+    $GLOBALS['testVariables'][$bool]['presentation']=['OPTIONS'=>json_encode([['Value'=>false,'Caption'=>'0 W'],['Value'=>true,'Caption'=>'1,5 kW']])];
+    $module->properties['VisualizationHeaterSwitch1']=$bool;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===1500.0,'Explicit boolean power mapping ignored');
+    $external->RegisterVariableString('StringPower','String power');$string=$external->GetIDForIdent('StringPower');
+    $GLOBALS['testVariables'][$string]['value']='boost';$GLOBALS['testVariables'][$string]['presentation']=['SUFFIX'=>' kW','OPTIONS'=>json_encode([['Value'=>'boost','Caption'=>'2,5']])];
+    $module->properties['VisualizationHeaterSwitch1']=$string;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===2500.0,'Numeric association caption ignores profile unit');
+    foreach (['Ein','Automatik','2 kWh','-3000W','1 kW / 3 kW','0–3 kW','50 %','6 A'] as $caption) {
+        $GLOBALS['testVariables'][$switch]['presentation']=['OPTIONS'=>json_encode([['Value'=>1,'Caption'=>$caption]])];
+        $module->properties['VisualizationHeaterSwitch1']=$switch;
+        check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===null,'Non-power caption interpreted as watts: '.$caption);
+    }
+};
+
+$tests['zero power remains zero with Automatic associations while other heaters contribute measured power'] = static function (): void {
+    foreach ([false,true] as $modern) {
+        $module=new Luxtronik();$external=new Luxtronik();
+        $GLOBALS['testProfiles']['ZeroAutoPower']=['Type'=>1,'Suffix'=>'','Associations'=>[['Value'=>0,'Name'=>'Automatisch']]];
+        foreach ([1,2] as $n) {
+            $id=visualizationVariable($external,'ZeroPower'.$n,0,$modern?'':'ZeroAutoPower');
+            if ($modern) $GLOBALS['testVariables'][$id]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'Automatisch']])];
+            $module->properties['HeaterRod'.$n]=$id;
+        }
+        $third=visualizationVariable($external,'ActivePower',1.38);
+        $GLOBALS['testVariables'][$third]['presentation']=['SUFFIX'=>' kW'];
+        $module->properties['HeaterRod3']=$third;
+        $total=invoke($module,'BuildVisualizationData')['heaterRodTotalPower'];
+        check($total['value']===1380.0 && $total['complete'] && $total['knownCount']===3,'Valid zero association poisons total');
+        $controls=invoke($module,'BuildControlData')['heaterSwitches'];
+        check($controls[0]['powerWatts']===0.0 && $controls[1]['powerWatts']===0.0 && $controls[2]['powerWatts']===1380.0,'Menu differs from summed zero power');
+        $GLOBALS['testHeaterZeroHtml']=$module->GetVisualizationTile();
+        $GLOBALS['testVariables'][$module->properties['HeaterRod1']]['value']=99;
+        $GLOBALS['testVariables'][$module->properties['HeaterRod1']]['presentation']=['SUFFIX'=>' kWh'];
+        $partial=visualizationPayload($module);
+        check($partial['data']['heaterRodTotalPower']['value']===null && $partial['data']['heaterRodTotalPower']['knownWatts']===1380.0,'Unknown source loses known partial power');
+        $GLOBALS['testHeaterPartialUpdate']=$partial;
+    }
+    $module=new Luxtronik();$external=new Luxtronik();
+    $id=visualizationVariable($external,'ZeroStage',0);$module->properties['HeaterRod1']=$id;
+    $GLOBALS['testVariables'][$id]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'1.5 kW']])];
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===1500.0,'Explicit power association at enum zero ignored');
+};
+$tests['obsolete timer callbacks stop at the first unavailable interface and restore normal warning handling'] = static function (): void {
+    $module=new Luxtronik();$GLOBALS['testGlobalLogs']=[];
+    $module->interfaceWarning='InstanceInterface is not available';$before=$module->interfaceReads;
+    $module->Update();
+    check($module->interfaceReads===$before+1 && count($GLOBALS['testGlobalLogs'])===1,'Obsolete timer continues or warning not logged once');
+    check($module->writes===0,'Unavailable timer writes data');
+    $module->interfaceWarning='An unrelated warning';
+    try {$module->Update();throw new LogicException('Unrelated warning swallowed');}
+    catch (ErrorException $expected) {check($expected->getMessage()==='An unrelated warning','Wrong warning forwarded');}
+    try {trigger_error('Handler restored',E_USER_WARNING);throw new LogicException('Previous handler not restored');}
+    catch (ErrorException $expected) {check($expected->getMessage()==='Handler restored','Wrong restored handler');}
+    unset($GLOBALS['testInstances'][$module->InstanceID]);$before=$module->interfaceReads;$module->Update();
+    check($module->interfaceReads===$before,'Deleted instance still accessed');
+};
+
+$tests['retired footer selections neither create variables nor subscribe external values'] = static function (): void {
+    $values=array_fill(0,301,0);$values[15]=80;$values[300]=123;
+    withServer([[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $module):void {
+        $external=new Luxtronik();$id=visualizationVariable($external,'FormerFooter',42.0);
+        $module->properties['IDListe']='[{"id":15,"enabled":false,"visualizationFooter":true},{"id":300,"visualizationFooter":true}]';
+        $module->properties['VisualizationExternalFooter']=json_encode([['label'=>'Former footer','variableID'=>$id]]);
+        $module->properties['AdditionalValue000']=$id;
+        $module->Update();$payload=visualizationPayload($module);$module->GetVisualizationTile();
+        check($module->GetIDForIdent('Aussentemperatur')===false && $module->GetIDForIdent('ID_300')===false,'Footer flags still create objects');
+        check($payload['data']['outdoorTemperature']['value']===8.0,'Independent internal data lost');
+        check(!isset($module->messages[$id][VM_UPDATE]),'Removed external footer value still subscribed');
+        foreach (array_keys($payload['config']+$payload['data']) as $key) check(!str_contains(strtolower($key),'footer'),'Footer payload retained');
+    });
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
@@ -893,6 +951,10 @@ if ($dir!==false && $dir!=='') {
     file_put_contents($dir.'/hybrid.html','<meta charset="utf-8">'.$GLOBALS['testHybridVisualizationHtml']);
     file_put_contents($dir.'/hybrid-update.json',json_encode($GLOBALS['testHybridVisualizationUpdate']));
     file_put_contents($dir.'/hybrid-missing.json',json_encode($GLOBALS['testHybridVisualizationMissing']));
+    file_put_contents($dir.'/heater-zero.html','<meta charset="utf-8">'.$GLOBALS['testHeaterZeroHtml']);
+    file_put_contents($dir.'/heater-partial-update.json',json_encode($GLOBALS['testHeaterPartialUpdate']));
+    file_put_contents($dir.'/heater-associations.html','<meta charset="utf-8">'.$GLOBALS['testHeaterAssociationsHtml']);
+    file_put_contents($dir.'/heater-associations-update.json',json_encode($GLOBALS['testHeaterAssociationsUpdate']));
     file_put_contents($dir.'/internal-only.html','<meta charset="utf-8">'.$GLOBALS['testInternalVisualizationHtml']);
     file_put_contents($dir.'/internal-only-update.json',json_encode($GLOBALS['testInternalVisualizationUpdate']));
     $frequency=new Luxtronik();

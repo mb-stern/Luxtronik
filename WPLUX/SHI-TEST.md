@@ -22,8 +22,8 @@ echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalt
 - Als anfänglichen Aktualisierungstakt beispielsweise **30 Sekunden** verwenden.
 - In der bestehenden Checkboxliste zeigt die Spalte **Schnittstelle**:
   `Java`, `Modbus` oder `Java + Modbus`. Variablennamen bekommen keinen Zusatz.
-- Alle 129 dokumentierten Punkte werden intern abgefragt. Nur ausgewählte Zeilen
-  (`aktiv` oder `Fußzeile`) erzeugen zusätzliche Objekte. Die Grafik benötigt keine
+- Alle 129 dokumentierten Punkte werden intern abgefragt. Nur als `aktiv` ausgewählte Zeilen
+  erzeugen zusätzliche Objekte. Die Grafik benötigt keine
   ausgewählten Messvariablen. Hohe IDs der SHI-Zeilen sind Auswahlschlüssel,
   keine Java-Indizes und keine Modbus-Adressen.
 
@@ -47,7 +47,7 @@ benötigten bisherigen Ident kein aktueller gültiger Modbus-Messwert vorliegt,
 liest das Modul bei aktivierter Ergänzung **einmal pro Lesezyklus Kommando 3004**
 über den Java-Port. Das gilt für fehlende Zuordnungen, Ersatzwerte und optionale
 Registerausnahmen sowie bei einem verworfenen Modbus-Lesezyklus. Es werden nur
-die benötigten Werte für Grafik, aktivierte Objekte, Fußzeile und COP/JAZ übernommen.
+die benötigten Werte für Grafik, aktivierte Objekte und COP/JAZ übernommen.
 Idents und numerische Objekt-IDs bleiben erhalten; nicht ausgewählte Messwerte
 werden nur intern gespeichert. Unbestätigte Ident-/Registerzuordnungen werden
 dadurch nicht ergänzt: etwa `SEC_EEV` wird weiterhin nicht zur EEV-Öffnung erklärt.

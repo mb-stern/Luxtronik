@@ -32,6 +32,8 @@ function IPS_SetVariableProfileDigits(string $name, int $digits): void { $GLOBAL
 function IPS_SetVariableProfileText(string $name, string $prefix, string $suffix): void { $GLOBALS['testProfiles'][$name]['Prefix'] = $prefix; $GLOBALS['testProfiles'][$name]['Suffix'] = $suffix; }
 function IPS_SetVariableProfileAssociation(string $name, float $value, string $text, string $icon, int $color): void { $GLOBALS['testProfiles'][$name]['Associations'][] = ['Value' => $value, 'Name' => $text]; }
 function IPS_GetVariableProfile(string $name): array { return $GLOBALS['testProfiles'][$name]; }
+function IPS_InstanceExists(int $id): bool { return isset($GLOBALS['testInstances'][$id]); }
+function IPS_LogMessage(string $sender, string $message): bool { $GLOBALS['testGlobalLogs'][] = [$sender,$message]; return true; }
 function IPS_GetKernelRunlevel(): int { return KR_READY; }
 function IPS_GetName(int $id): string { return $GLOBALS['testVariables'][$id]['name'] ?? ''; }
 function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '']; }
@@ -105,10 +107,13 @@ class IPSModuleStrict
         return true;
     }
     public int $visualizationType = 0;
+    public ?string $interfaceWarning = null;
+    public int $interfaceReads = 0;
 
     public function __construct()
     {
         $this->InstanceID = ++$GLOBALS['testNextID'];
+        $GLOBALS['testInstances'][$this->InstanceID] = true;
         $this->Create();
     }
 
@@ -119,7 +124,11 @@ class IPSModuleStrict
     protected function RegisterPropertyInteger(string $name, int $value): void { $this->properties[$name] ??= $value; }
     protected function RegisterPropertyBoolean(string $name, bool $value): void { $this->properties[$name] ??= $value; }
     protected function RegisterAttributeFloat(string $name, float $value): void { $this->attributes[$name] = $value; }
-    protected function ReadPropertyString(string $name): string { return $this->properties[$name]; }
+    protected function ReadPropertyString(string $name): string {
+        ++$this->interfaceReads;
+        if ($this->interfaceWarning !== null) trigger_error($this->interfaceWarning,E_USER_WARNING);
+        return $this->properties[$name];
+    }
     protected function ReadPropertyInteger(string $name): int { return $this->properties[$name]; }
     protected function ReadPropertyBoolean(string $name): bool { return $this->properties[$name]; }
     protected function ReadAttributeFloat(string $name): float { return $this->attributes[$name]; }

@@ -251,13 +251,13 @@ $tests['disabled instances invalid settings and overlapping scans never perform 
         $m->properties['ModbusUnitID']=0;$m->Update();check($m->status===202,'Invalid config not rejected');
     });check($requests===[],'Disabled/overlapping request connected');
 };
-$tests['COP JAZ existing meters and unrestricted footer selection retain their semantics'] = static function ():void {
+$tests['COP JAZ meters retain their semantics while retired SHI footer selections are ignored'] = static function ():void {
     withSHI(static function(Luxtronik $m):void {
         $external=new Luxtronik();$in=shiVariable($external,'input',2.0);$kwh=shiVariable($external,'energy',10.0);
         $m->properties['kwin']=$in;$m->properties['kwhin']=$kwh;$m->properties['IDListe']='[{"id":110326,"visualizationFooter":true}]';
         $m->ApplyChanges();check(abs(GetValue($m->GetIDForIdent('copfaktor'))-5.0)<0.001,'COP source changed');
-        $footer=invoke($m,'GetVisualizationFooter');check(count($footer)===1 && $footer[0]['variableId']===$m->GetIDForIdent('SHI_Thermische_Energie_Kuehlung'),'SHI footer not selected');
         check($m->properties['kwin']===$in && $m->properties['kwhin']===$kwh,'Meter settings changed');
+        check($m->GetIDForIdent('SHI_Thermische_Energie_Kuehlung')===false,'Retired SHI footer flag still creates objects');
     },['input'=>[10300=>100,10322=>8000,10324=>4000]]);
 };
 $tests['uint32 hours do not sign-wrap and optional sentinels remain unavailable'] = static function ():void {
@@ -290,7 +290,7 @@ function hybridFrameValues(): array
 $tests['hybrid reads one Java frame for missing measurements while zero Modbus values keep priority'] = static function ():void {
     withServer([[pack('N*',3004,0),frame(3004,hybridFrameValues())]],static function(Luxtronik $m):void {
         $id=shiVariable($m,'Heisgastemperatur',42.0,'Mein Heißgas','~Temperature');
-        $m->properties['IDListe']='[{"id":14,"enabled":true},{"id":300,"visualizationFooter":true}]';
+        $m->properties['IDListe']='[{"id":14,"enabled":true},{"id":300,"enabled":true}]';
         $requests=withSHI(static function(Luxtronik $m) use($id):void {
             $m->Update();$p=shiPayload($m);
             check($m->status===102,'Successful hybrid scan not active');

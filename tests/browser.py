@@ -144,39 +144,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 page.evaluate('(data)=>window.handleMessage({type:"update",data})',eev['data'])
                 assert page.locator('#textExpansionValveOpening').text_content()=='EEV Kühlen: —'
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
-                # Native checkbox selections must not be limited to the old ten footer slots.
-                footer_sample=json.loads(json.dumps(payload))
-                footer_sample['config']['externalFooter']=[]
-                footer_sample['config']['instanceFooter']=[]
-                for i in range(13):
-                    key='internalTest'+str(i)
-                    footer_sample['config']['instanceFooter'].append({'key':key,'label':'Intern '+str(i),'variableId':99000+i})
-                    footer_sample['data'][key]={'value':i,'formatted':str(i)+' °C','binary':False}
-                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',footer_sample)
-                assert page.locator('#gFooter text[id^="textFooterAdditional"]').count()==13
-                assert '0 °C' in page.locator('#textFooterAdditional000').text_content()
-                assert '12 °C' in page.locator('#textFooterAdditional012').text_content()
-                assert page.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.height')>985
-                # External footer rows are unbounded too, including zero, labels and live data.
-                footer_sample['config']['instanceFooter']=[]
-                footer_sample['config']['externalFooter']=[]
-                for i in range(27):
-                    key='externalTest'+str(i)
-                    footer_sample['config']['externalFooter'].append({'key':key,'label':'Extern '+str(i),'variableId':98000+i})
-                    footer_sample['data'][key]={'value':i,'formatted':str(i)+' kWh','binary':False}
-                footer_sample['config']['externalFooter'][26]['label']='<script>unsafe()</script>'
-                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',footer_sample)
-                assert page.locator('#gFooter text[id^="textFooterAdditional"]').count()==27
-                assert '0 kWh' in page.locator('#textFooterAdditional000').text_content()
-                assert '<script>unsafe()</script>' in page.locator('#textFooterAdditional026').text_content()
-                assert page.locator('#gFooter script').count()==0
-                footer_sample['data']['externalTest26'].update(value=42,formatted='42 kWh')
-                page.evaluate('(p)=>window.handleMessage({type:"update",data:p.data})',footer_sample)
-                assert '42 kWh' in page.locator('#textFooterAdditional026').text_content()
-                footer_sample['config']['externalFooter']=[]
-                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',footer_sample)
-                assert page.locator('#gFooter text[id^="textFooterAdditional"]').count()==0
-                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
+                assert page.locator('#gFooter').count()==0
+                assert page.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.height')==925
                 # A full control bar sets the right edge of the automatic narrow layout.
                 narrow=json.loads(json.dumps(payload))
                 narrow['config'].update(tankHP=False,thermalSolarAvailable=False,luxtronikWebInterfaceURL=f'http://127.0.0.1:{server.server_port}/luxtronik-test.html')
@@ -581,7 +550,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert placement['gMixerValveSymbol1']['right']<placement['gHKPumpIcon1']['x'],placement
                     screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                     if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'mixed-buffer-{has_buffer}-{width}.png'))
-                # Without buffer and solar, the circuit moves left and the canvas/footer shrink together.
+                # Without buffer and solar, the circuit moves left and the canvas shrink together.
                 slim=json.loads(json.dumps(original))
                 slim['config'].update(tankHP=False,thermalSolarAvailable=False)
                 slim['config']['heatingFlow']='testFlowPosition'
@@ -749,6 +718,43 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 frequency.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
                 assert frequency.locator('#textHeatPumpCycle').text_content()=='Lauf-/Standzeit —'
                 frequency.close()
+
+            # Enum indexes stay control values; associated power feeds both heater displays.
+            for width in [1200,390]:
+                heaters=browser.new_page(viewport={'width':width,'height':850})
+                heaters.goto(f'http://127.0.0.1:{server.server_port}/heater-associations.html')
+                assert heaters.locator('#wp-error').text_content()==''
+                assert heaters.locator('#textHeaterButtonState').text_content()=='3.00 kW'
+                assert heaters.locator('#textBoilerHeaterPower').text_content()=='3.00 kW'
+                assert heaters.locator('#pathBoilerHeatBolt').get_attribute('class')=='wp-boiler-heater-active'
+                heaters.evaluate('() => {window.testActions=[];window.requestAction=(ident,value)=>window.testActions.push({ident,payload:JSON.parse(value)});}')
+                heaters.locator('#gHeaterControlButton').dispatch_event('click')
+                assert '3.00 kW' in heaters.locator('#wp-mode-menu').text_content()
+                heaters.locator('#wp-mode-menu [data-heater="1"][data-value="0"]').click()
+                assert heaters.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':0}}
+                assert heaters.locator('#textHeaterButtonState').text_content()=='3.00 kW'
+                update=json.loads(Path(artifacts,'heater-associations-update.json').read_text())
+                heaters.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
+                assert heaters.locator('#textHeaterButtonState').text_content()=='0.00 kW'
+                assert heaters.locator('#textBoilerHeaterPower').text_content()=='0.00 kW'
+                assert heaters.locator('#pathBoilerHeatBolt').get_attribute('class')==''
+                heaters.locator('#gHeaterControlButton').dispatch_event('click')
+                heaters.locator('#wp-mode-menu [data-heater="1"][data-value="2"]').click()
+                assert heaters.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':2}}
+                heaters.close()
+
+            # Valid zero meters with Automatic labels contribute zero, not unknown power.
+            for width in [1200,390]:
+                heaters=browser.new_page(viewport={'width':width,'height':850})
+                heaters.goto(f'http://127.0.0.1:{server.server_port}/heater-zero.html')
+                for target in ['#textHeaterButtonState','#textBoilerHeaterPower']:
+                    assert heaters.locator(target).text_content()=='1.38 kW'
+                partial=json.loads(Path(artifacts,'heater-partial-update.json').read_text())
+                heaters.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',partial)
+                for target in ['#textHeaterButtonState','#textBoilerHeaterPower']:
+                    assert heaters.locator(target).text_content()=='≥ 1.38 kW'
+                assert heaters.locator('#pathBoilerHeatBolt').get_attribute('class')=='wp-boiler-heater-active'
+                heaters.close()
 
             # SHI has its own states, current measurements and shared numeric controls.
             for width in [1200,390]:

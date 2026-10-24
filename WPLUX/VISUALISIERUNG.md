@@ -13,7 +13,7 @@ Darstellung verwenden. Die internen Messpunkte der Grafik werden bei der normale
 Aktualisierung unabhängig von der ID-Liste intern zwischengespeichert. Dafür
 werden keine Symcon-Messwertvariablen angelegt. Java nutzt
 weiterhin eine gemeinsame 3004-Abfrage. SHI liest zusätzlich nur bestätigte
-Input-Register. Nur die ID-Liste einschließlich Fußzeilen-Auswahl bestimmt,
+Input-Register. Nur die ID-Liste bestimmt,
 welche Messwertvariablen im Objektbaum angelegt werden. Die gespeicherte Auswahl
 wird nicht verändert. Bedienvariablen
 werden weiterhin über die bisherigen Optionen aktiviert.
@@ -44,10 +44,7 @@ ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
   weiteren Picker. Ist diese nicht konfiguriert, wird der übertragene Wert
   `Leistungsaufnahme` (ID 268, Watt) verwendet. Das allein bestätigt keine echte
   Strommessung. Die verwendete Quelle steht im Tooltip des Leistungswerts.
-- **Externe Variablen für Fußzeile**: beliebig viele Zeilen mit Bezeichnung und
-  Variablenauswahl, hinzufügbar, löschbar und umsortierbar. Eine leere Bezeichnung
-  verwendet den Variablennamen. Bisherige Zuordnungen werden übernommen; eine
-  bewusst leer gespeicherte Liste bleibt leer.
+
 
 Es gibt keine separaten Auswahlfelder für einzelne Speicherfühler, Pumpen oder
 interne Heizkreiswerte. Ein umfassendes Zuordnungsformular, Zuordnungsdiagnosen,
@@ -69,7 +66,7 @@ Rücklaufbeimischung, Pumpe und Heizfläche. Ohne Puffer führen die Leitungen d
 von der Wärmepumpe zu den Abgängen; direkte Heizkreise zeigen kein Mischerventil.
 Die Heizfläche steht stellvertretend für die angeschlossenen Verbraucher. Ohne
 Puffer und Solarthermie rücken die Heizkreisabgänge automatisch nach links;
-Zeichenfläche und Fußzeile passen sich bis zur Bedienleiste an. Mindestabstände
+die Zeichenfläche passt sich bis zur Bedienleiste an. Mindestabstände
 für Mischer und Pumpen bleiben erhalten. Dies ist keine separate Kompaktansicht.
 
 Der allgemeine Vorlauf nutzt `Vorlauftemperatur_Heizkreis` (ID 10). Ein separater
@@ -126,15 +123,20 @@ Der Durchfluss liest ausschließlich `Flow_Rate` (ID 254, l/h) und steht am
 gemeinsamen Wärmepumpenausgang. WMZ-Durchfluss (155) und Wärmequellendurchfluss
 (173) werden dafür nicht ersatzweise verwendet.
 
-Der Warmwasserspeicher zeigt nur Ist (`Warmwasser_Ist_Temperatur`) und Soll
-(`Warmwasser_Soll_Temperatur`). Gespeicherte Zuordnungen
+Der Warmwasserspeicher zeigt die Isttemperatur (`Warmwasser_Ist_Temperatur`);
+der Sollwert steht ausschließlich im oberen Button. Gespeicherte Zuordnungen
 weiterer Fühler bleiben erhalten. Die Summe der ausgewählten Heizstableistungen
 steht mit einem gelben Blitz im Boiler; bei Leistung über null pulsiert er.
-Schaltzustände werden nicht in Watt umgedeutet, doppelt ausgewählte Variablen
-werden nur einmal summiert. Bei fehlender oder ungültiger Leistung erscheint „—“.
+W/kW-Einheiten und explizite Leistungsassoziationen wie `3 kW` werden ausgewertet.
+Eine gewählte Ist-Leistung von 0 zählt auch mit der Assoziation „Automatisch“
+als 0 W. Ohne separate Ist-Leistung kann eine Leistungsassoziation der
+Schaltvariable dienen; ein bloßes Ein/Aus liefert keine Wattzahl. Doppelt
+ausgewählte Quellen werden nur einmal summiert. Fehlen alle Leistungsangaben,
+erscheint „—“; bei teilweise fehlenden Angaben bleibt die bekannte Teilsumme
+mit `≥` sichtbar.
 
 Der Button **Heizstäbe** zwischen Heizkorrektur und LUX-Bedienfeld zeigt die
-summierte Ist-Leistung in kW, bei fehlenden Leistungswerten „—“. Er öffnet die
+summierte Ist-Leistung in kW, gegebenenfalls als gekennzeichnete Teilsumme. Er öffnet die
 konfigurierten Heizstäbe mit Ein-/Ausschaltung. Geschaltet wird ausschließlich
 über `RequestAction` der in der Konfiguration ausgewählten externen
 Variable mit aktiver Aktion. Die Bedienung übernimmt Beschriftungen und
@@ -156,22 +158,6 @@ HTML-SDK-Skript `/icons.js` eingebunden. Nicht zuordenbare ältere Symbole erhal
 ein Haus als Ersatz; das besondere Symbol `Transparent` blendet das Symbol aus.
 Vorhandene Kreisauswahlen aus früheren Entwicklungsständen behalten bei der Migration ihre Anzahl
 sichtbarer Heizkreisplätze. Frühere Mischkreisschalter werden nicht mehr benötigt.
-
-## Interne Werte in der Fußzeile
-
-In der vorhandenen Liste **Überwachte IDs** steht neben **Aktiv** die zusätzliche
-Checkbox **Fußzeile**. Die Auswahl wird in derselben ID-Liste gespeichert und
-bleibt beim Öffnen, Speichern und Neustart erhalten. Eine Auswahl für die Fußzeile
-aktiviert den betreffenden Messpunkt bei der normalen Aktualisierung mit; sie
-löst keine separate Java-Datenabfrage aus. Im SHI-Modus werden nur unterstützte
-Input-Register gelesen, weiterhin ohne Schreibbefehle.
-
-Die Fußzeile zeigt Namen und formatierte Werte der eigenen Variablen, ohne neue
-Variablen anzulegen oder Messwerte nochmals umzurechnen. Mehr als zehn ausgewählte
-Werte sind möglich; die Fußzeile wächst um weitere Zeilen. Nicht vorhandene
-Variablen erscheinen erst, sobald sie durch eine erfolgreiche Datenabfrage
-angelegt wurden. Fehlende oder nicht unterstützte SHI-Daten können wie bisher
-letzte Werte enthalten; die SHI-Unterstützung ist in der Konfiguration ausgewiesen.
 
 ## Messwerte und Bedienung
 
@@ -217,7 +203,7 @@ Quellmaterials liegt unter `heat-pump/LICENSE`.
 Die Java- und SHI-Kommunikation bleibt bestehen. Bestehende Modul-/Bibliotheks-IDs,
 Variablen-Idents sowie die Typen und Standardwerte bisheriger Einstellungen wurden
 erhalten. Messpunkte der Grafik werden intern zwischengespeichert; die ID-Liste
-steuert die im Objektbaum angelegten Messwertvariablen und die Fußzeile. Die
+steuert die im Objektbaum angelegten Messwertvariablen. Die
 bisherigen Bedien- und Berechnungsvariablen bleiben durch ihre vorhandenen
 Optionen gesteuert. Der interne Speicher ist an Verbindung und Betriebsart
 gebunden; fehlerhafte Abfragen überschreiben keine vollständigen Messwerte.
@@ -233,8 +219,8 @@ python3 tests/browser.py
 
 PHP-Prüfungen nutzen eine Symcon-Nachbildung und lokale Protokollsimulatoren.
 Die optionalen Browsertests benötigen Playwright und Chromium. Sie prüfen Desktop
-und Mobilansicht, Live-Aktualisierung, Speicherfühler, Bedienpopups, die dynamische
-Fußzeile, Raumquellen, Mischerdaten, COP/JAZ und das simulierte LUX-Bedienfeld.
+und Mobilansicht, Live-Aktualisierung, Speicherfühler, Bedienpopups,
+Raumquellen, Mischerdaten, COP/JAZ und das simulierte LUX-Bedienfeld.
 Die echte Symbolbibliothek wird von Symcon bereitgestellt; lokal werden Bindung
 und sichere Symbolklassen geprüft. Eine echte Symcon-Instanz mit Wärmepumpe
 wurde in dieser Cloud-Umgebung nicht verwendet.

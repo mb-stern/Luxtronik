@@ -199,30 +199,6 @@ trait LuxtronikVisualization
         $this->RegisterPropertyInteger('ThermalSolarFluxTemp', 0);
         $this->RegisterPropertyInteger('ThermalSolarReturnTemp', 0);
 
-        // Frei belegbare Zusatzwerte der SVG (000 ... 009)
-        // Empty means not migrated yet; an explicitly saved [] stays empty.
-        $this->RegisterPropertyString('VisualizationExternalFooter', '');
-        $this->RegisterPropertyString('AdditionalLabel000', '');
-        $this->RegisterPropertyInteger('AdditionalValue000', 0);
-        $this->RegisterPropertyString('AdditionalLabel001', '');
-        $this->RegisterPropertyInteger('AdditionalValue001', 0);
-        $this->RegisterPropertyString('AdditionalLabel002', '');
-        $this->RegisterPropertyInteger('AdditionalValue002', 0);
-        $this->RegisterPropertyString('AdditionalLabel003', '');
-        $this->RegisterPropertyInteger('AdditionalValue003', 0);
-        $this->RegisterPropertyString('AdditionalLabel004', '');
-        $this->RegisterPropertyInteger('AdditionalValue004', 0);
-        $this->RegisterPropertyString('AdditionalLabel005', '');
-        $this->RegisterPropertyInteger('AdditionalValue005', 0);
-        $this->RegisterPropertyString('AdditionalLabel006', '');
-        $this->RegisterPropertyInteger('AdditionalValue006', 0);
-        $this->RegisterPropertyString('AdditionalLabel007', '');
-        $this->RegisterPropertyInteger('AdditionalValue007', 0);
-        $this->RegisterPropertyString('AdditionalLabel008', '');
-        $this->RegisterPropertyInteger('AdditionalValue008', 0);
-        $this->RegisterPropertyString('AdditionalLabel009', '');
-        $this->RegisterPropertyInteger('AdditionalValue009', 0);
-
         // HTML-SDK Visualisierung
         $this->SetVisualizationType(1);
 
@@ -561,8 +537,6 @@ HTML;
     {
         $config = [
             'instanceId'                 => $this->InstanceID,
-            'instanceFooter'             => $this->GetVisualizationFooter(),
-            'externalFooter'             => $this->GetVisualizationExternalFooter(),
             'title'                      => '',
             'fullConfigurationPreview'   => $this->ReadPropertyBoolean('FullConfigurationPreview'),
             'luxtronikWebInterfaceURL'    => $this->GetLuxtronikWebInterfaceURL(),
@@ -810,25 +784,23 @@ HTML;
         $total = 0.0;
         $sources = [];
         $complete = true;
+        $knownCount = 0;
         $selected = false;
         for ($i = 1; $i <= 3; ++$i) {
             $id = $this->ReadPropertyInteger('HeaterRod' . $i);
+            if ($id <= 0) $id = $this->ReadPropertyInteger('VisualizationHeaterSwitch' . $i);
             if ($id <= 0 || isset($sources[$id])) continue;
             $selected = true;
             $sources[$id] = true;
-            $power = $this->VisualizationPowerData($id, 'W');
+            $power = $this->VisualizationHeaterPower($i);
             if ($power === null) $complete = false;
-            else $total += $power['watts'];
+            else {$total += $power['watts'];++$knownCount;}
         }
-        if ($selected) $data['heaterRodTotalPower'] = ['value' => $complete ? $total : null, 'unit' => 'W', 'binary' => false];
+        if ($selected) $data['heaterRodTotalPower'] = ['value' => $complete ? $total : null, 'unit' => 'W', 'binary' => false,
+            'complete'=>$complete,'knownWatts'=>$total,'knownCount'=>$knownCount];
         foreach ($this->GetVisualizationRoomSources() as $entry) {
             $id = $entry['variableId'];
             $data[$entry['key']] = ['variableId' => $id, 'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
-        }
-        foreach (array_merge($this->GetVisualizationFooter(), $this->GetVisualizationExternalFooter()) as $entry) {
-            $id = $entry['variableId'];
-            $data[$entry['key']] = ['variableId' => $id, 'value' => GetValue($id),
-                'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
         }
         return $data;
     }
@@ -2683,6 +2655,13 @@ window.SymconHeatPump = {
             const controls = currentControls || {};
             const previewAll = cfg.fullConfigurationPreview === true;
             const powerText = (watts) => typeof watts === 'number' && Number.isFinite(watts) ? (watts / 1000).toFixed(2) + ' kW' : '—';
+            const heaterPower = data.heaterRodTotalPower;
+            const partialHeaterPower = heaterPower?.complete === false && heaterPower.knownCount > 0;
+            const heaterWatts = partialHeaterPower ? heaterPower.knownWatts : heaterPower?.value;
+            const heaterPowerText = (partialHeaterPower ? '≥ ' : '') + powerText(heaterWatts);
+            const heaterPowerDescription = partialHeaterPower
+                ? 'Bekannte Teilsumme; für weitere Heizstäbe liegt keine gültige Leistungsangabe vor.'
+                : 'Summe der konfigurierten Heizstableistungen in W/kW und ihrer aktiven Leistungsassoziationen.';
             clearTimeout(valveActivityTimer);
             valveActivityTimer = null;
             const valveExpiries = [];
@@ -2830,7 +2809,10 @@ window.SymconHeatPump = {
             show('#gHeaterControlButton', heaterControls.length > 0);
             const heaterButton = svg.querySelector('#gHeaterControlButton');
             if (heaterButton) {
-                setText('#textHeaterButtonState', powerText(data.heaterRodTotalPower?.value));
+                setText('#textHeaterButtonState', heaterPowerText);
+                let title = heaterButton.querySelector('title');
+                if (!title) {title = document.createElementNS(svg.namespaceURI,'title');heaterButton.appendChild(title);}
+                title.textContent = heaterPowerDescription;
                 heaterButton.style.cursor = 'pointer';
                 if (!heaterButton.dataset.bound) {
                     bindTap(heaterButton, openHeaterMenu);
@@ -3144,12 +3126,13 @@ window.SymconHeatPump = {
             node(dhwReadings, 'text', {class:'sm', x:925, y:687}, 'Ist');
             fittedText(dhwReadings, {id:'textDHWIst', class:'md', x:1055, y:710, 'text-anchor':'end'}, formatted(cfg.tankTempWWMiddle) || '—', 130);
             const boilerPower = group('gBoilerHeaterPower', svg.querySelector('#gDHW'));
-            const total = data.heaterRodTotalPower?.value;
+            const total = heaterWatts;
             if (data.heaterRodTotalPower) {
                 const active = typeof total === 'number' && total > 0;
                 node(boilerPower, 'path', {id:'pathBoilerHeatBolt', d:'M945 782L934 804H944L939 824L958 798H948L954 782Z',
                     fill:'#ffc51b', class:active ? 'wp-boiler-heater-active' : '', opacity:active ? 1 : .35});
-                fittedText(boilerPower, {id:'textBoilerHeaterPower', class:'sm', x:1055, y:813, 'text-anchor':'end'}, powerText(total), 93);
+                fittedText(boilerPower, {id:'textBoilerHeaterPower', class:'sm', x:1055, y:813, 'text-anchor':'end'}, heaterPowerText, 110);
+                node(boilerPower,'title',{},heaterPowerDescription);
             }
             let heaterStyle = svg.querySelector('#boilerHeaterStyle');
             if (!heaterStyle) {
@@ -3528,43 +3511,7 @@ window.SymconHeatPump = {
                 );
             }
 
-            // Native checkbox values and an unrestricted external list share the same footer.
-            const footerValues = [];
-            for (const item of [...(cfg.instanceFooter || []), ...(cfg.externalFooter || [])]) {
-                const value = item.key ? formatted(item.key) : '';
-                if (value) footerValues.push({label: String(item.label || ''), value});
-            }
-
-            const footer = svg.querySelector('#gFooter');
-            if (footer) {
-                footer.querySelectorAll('text[id^="textFooterAdditional"]').forEach(el => el.remove());
-                const footerWidth = contentRight - 68;
-                const columns = Math.min(5, Math.max(1,Math.floor(footerWidth / 220)), Math.max(1,footerValues.length));
-                const rows = Math.max(1, Math.ceil(footerValues.length / columns));
-                const height = Math.max(50, rows * 48 + 12);
-                footer.querySelector('rect')?.setAttribute('height', String(height));
-                footer.querySelector('rect')?.setAttribute('width',String(contentRight - 28));
-                svg.setAttribute('viewBox','15 0 ' + (narrowHydraulics ? contentRight : 1570) + ' ' + Math.max(985,935 + height));
-                footerValues.forEach((item, index) => {
-                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    text.id = 'textFooterAdditional' + String(index).padStart(3, '0');
-                    text.setAttribute('class', 'sm');
-                    text.setAttribute('x', String(50 + (index % columns) * (footerWidth / columns)));
-                    text.setAttribute('y', String(948 + Math.floor(index / columns) * 48));
-                    const title = document.createElementNS(text.namespaceURI, 'title');
-                    title.textContent = item.label;
-                    text.appendChild(title);
-                    const label = document.createElementNS(text.namespaceURI, 'tspan');
-                    label.textContent = item.label.length > 30 ? item.label.slice(0, 29) + '…' : item.label;
-                    text.appendChild(label);
-                    const value = document.createElementNS(text.namespaceURI, 'tspan');
-                    value.setAttribute('x', text.getAttribute('x'));
-                    value.setAttribute('dy', '22');
-                    value.textContent = item.value;
-                    text.appendChild(value);
-                    footer.appendChild(text);
-                });
-            }
+            svg.setAttribute('viewBox','15 0 ' + (narrowHydraulics ? contentRight : 1570) + ' 925');
 
             // Live flow overlays use actual running variables; no idle animation.
             const heatingActive = [1,2,3].some(n => [hk1,hk2,hk3][n - 1] && binary(circuitPump(n)));
@@ -3849,7 +3796,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     }
 
     /** Supports modern OPTIONS and legacy profile associations for every scalar type. */
-    private function VisualizationAssociations(int $id): array
+    private function VisualizationAssociations(int $id, bool $booleanFallback = true): array
     {
         $type = (int)IPS_GetVariable($id)['VariableType'];
         $presentation = $this->VisualizationPresentation($id);
@@ -3877,7 +3824,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 'name' => (string)($row['Caption'] ?? $row['Name'] ?? $value),
                 'icon' => (string)(array_key_exists('IconValue', $row) ? (!empty($row['IconActive']) ? $row['IconValue'] : '') : ($row['Icon'] ?? ''))];
         }
-        if ($options === [] && $type === VARIABLETYPE_BOOLEAN && $rows === []) {
+        if ($booleanFallback && $options === [] && $type === VARIABLETYPE_BOOLEAN && $rows === []) {
             $options = [['value'=>false,'name'=>'Aus'], ['value'=>true,'name'=>'Ein']];
         }
         return $options;
@@ -3963,7 +3910,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 if ($on !== '' && $on === $off) $mappingValid = false;
             }
             $action = (int)($variable['VariableCustomAction'] ?? 0) ?: (int)($variable['VariableAction'] ?? 0);
-            $power = $powerID > 0 ? $this->VisualizationPowerData($powerID, 'W') : null;
+            $power = $this->VisualizationHeaterPower($i);
             $heaters[] = ['number' => $i, 'label' => 'Heizstab ' . $i, 'variableId' => $exists ? $switchID : 0,
                 'configured' => $mappingValid && $options !== [] && $action > 1 && $action !== $this->InstanceID && IPS_GetParent($switchID) !== $this->InstanceID && $this->ReadPropertyBoolean('InstanceStatus'),
                 'currentValue' => $current, 'enabled' => $enabled, 'stateLabel' => $label, 'options' => $options, 'type' => $type, 'boolean' => $type === VARIABLETYPE_BOOLEAN,
@@ -4047,27 +3994,6 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         $this->RequestAction($ident, $this->CastValueForVariableType($newValue, (int)IPS_GetVariable($id)['VariableType']));
     }
 
-    private function GetVisualizationFooter(): array
-    {
-        $rows = json_decode($this->ReadPropertyString('IDListe'), true);
-        $footer = [];
-        foreach (is_array($rows) ? $rows : [] as $row) {
-            if (!is_array($row) || empty($row['visualizationFooter'])) {
-                continue;
-            }
-            $javaID = (int)($row['id'] ?? 0);
-            $shi = $this->ReadPropertyString('CommunicationMode') === 'modbus' ? ($this->SHISelections()[$javaID] ?? null) : null;
-            if ($javaID >= 100000 && $shi === null) continue;
-            $ident = $shi['ident'] ?? self::DATA_POINT_CONFIG[$javaID]['name'] ?? ('ID_' . $javaID);
-            $id = @$this->GetIDForIdent($ident);
-            if ($id !== false && IPS_VariableExists($id)) {
-                $footer[$javaID] = ['key' => 'instanceFooter' . $javaID, 'variableId' => $id, 'label' => IPS_GetName($id)];
-            }
-        }
-        ksort($footer, SORT_NUMERIC);
-        return array_values($footer);
-    }
-
     private function RegisterVariableMessages(): void
     {
         $ids = [];
@@ -4134,23 +4060,8 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function AddVisualizationForm(array $form): array
     {
-        $footer = [];
-        $rows = json_decode($this->ReadPropertyString('IDListe'), true);
-        foreach (is_array($rows) ? $rows : [] as $row) {
-            if (is_array($row) && isset($row['id'])) $footer[(int)$row['id']] = (bool)($row['visualizationFooter'] ?? false);
-        }
-        foreach ($form['elements'] as &$element) {
-            if (($element['name'] ?? '') !== 'IDListe') continue;
-            $element['columns'][] = ['name' => 'visualizationFooter', 'caption' => 'Fußzeile', 'width' => '100',
-                'save' => true, 'edit' => ['type' => 'CheckBox']];
-            foreach ($element['values'] as &$row) {
-                $row['visualizationFooter'] = $footer[$row['id']] ?? false;
-            }
-            unset($row);
-        }
-        unset($element);
         $items = [
-            ['type' => 'Label', 'caption' => 'Komponenten auswählen; die Grafik erhält ihre internen Messwerte automatisch, unabhängig von der ID-Liste. Interne Zusatzwerte dort mit „Fußzeile“ auswählen.'],
+            ['type' => 'Label', 'caption' => 'Komponenten auswählen; die Grafik erhält ihre internen Messwerte automatisch, unabhängig von der ID-Liste.'],
             ['type' => 'RowLayout', 'items' => [
                 ['type' => 'CheckBox', 'name' => 'TankHP', 'caption' => 'Pufferspeicher'],
                 ['type' => 'CheckBox', 'name' => 'TankWW', 'caption' => 'Warmwasserspeicher'],
@@ -4171,11 +4082,10 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                         ['caption'=>'Mischkreis 2','value'=>2],['caption'=>'Mischkreis 3','value'=>3]]]
             ]],range(1,3)),
             ['type' => 'ExpansionPanel', 'caption' => 'Heizstäbe', 'items' => [
-                ['type' => 'Label', 'caption' => 'Gemessene Leistungen in W oder kW laut Variablenprofil; ohne Einheit wird W verwendet. Schaltzustände liefern keine Leistung.'],
+                ['type' => 'Label', 'caption' => 'Leistungen in W/kW oder aus der aktiven Leistungsassoziation, z.B. 1500 W oder 3 kW. Ohne separate Ist-Leistung wird das Schaltprofil verwendet. Ein/Aus allein legt keine Wattzahl fest.'],
                 ...array_map(fn(int $i): array => $this->HeaterConfigurationFields($i), range(1, 3))
             ]],
-            ['type' => 'ExpansionPanel', 'caption' => 'Innentemperaturen', 'items' => $this->VisualizationRoomFields()],
-            ['type' => 'ExpansionPanel', 'caption' => 'Externe Variablen für Fußzeile', 'items' => $this->VisualizationExternalFooterFields()]
+            ['type' => 'ExpansionPanel', 'caption' => 'Innentemperaturen', 'items' => $this->VisualizationRoomFields()]
         ];
         $index = count($form['elements']);
         foreach ($form['elements'] as $position => $element) {
@@ -4190,18 +4100,6 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         if (!isset($data['configuration']) || !is_array($data['configuration'])) return false;
         $config = &$data['configuration'];
         $changed = false;
-        if (($config['VisualizationExternalFooter'] ?? '') === '') {
-            $rows = [];
-            for ($i = 0; $i < 10; ++$i) {
-                $suffix = sprintf('%03d', $i);
-                $id = (int)($config['AdditionalValue' . $suffix] ?? 0);
-                if ($id > 0) $rows[] = ['label' => (string)($config['AdditionalLabel' . $suffix] ?? ''), 'variableID' => $id];
-            }
-            if ($rows !== []) {
-                $config['VisualizationExternalFooter'] = json_encode($rows, JSON_THROW_ON_ERROR);
-                $changed = true;
-            }
-        }
         if (array_key_exists('VisualizationHeatingCircuit1', $config)
             || !array_key_exists('VisualizationDirectCircuit', $config)) return $changed;
         // Retain the number of displayed places from 4.9/Build 1. Old mixer flags
@@ -4346,21 +4244,80 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         return $result;
     }
 
+    private function VisualizationHeaterPower(int $number): ?array
+    {
+        $id=$this->ReadPropertyInteger('HeaterRod'.$number);
+        if ($id>0) return $this->VisualizationPowerData($id,'W');
+        // The switch may declare a wattage in its active association or unit. Never default an index to watts.
+        return $this->VisualizationPowerData($this->ReadPropertyInteger('VisualizationHeaterSwitch'.$number),'');
+    }
+
     private function VisualizationPowerData(int $id, string $fallbackUnit): ?array
     {
         if (!IPS_VariableExists($id)) return null;
-        return $this->VisualizationPowerReading(['variableId' => $id, 'value' => GetValue($id),
-            'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false], $fallbackUnit);
+        $reading=['variableId'=>$id,'value'=>GetValue($id),'formatted'=>GetValueFormatted($id),
+            'unit'=>$this->GetVariableUnit($id),'binary'=>false];
+        $zero = $fallbackUnit!=='' && ($reading['value']===false || (is_numeric($reading['value']) && (float)$reading['value']===0.0))
+            && ($reading['unit']==='' || $this->VisualizationPowerUnit($reading['unit'])!==null)
+            ? array_replace($reading,['watts'=>0.0,'powerSource'=>'value']) : null;
+        // An enum's raw value can be a stage index, not its associated wattage.
+        foreach ($this->VisualizationAssociations($id,false) as $option) {
+            if ($option['value']!==$reading['value']) continue;
+            $label=trim($option['name']);
+            $watts=$this->VisualizationAssociationPower($label,$reading['unit']!==''?$reading['unit']:$fallbackUnit);
+            if ($watts!==null) return array_replace($reading,['watts'=>$watts,'powerSource'=>'association']);
+            if ($zero!==null) return $zero;
+            // Without a physical power unit, do not count an arbitrary enum index as watts.
+            if ($this->VisualizationPowerUnit($reading['unit'])===null
+                || preg_match('/(?<!\p{L})(?:k?watts?|kw|w)(?!\p{L})/iu',$label)
+                || preg_match('/[0-9]\s*(?:k?wh|[av]|%|°)/iu',$label)) return null;
+            break;
+        }
+        return $zero ?? $this->VisualizationPowerReading($reading,$fallbackUnit);
+    }
+
+    private function VisualizationPowerUnit(string $unit): ?string
+    {
+        $unit=strtolower((string)preg_replace('/[\s\p{Z}]+/u','',$unit));
+        return match ($unit) {'w','watt','watts'=>'W','kw','kilowatt','kilowatts'=>'kW',default=>null};
+    }
+
+    /** Explicit power captions, numeric captions in the profile unit, or a declared off state. */
+    private function VisualizationAssociationPower(string $caption,string $unit): ?float
+    {
+        $caption=trim(html_entity_decode(strip_tags($caption),ENT_QUOTES|ENT_HTML5,'UTF-8'));
+        if (preg_match('/^(?:aus|off|ausgeschaltet|inaktiv|deaktiviert)$/iu',$caption)) return 0.0;
+        if (str_contains($caption,'/') || preg_match('/[0-9]\s*[–—-]\s*[0-9]|\bbis\b/iu',$caption)) return null;
+        $number='[+\-\x{2212}]?[0-9]+(?:[\s\p{Z}][0-9]{3})*(?:[.,][0-9]+)*';
+        $matches=[];
+        $count=preg_match_all('/(?<![\p{L}0-9.,+\-])('.$number.')\s*(kilowatts?|watts?|kw|w)(?![\p{L}]|\s*\/)/iu',$caption,$matches,PREG_SET_ORDER);
+        if ($count===1) {
+            $unit=$matches[0][2];$text=$matches[0][1];
+        } elseif ($count===0 && preg_match('/^'.$number.'$/u',$caption)) {
+            $text=$caption;
+        } else return null;
+        $unit=$this->VisualizationPowerUnit($unit);
+        if ($unit===null) return null;
+        $text=str_replace("\u{2212}",'-',(string)preg_replace('/[\s\p{Z}]+/u','',$text));
+        // Both common decimal separators; mixed separators identify the last as decimal.
+        if (str_contains($text,',') && str_contains($text,'.')) {
+            $decimal=strrpos($text,',')>strrpos($text,'.')?',':'.';
+            $text=str_replace($decimal===','?'.':',','',$text);
+        }
+        $text=str_replace(',','.',$text);
+        if (!is_numeric($text) || !is_finite((float)$text) || (float)$text<0) return null;
+        $watts=(float)$text*($unit==='kW'?1000:1);
+        return is_finite($watts)?$watts:null;
     }
 
     private function VisualizationPowerReading(array $reading, string $fallbackUnit): ?array
     {
         $value = $reading['value'];
         if (is_bool($value) || !is_numeric($value) || !is_finite((float)$value) || $value < 0) return null;
-        $unit = trim($reading['unit']);
-        if ($unit === '') $unit = $fallbackUnit;
-        if (!in_array(strtolower($unit), ['w', 'kw'], true)) return null;
-        return array_replace($reading, ['watts' => $value * (strtolower($unit) === 'kw' ? 1000 : 1), 'unit' => $unit]);
+        $unit=$this->VisualizationPowerUnit($reading['unit']!==''?$reading['unit']:$fallbackUnit);
+        if ($unit===null) return null;
+        $watts=(float)$value*($unit==='kW'?1000:1);
+        return is_finite($watts)?array_replace($reading,['watts'=>$watts,'unit'=>$unit]):null;
     }
 
     private function GetVisualizationRoomSources(): array
@@ -4416,58 +4373,6 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             ]];
         }
         return $fields;
-    }
-
-    private function VisualizationExternalFooterFields(): array
-    {
-        return [[
-            'type' => 'List', 'name' => 'VisualizationExternalFooter', 'rowCount' => 5,
-            'add' => true, 'delete' => true, 'changeOrder' => true,
-            'loadValuesFromConfiguration' => false,
-            'columns' => [
-                ['name' => 'label', 'caption' => 'Bezeichnung (leer = Variablenname)', 'width' => 'auto',
-                    'save' => true, 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                ['name' => 'variableID', 'caption' => 'Variable', 'width' => '300px',
-                    'save' => true, 'add' => 0, 'edit' => ['type' => 'SelectVariable']]
-            ],
-            'values' => $this->VisualizationExternalFooterRows()
-        ]];
-    }
-
-    /** Legacy fixed slots remain readable until the list is first saved. */
-    private function VisualizationExternalFooterRows(): array
-    {
-        $raw = $this->ReadPropertyString('VisualizationExternalFooter');
-        if ($raw !== '') {
-            $saved = json_decode($raw, true);
-            $rows = [];
-            foreach (is_array($saved) ? $saved : [] as $row) {
-                if (!is_array($row)) continue;
-                $rows[] = ['label' => is_scalar($row['label'] ?? '') ? (string)($row['label'] ?? '') : '',
-                    'variableID' => is_numeric($row['variableID'] ?? null) ? max(0, (int)$row['variableID']) : 0];
-            }
-            return $rows;
-        }
-        $rows = [];
-        for ($i = 0; $i < 10; ++$i) {
-            $suffix = sprintf('%03d', $i);
-            $id = $this->ReadPropertyInteger('AdditionalValue' . $suffix);
-            if ($id > 0) $rows[] = ['label' => $this->ReadPropertyString('AdditionalLabel' . $suffix), 'variableID' => $id];
-        }
-        return $rows;
-    }
-
-    private function GetVisualizationExternalFooter(): array
-    {
-        $footer = [];
-        foreach ($this->VisualizationExternalFooterRows() as $index => $row) {
-            $id = $row['variableID'];
-            if ($id <= 0 || !IPS_VariableExists($id)) continue;
-            $label = trim($row['label']);
-            $footer[] = ['key' => 'externalFooter' . $index, 'variableId' => $id,
-                'label' => $label !== '' ? $label : IPS_GetName($id)];
-        }
-        return $footer;
     }
 
 }

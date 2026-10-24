@@ -3,6 +3,9 @@
 require_once __DIR__ . '/ModbusSHI.php';
 require_once __DIR__ . '/Visualization.php';
 
+// Abort an obsolete timer invocation as soon as its Symcon interface disappears.
+class LuxtronikInstanceUnavailable extends Exception {}
+
 class Luxtronik extends IPSModuleStrict
 {
     use LuxtronikModbusSHI;
@@ -1224,6 +1227,25 @@ class Luxtronik extends IPSModuleStrict
 
     public function Update(): void
     {
+        if (!IPS_InstanceExists($this->InstanceID)) return;
+        $previous = null;
+        $previous = set_error_handler(static function (int $severity, string $message, string $file, int $line) use (&$previous): bool {
+            if ((error_reporting() & $severity) && str_contains($message, 'InstanceInterface is not available')) {
+                throw new LuxtronikInstanceUnavailable($message);
+            }
+            return $previous !== null ? (bool)$previous($severity, $message, $file, $line) : false;
+        });
+        try {
+            $this->UpdateInstance();
+        } catch (LuxtronikInstanceUnavailable $error) {
+            IPS_LogMessage('Luxtronik ' . $this->InstanceID, 'Aktualisierung abgebrochen: Instanzschnittstelle nicht verfügbar.');
+        } finally {
+            restore_error_handler();
+        }
+    }
+
+    private function UpdateInstance(): void
+    {
         if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
             $this->UpdateModbus();
             return;
@@ -1249,7 +1271,7 @@ class Luxtronik extends IPSModuleStrict
         $enabledIds = [];
         foreach ($idListe as $row) {
             $id = (int)($row['id'] ?? 0);
-            $enabled = (bool)($row['enabled'] ?? false) || (bool)($row['visualizationFooter'] ?? false);
+            $enabled = (bool)($row['enabled'] ?? false);
 
             if ($id > 0 && $enabled) {
                 $enabledIds[$id] = true;

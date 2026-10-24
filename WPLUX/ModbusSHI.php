@@ -51,7 +51,7 @@ trait LuxtronikModbusSHI
         $selections=$this->SHISelections();
         foreach (json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) {
             $point=$selections[(int)($row['id']??0)]??null;
-            if (($point['ident']??'')===$ident && (!empty($row['enabled']) || !empty($row['visualizationFooter']))) return true;
+            if (($point['ident']??'')===$ident && !empty($row['enabled'])) return true;
         }
         return false;
     }
@@ -189,7 +189,7 @@ trait LuxtronikModbusSHI
         $ids=$this->GetVisualizationRequiredPointIDs();
         foreach (json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) {
             $id=(int)($row['id']??0);
-            if ($id>0 && $id<self::MAX_RESPONSE_VALUES && (!empty($row['enabled']) || !empty($row['visualizationFooter']))) $ids[$id]=true;
+            if ($id>0 && $id<self::MAX_RESPONSE_VALUES && !empty($row['enabled'])) $ids[$id]=true;
         }
         if ($this->ReadPropertyInteger('kwin')>0) $ids[257]=true;
         if ($this->ReadPropertyInteger('kwhin')>0) {$ids[151]=true;$ids[152]=true;}
@@ -223,7 +223,7 @@ trait LuxtronikModbusSHI
         $this->StoreVisualizationPoints($values);
         $selected=[];
         foreach (json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) {
-            if (!empty($row['enabled']) || !empty($row['visualizationFooter'])) $selected[(int)($row['id']??0)]=true;
+            if (!empty($row['enabled'])) $selected[(int)($row['id']??0)]=true;
         }
         foreach ($values as $id=>$value) {
             if (!isset($selected[$id])) continue;
@@ -334,7 +334,7 @@ trait LuxtronikModbusSHI
     {
         $selected=[];
         foreach (json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) {
-            if (!empty($row['enabled']) || !empty($row['visualizationFooter'])) $selected[(int)$row['id']]=true;
+            if (!empty($row['enabled'])) $selected[(int)$row['id']]=true;
         }
         $cache=$this->SHICache();
         if (!empty($cache['stale'])) $cache['points']=[];
