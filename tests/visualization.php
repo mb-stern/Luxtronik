@@ -814,6 +814,20 @@ $tests['each circuit exposes its existing saved name beside activation and mixer
     }
 };
 
+$tests['cycle durations use converted internal controller values without measurement objects'] = static function (): void {
+    $module=new Luxtronik();
+    $module->properties['IDListe']='[]';
+    $required=invoke($module,'GetVisualizationRequiredPointIDs');
+    check(isset($required[67],$required[73]),'Cycle durations not read independently of IDListe');
+    invoke($module,'StoreVisualizationPoints',[67=>'2h 3m',73=>'1h 14m']);
+    $payload=visualizationPayload($module);
+    foreach (['heatPumpRuntime'=>['Waermepumpe_laeuft_seit','2h 3m'],'compressorStandstill'=>['Verdichter_Standzeit','1h 14m']] as $key=>[$ident,$value]) {
+        $point=$payload['data'][$payload['config'][$key]];
+        check($point['ident']===$ident && $point['value']===$value && $point['formatted']===$value,'Converted duration altered');
+        check($point['variableId']===0 && $module->GetIDForIdent($ident)===false,'Cycle duration creates measurement object');
+    }
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
@@ -828,9 +842,9 @@ if ($dir!==false && $dir!=='') {
     file_put_contents($dir.'/internal-only.html','<meta charset="utf-8">'.$GLOBALS['testInternalVisualizationHtml']);
     file_put_contents($dir.'/internal-only-update.json',json_encode($GLOBALS['testInternalVisualizationUpdate']));
     $frequency=new Luxtronik();
-    invoke($frequency,'StoreVisualizationPoints',[193=>0,231=>55,236=>60,44=>false]);
+    invoke($frequency,'StoreVisualizationPoints',[193=>0,231=>55,236=>60,44=>false,67=>'2h 3m',73=>'0h 0m']);
     file_put_contents($dir.'/compressor-frequency.html','<meta charset="utf-8">'.$frequency->GetVisualizationTile());
-    invoke($frequency,'StoreVisualizationPoints',[193=>0,231=>0,236=>60,44=>true]);
+    invoke($frequency,'StoreVisualizationPoints',[193=>0,231=>0,236=>60,44=>true,67=>'0h 0m',73=>'1h 14m']);
     file_put_contents($dir.'/compressor-frequency-update.json',json_encode(visualizationPayload($frequency)));
     $components = new Luxtronik();
     $components->properties['ThermalSolarAvailable']=true;

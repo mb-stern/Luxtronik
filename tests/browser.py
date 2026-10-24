@@ -710,11 +710,23 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert frequency.locator('#textCompressorSpeedValue').text_content()=='Ist 55 rpm'
                 assert frequency.locator('#textCompressorFrequencyTarget').text_content()=='Soll 60 rpm'
                 assert frequency.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='symcon-modern-rotate'
+                assert frequency.locator('#textHeatPumpCycle').text_content()=='Läuft seit 2h 3m'
+                assert frequency.locator('#gHeatPumpCycle > text').count()==1
+                assert frequency.locator('#textHeatPumpCycle').evaluate('e=>e.getBBox().width')<=175.5
                 update=json.loads(Path(artifacts,'compressor-frequency-update.json').read_text())
                 frequency.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
                 assert frequency.locator('#textCompressorSpeedValue').text_content()=='Ist 0 rpm'
                 assert frequency.locator('#textCompressorFrequencyTarget').text_content()=='Soll 60 rpm'
                 assert frequency.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='none'
+                assert frequency.locator('#textHeatPumpCycle').text_content()=='Steht seit 1h 14m'
+                assert frequency.locator('#gHeatPumpCycle > text').count()==1
+                update['data'].pop(update['config']['compressorStandstill'])
+                frequency.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
+                assert frequency.locator('#textHeatPumpCycle').text_content()=='Steht seit —'
+                update['data'].pop(update['config']['compressorValue'])
+                update['data'].pop(update['config']['compressorRunning'])
+                frequency.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
+                assert frequency.locator('#textHeatPumpCycle').text_content()=='Lauf-/Standzeit —'
                 frequency.close()
 
             # Native measurements render and update with no measurement objects at all.

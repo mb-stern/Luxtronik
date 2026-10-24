@@ -54,6 +54,8 @@ trait LuxtronikVisualization
         'InputPower' => ['Leistungsaufnahme'],
         'HeatingFlow' => ['Flow_Rate'],
         'CompressorFrequencyTarget' => ['Verdichterfrequenz_Soll'],
+        'HeatPumpRuntime' => ['Waermepumpe_laeuft_seit'],
+        'CompressorStandstill' => ['Verdichter_Standzeit'],
         // Prepared engineering-value Idents; no unconfirmed numeric Java index.
         'EEVHeatingOpening' => ['EEV_Heizen'], 'EEVCoolingOpening' => ['EEV_Kuehlen'],
         'BufferReturnTemperature' => ['Ruecklauftemperatur_im_Trennspeicher'],
@@ -629,6 +631,8 @@ HTML;
             'compressorValue'            => $this->DataKey('CompressorValue', 'compressorValue'),
             'compressorFrequencyActual'  => $this->DataKey('CompressorValue', 'compressorValue'),
             'compressorFrequencyTarget'  => $this->DataKey('CompressorFrequencyTarget', 'compressorFrequencyTarget'),
+            'heatPumpRuntime'            => $this->DataKey('HeatPumpRuntime', 'heatPumpRuntime'),
+            'compressorStandstill'       => $this->DataKey('CompressorStandstill', 'compressorStandstill'),
             'heatingPumpPower'           => $this->DataKey('HeatingPumpPower', 'heatingPumpPower'),
 
             'wwHeatingValve'             => $this->DataKey('WWHeatingValve', 'wwHeatingValve'),
@@ -3503,6 +3507,16 @@ window.SymconHeatPump = {
             const compressorActive = hasCompressorSpeed
                 ? compressorSpeed > 0
                 : binary(cfg.compressorRunning);
+            // Controller durations are already converted; never count from browser startup.
+            const relayValue = raw(cfg.compressorRunning);
+            const compressorStateKnown = hasCompressorSpeed || (relayValue !== null && relayValue !== undefined && relayValue !== '');
+            const elapsed = formatted(compressorActive ? cfg.heatPumpRuntime : cfg.compressorStandstill);
+            const cycleReadings = group('gHeatPumpCycle', svg.querySelector('#heatPump'));
+            const cycleText = compressorStateKnown ? (compressorActive ? 'Läuft seit ' : 'Steht seit ') + (elapsed || '—') : 'Lauf-/Standzeit —';
+            fittedText(cycleReadings, {id:'textHeatPumpCycle',class:'sm',x:55,y:867,style:'font-size:16px'},cycleText,175);
+            node(cycleReadings,'title',{},compressorStateKnown
+                ? 'Reglerwert: ' + (compressorActive ? 'Waermepumpe_laeuft_seit (ID 67)' : 'Verdichter_Standzeit (ID 73)')
+                : 'Verdichterzustand nicht verfügbar');
             const compressor = svg.querySelector('#pathCompressor');
             if (compressor) {
                 // Frequency and rpm use different schematic scales. The displayed

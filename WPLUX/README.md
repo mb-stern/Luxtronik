@@ -109,6 +109,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
 - Puffer vor den konfigurierbaren Mischern 1–3; frei benennbare Heizkreisabgänge mit gleich großen VL-/RL-/Sollwerten.
 - Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss aus ID 254 am WP-Ausgang und Verdichter-Ist/-Soll.
+- Lauf- oder Standzeit unter dem Wärmepumpenbild aus den Reglerwerten ID 67/73.
 - Warmwasser mit Ist/Soll und summierter Heizstableistung samt gelbem Blitz; Heizstäbe-Button mit Leistung und konfigurierbaren Schaltern.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
 
