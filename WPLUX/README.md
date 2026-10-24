@@ -113,7 +113,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss aus ID 254 am WP-Ausgang und Verdichter-Ist/-Soll; Wasserflussanimation gemäß Durchflusswert.
 - Timer-Aufrufe bei nicht mehr verfügbarer Instanzschnittstelle mit einer Meldung abbrechen.
 - Lauf- oder Standzeit unter dem Wärmepumpenbild aus den Reglerwerten ID 67/73.
-- Einheitliche Mindestschrift wie Verdampfer/Kondensator; Durchflusswert oben am roten Vorlauf, Pumpenwert ohne Zusatztext.
+- Einheitliche Mindestschrift wie Verdampfer/Kondensator; Temperaturangaben einzeilig mit °C und einheitlichem Leitungsabstand; Durchflusswert direkt am roten Anschluss, Pumpenwert ohne Zusatztext.
 - Warmwasserspeicher mit mehr Abstand und kurzem Zirkulationsabgang ohne breitere Kachel; Temperatur/Leistung gleich groß und zentriert, Sollwert nur oben. Summierte Heizstableistung aus W/kW-Messwerten mit Blitz und Bedienbutton.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
 

@@ -2718,6 +2718,12 @@ window.SymconHeatPump = {
                 return String(item.value) + (item.unit ? ' ' + item.unit : '');
             };
 
+            const temperature = (key) => {
+                const value = formatted(key);
+                return value && !/[°]|\bK\b/.test(value) ? value + ' °C' : value;
+            };
+            const temperatureLineGap = 28;
+
             const raw = (key) => {
                 if (!key || !data[key]) return null;
                 return data[key].value;
@@ -3074,10 +3080,10 @@ window.SymconHeatPump = {
                 node(hydraulic, 'path', {id:'pathHKMixingReturn' + n,class:'cold',d:'M1045 ' + (y + 50) + 'V' + (y + 18)});
                 node(hydraulic, 'circle', {cx:1045,cy:y + 50,r:4,fill:'#35a6ff'});
                 mixerSymbol(hydraulic, mixer, 1045, y, 18);
-                const readings = node(mixerReadings, 'g', {id:'gMixerReading' + n,transform:'translate(' + mixerReadingX + ' ' + (y - 48) + ')'});
-                node(readings, 'text', {class:'sm',x:0,y:0,style:'font-size:18px'},'Mischer ' + mixer.number);
-                fittedText(readings, {id:'textMixerActual' + n,class:'sm',x:0,y:20,style:'font-size:18px'},'Ist ' + (formatted(mixer.actual) || '—'),100);
-                fittedText(readings, {id:'textMixerTarget' + n,class:'sm',x:110,y:20,style:'font-size:18px'},'Soll ' + (formatted(mixer.target) || '—'),100);
+                const readings = node(mixerReadings, 'g', {id:'gMixerReading' + n,transform:'translate(' + mixerReadingX + ' ' + (y - temperatureLineGap) + ')'});
+                node(readings, 'title', {}, 'Mischer ' + mixer.number + ': Vorlauf Ist und Soll');
+                fittedText(readings, {id:'textMixerActual' + n,class:'sm',x:0,y:0,'dominant-baseline':'text-after-edge',style:'font-size:18px'},'MK' + mixer.number + ': ' + (temperature(mixer.actual) || '—'),90);
+                fittedText(readings, {id:'textMixerTarget' + n,class:'sm',x:100,y:0,'dominant-baseline':'text-after-edge',style:'font-size:18px'},'Soll: ' + (temperature(mixer.target) || '—'),90);
             });
 
             // The information panel keeps its size; operating data replaces VL/RL.
@@ -3125,7 +3131,7 @@ window.SymconHeatPump = {
 
             // Only the measured DHW temperature belongs in the tank; the setpoint is in the top button.
             const dhwReadings = group('gDHWTemperatures', svg.querySelector('#gDHW'));
-            fittedText(dhwReadings, {id:'textDHWIst', class:'md', x:982, y:710, 'text-anchor':'middle'}, formatted(cfg.tankTempWWMiddle) || '—', 130);
+            fittedText(dhwReadings, {id:'textDHWIst', class:'md', x:982, y:710, 'text-anchor':'middle'}, temperature(cfg.tankTempWWMiddle) || '—', 130);
             const boilerPower = group('gBoilerHeaterPower', svg.querySelector('#gDHW'));
             const total = heaterWatts;
             if (data.heaterRodTotalPower) {
@@ -3192,19 +3198,19 @@ window.SymconHeatPump = {
                     }
                 }
                 if (value) {
-                    const reading = formatted(supply);
-                    value.textContent = reading;
+                    const reading = temperature(supply);
+                    value.textContent = reading ? 'VL: ' + reading : '';
                     value.style.display = reading !== '' ? 'inline' : 'none';
                     value.style.fontSize = '18px';
-                    value.setAttribute('x','1510');
-                    value.setAttribute('y',String(270 + offset));
-                    value.setAttribute('text-anchor','end');
-                    const label = value.previousElementSibling;
-                    if (label) {
-                        label.textContent = 'VL';
-                        label.style.display = reading !== '' ? 'inline' : 'none';
-                        label.style.fontSize = '18px';
-                        label.setAttribute('y',String(270 + offset));
+                    value.setAttribute('x','1378');
+                    value.setAttribute('y',String(245 + offset + temperatureLineGap));
+                    value.setAttribute('text-anchor','start');
+                    value.setAttribute('dominant-baseline','text-before-edge');
+                    value.removeAttribute('textLength');
+                    value.removeAttribute('lengthAdjust');
+                    if (value.getComputedTextLength() > 132) {
+                        value.setAttribute('textLength','132');
+                        value.setAttribute('lengthAdjust','spacingAndGlyphs');
                     }
                 }
 
@@ -3290,22 +3296,24 @@ window.SymconHeatPump = {
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:735, y:535,
-                    'text-anchor':'middle', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:665 + temperatureLineGap,
+                    'dominant-baseline':'text-before-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 110);
             }
             // Common WP temperatures belong before the DHW/heating split, in every operating mode.
             const wpTemperatures = group('gHeatPumpTemperatures', svg.querySelector('#heatPump'));
-            wpTemperatures.setAttribute('transform','translate(735 0)');
+            wpTemperatures.setAttribute('transform','translate(680 0)');
             [
-                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,620],
-                ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,780],
-                ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint,860]
-            ].forEach(([id,label,key,y]) => {
-                const reading = formatted(key);
+                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,665,false],
+                ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,835,false],
+                ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint,835,true]
+            ].forEach(([id,label,key,lineY,below]) => {
+                const reading = temperature(key);
                 if (!reading) return;
-                node(wpTemperatures,'text',{id:id + 'Label',class:'sm',x:0,y,'text-anchor':'middle'},label);
-                fittedText(wpTemperatures,{id,class:'sm',x:0,y:y + 26,'text-anchor':'middle'},reading,110);
+                fittedText(wpTemperatures,{id,class:'sm',x:0,
+                    y:lineY + (below ? temperatureLineGap : -temperatureLineGap),
+                    'dominant-baseline':below ? 'text-before-edge' : 'text-after-edge'},
+                    label + ': ' + reading,below ? 155 : 115);
             });
 
             // Touch handling. Bind once per SVG element.
