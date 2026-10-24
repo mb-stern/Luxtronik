@@ -862,6 +862,19 @@ $tests['SHI graphic uses its current internal snapshot and shared numeric contro
     $cache['points']['input:10120']['value']=49.0;
     invoke($module,'SetBuffer','SHICache',json_encode($cache));
     $GLOBALS['testSHIVisualizationUpdate']=visualizationPayload($module);
+    $cache['points']['input:10002']['value']=0;
+    $cache['points']['input:10000']['value']=1;
+    $cache['points']['input:10355']['value']=false;
+    invoke($module,'SetBuffer','SHICache',json_encode($cache));
+    invoke($module,'StoreVisualizationPoints',[254=>612,231=>55,236=>60,233=>8.2,67=>'2h 3m',73=>'0h 0m']);
+    $hybrid=visualizationPayload($module);
+    check($hybrid['data']['outdoorTemperature']['source']==='Modbus' && $hybrid['data']['heatingFlow']['source']==='Java','Hybrid graph sources conflated');
+    check($module->GetIDForIdent('Flow_Rate')===false,'Hybrid graph creates measurement objects');
+    $GLOBALS['testHybridVisualizationHtml']=$module->GetVisualizationTile();
+    invoke($module,'StoreVisualizationPoints',[254=>600,231=>0,236=>0,233=>9.2,67=>'0h 0m',73=>'1h 14m']);
+    $GLOBALS['testHybridVisualizationUpdate']=visualizationPayload($module);
+    invoke($module,'StoreVisualizationPoints',[]);
+    $GLOBALS['testHybridVisualizationMissing']=visualizationPayload($module);
 };
 
 $failed=0;
@@ -877,6 +890,9 @@ if ($dir!==false && $dir!=='') {
     if(!is_dir($dir)) mkdir($dir,0777,true);
     file_put_contents($dir.'/shi.html','<meta charset="utf-8">'.$GLOBALS['testSHIVisualizationHtml']);
     file_put_contents($dir.'/shi-update.json',json_encode($GLOBALS['testSHIVisualizationUpdate']));
+    file_put_contents($dir.'/hybrid.html','<meta charset="utf-8">'.$GLOBALS['testHybridVisualizationHtml']);
+    file_put_contents($dir.'/hybrid-update.json',json_encode($GLOBALS['testHybridVisualizationUpdate']));
+    file_put_contents($dir.'/hybrid-missing.json',json_encode($GLOBALS['testHybridVisualizationMissing']));
     file_put_contents($dir.'/internal-only.html','<meta charset="utf-8">'.$GLOBALS['testInternalVisualizationHtml']);
     file_put_contents($dir.'/internal-only-update.json',json_encode($GLOBALS['testInternalVisualizationUpdate']));
     $frequency=new Luxtronik();

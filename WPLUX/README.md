@@ -106,12 +106,13 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Optionales Modbus/SHI mit allen 129 dokumentierten Lesepunkten und 41 Schreibfunktionen samt Rückleseprüfung; Java bleibt Standard.
 - Vorhandene Idents bleiben erhalten. [Hinweise für Tester](SHI-TEST.md).
 - Checkboxliste mit Schnittstellenübersicht: Java, Modbus oder beide; Variablennamen bleiben unverändert.
+- Fehlende Modbus-Messwerte optional lesend über Java ergänzen; gültige Modbus-Werte haben Vorrang, Datenquelle im Debug sichtbar.
 - Bereinigte HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration vor der ID-Liste und erweiterbarer Fußzeile.
 - Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
 - Puffer vor den konfigurierbaren Mischern 1–3; frei benennbare Heizkreisabgänge mit gleich großen VL-/RL-/Sollwerten.
 - Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss aus ID 254 am WP-Ausgang und Verdichter-Ist/-Soll.
 - Lauf- oder Standzeit unter dem Wärmepumpenbild aus den Reglerwerten ID 67/73.
-- Einheitliche Mindestschrift wie Verdampfer/Kondensator; Durchflusswert am roten Vorlauf, Pumpenwert ohne Zusatztext.
+- Einheitliche Mindestschrift wie Verdampfer/Kondensator; Durchflusswert oben am roten Vorlauf, Pumpenwert ohne Zusatztext.
 - Warmwasserspeicher mit Isttemperatur und summierter Heizstableistung samt gelbem Blitz; Sollwert nur im oberen Button. Heizstäbe-Button mit Leistung und konfigurierbaren Schaltern.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
 

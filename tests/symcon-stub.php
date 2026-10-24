@@ -96,6 +96,7 @@ class IPSModuleStrict
     public array $messages = [];
     public array $updates = [];
     public array $formUpdates = [];
+    public array $debugMessages = [];
     protected function UpdateFormField(string $name, string $parameter, mixed $value): bool
     {
         // Symcon accepts scalar values; complex form values must arrive as JSON strings.
@@ -134,7 +135,7 @@ class IPSModuleStrict
     protected function RegisterMessage(int $sender, int $message): bool { $this->messages[$sender][$message] = true; return true; }
     protected function UnregisterMessage(int $sender, int $message): bool { unset($this->messages[$sender][$message]); return true; }
     protected function UpdateVisualizationValue(mixed $data): bool { $this->updates[] = json_decode($data, true, 512, JSON_THROW_ON_ERROR); return true; }
-    protected function SendDebug(string $name, mixed $value, int $format): void {}
+    protected function SendDebug(string $name, mixed $value, int $format): void { $this->debugMessages[] = [$name,$value,$format]; }
     protected function LogMessage(string $message, int $severity): void { $this->errors[] = $message; }
     public function GetIDForIdent(string $ident): int|false { return IPS_GetObjectIDByIdent($ident, $this->InstanceID); }
 

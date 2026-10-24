@@ -22,6 +22,7 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyInteger('ModbusPort', 502);
         $this->RegisterPropertyInteger('ModbusUnitID', 1);
         $this->RegisterPropertyInteger('ModbusTimeout', 500);
+        $this->RegisterPropertyBoolean('ModbusJavaSupplement', true);
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
         $this->RegisterPropertyInteger('Port', 8889);
@@ -1311,6 +1312,9 @@ class Luxtronik extends IPSModuleStrict
             } else {
                 // Variable löschen, da nicht ausgewählt
                 $this->DeleteVariableIfExists($java_dataset[$i] ?? ('ID_' . $i));
+            }
+            if (isset($enabledIds[$i]) || isset($graphicPoints[$i])) {
+                $this->SendDebug('Datenquelle', ($java_dataset[$i] ?? ('ID_' . $i)) . ": Java (3004, ID $i)", 0);
             }
         }
 

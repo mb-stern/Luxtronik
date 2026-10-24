@@ -129,48 +129,131 @@ trait LuxtronikModbusSHI
         $lock='WPLUX.SHI.'.$this->InstanceID;
         if (!IPS_SemaphoreEnter($lock,1)) return;
         $client=null;
+        $source=$this->VisualizationSourceKey();
+        $status=201;
         try {
-            $client=$this->NewSHIClient();
-            $previous=$this->SHICache()['points']??[];
-            $points=[];
-            $unavailable=[];
-            // Full documented read coverage, irrespective of which objects are selected.
-            foreach ($this->SHICatalog() as $key=>$point) {
-                try {
-                    $value=$this->ReadSHIPoint($client,$point);
-                } catch (LuxtronikModbusException $error) {
-                    if (!in_array($error->getCode(),[1,2,3],true)) throw $error;
-                    $value=null;
-                    $this->SendDebug('SHI',$key.': '.$error->getMessage(),0);
+            try {
+                $client=$this->NewSHIClient();
+                $previous=$this->SHICache()['points']??[];
+                $points=[];
+                $unavailable=[];
+                foreach ($this->SHICatalog() as $key=>$point) {
+                    try {
+                        $value=$this->ReadSHIPoint($client,$point);
+                    } catch (LuxtronikModbusException $error) {
+                        if (!in_array($error->getCode(),[1,2,3],true)) throw $error;
+                        $value=null;
+                        $this->SendDebug('SHI',$key.': '.$error->getMessage(),0);
+                    }
+                    if ($value===null) {
+                        $unavailable[]=$key;
+                        $this->SendDebug('SHI',$key.': nicht verfügbar',0);
+                        continue;
+                    }
+                    $old=$previous[$key]??null;
+                    $points[$key]=['value'=>$value,'changedAt'=>$old!==null && $old['value']!==$value?microtime(true):($old['changedAt']??0)];
                 }
-                if ($value===null) {
-                    $unavailable[]=$key;
-                    $this->SendDebug('SHI',$key.': nicht verfügbar; vorhandene Variable bleibt unverändert',0);
-                    continue;
+                if ($source!==$this->VisualizationSourceKey()) return;
+                $this->SetBuffer('SHICache',json_encode(['source'=>$source,'updatedAt'=>time(),
+                    'stale'=>false,'points'=>$points,'unavailable'=>$unavailable],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+                $status=$points===[]?203:($unavailable===[]?102:204);
+            } catch (InvalidArgumentException $error) {
+                $status=202;
+                $this->LogMessage($error->getMessage(),KL_ERROR);
+            } catch (RuntimeException $error) {
+                $cache=$this->SHICache();
+                if ($cache!==[]) {
+                    $cache['stale']=true;
+                    $this->SetBuffer('SHICache',json_encode($cache,JSON_THROW_ON_ERROR));
                 }
-                $old=$previous[$key]??null;
-                $points[$key]=['value'=>$value,'changedAt'=>$old!==null && $old['value']!==$value?microtime(true):($old['changedAt']??0)];
+                $this->LogMessage('SHI: '.$error->getMessage(),KL_ERROR);
+            } finally {
+                $client?->close();
             }
-            $this->SetBuffer('SHICache',json_encode(['source'=>$this->VisualizationSourceKey(),'updatedAt'=>time(),
-                'stale'=>false,'points'=>$points,'unavailable'=>$unavailable],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+            if ($source!==$this->VisualizationSourceKey() || !$this->ReadPropertyBoolean('InstanceStatus')) return;
+            $complete=$this->ReadSHIJavaSupplement();
+            if ($source!==$this->VisualizationSourceKey() || !$this->ReadPropertyBoolean('InstanceStatus')) return;
             $this->PublishSHIValues();
-            $this->SetStatus($points===[]?203:($unavailable===[]?102:204));
-        } catch (InvalidArgumentException $error) {
-            $this->SetStatus(202);
-            $this->LogMessage($error->getMessage(),KL_ERROR);
-        } catch (RuntimeException $error) {
-            $cache=$this->SHICache();
-            if ($cache!==[]) {
-                $cache['stale']=true;
-                $this->SetBuffer('SHICache',json_encode($cache,JSON_THROW_ON_ERROR));
-            }
-            $this->SetStatus(201);
-            $this->LogMessage('SHI: '.$error->getMessage(),KL_ERROR);
+            $this->TraceHybridSources();
+            $this->SetStatus(!$complete && $status===102?204:$status);
         } finally {
             $client?->close();
             IPS_SemaphoreLeave($lock);
+            $this->RefreshVisualization();
         }
-        $this->RefreshVisualization();
+    }
+
+    /** Only native measurements needed by the graphic, selected objects or configured meters. */
+    private function HybridMeasurementIDs(): array
+    {
+        $ids=$this->GetVisualizationRequiredPointIDs();
+        foreach (json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) {
+            $id=(int)($row['id']??0);
+            if ($id>0 && $id<self::MAX_RESPONSE_VALUES && (!empty($row['enabled']) || !empty($row['visualizationFooter']))) $ids[$id]=true;
+        }
+        if ($this->ReadPropertyInteger('kwin')>0) $ids[257]=true;
+        if ($this->ReadPropertyInteger('kwhin')>0) {$ids[151]=true;$ids[152]=true;}
+        return $ids;
+    }
+
+    /** One read-only 3004 frame. Never invokes Update(), 3003, a write, or object deletion. */
+    private function ReadSHIJavaSupplement(): bool
+    {
+        if (!$this->ReadPropertyBoolean('ModbusJavaSupplement')) {
+            $this->StoreVisualizationPoints([]);
+            return true;
+        }
+        $missing=[];
+        foreach ($this->HybridMeasurementIDs() as $id=>$_) {
+            $ident=$this->GetDataPointConfig((int)$id)['name'];
+            if ($this->GetSHIVisualizationPoint($ident)===null) $missing[$id]=$ident;
+        }
+        if ($missing===[]) {
+            $this->StoreVisualizationPoints([]);
+            return true;
+        }
+        $source=$this->VisualizationSourceKey();
+        $raw=$this->ReadData(3004);
+        if ($source!==$this->VisualizationSourceKey()) return false;
+        $values=[];
+        foreach ($missing as $id=>$ident) {
+            if ($raw!==null && array_key_exists($id,$raw)) $values[$id]=$this->convertValueBasedOnID($raw[$id],$id);
+        }
+        // A failed/truncated Java reply clears current supplementary data, not existing objects.
+        $this->StoreVisualizationPoints($values);
+        $selected=[];
+        foreach (json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) {
+            if (!empty($row['enabled']) || !empty($row['visualizationFooter'])) $selected[(int)($row['id']??0)]=true;
+        }
+        foreach ($values as $id=>$value) {
+            if (!isset($selected[$id])) continue;
+            $ident=$missing[$id];
+            if (@$this->GetIDForIdent($ident)===false) $this->CreateOrUpdateVariable($ident,$value,$id);
+            else $this->SetValueIfChanged($ident,$value);
+        }
+        $complete=count($values)===count($missing);
+        if (!$complete) $this->SendDebug('Java-Ergänzung','Nicht alle benötigten Messwerte verfügbar; aktuelle Modbus-Werte bleiben erhalten.',0);
+        return $complete;
+    }
+
+    private function GetHybridVisualizationPoint(string $ident): ?array
+    {
+        $point=$this->GetSHIVisualizationPoint($ident);
+        if ($point!==null) return $point;
+        return $this->ReadPropertyBoolean('ModbusJavaSupplement')?$this->GetCachedVisualizationPoint($ident):null;
+    }
+
+    private function TraceHybridSources(): void
+    {
+        $idents=[];
+        foreach (self::SHI_REGISTERS as $definition) $idents[$definition['ident']]=true;
+        foreach ($this->HybridMeasurementIDs() as $id=>$_) $idents[$this->GetDataPointConfig((int)$id)['name']]=true;
+        foreach ($idents as $ident=>$_) {
+            $point=$this->GetHybridVisualizationPoint($ident);
+            $description=$point===null?'keine aktuelle Quelle; vorhandener Objektwert bleibt unverändert'
+                :$point['source'].' ('.($point['source']==='Modbus'?$point['protocolRegister']:'3004, ID '.$point['protocolId']).'): '.$point['formatted'];
+            $this->SendDebug('Datenquelle',$ident.': '.$description,0);
+        }
     }
 
     private function DecodeModbusValue(array $words,string $type,float $factor): int|float|bool|null
@@ -218,7 +301,8 @@ trait LuxtronikModbusSHI
             $value=$this->SHIEngineeringValue($point,$entry['value']);
             $id=@$this->GetIDForIdent($ident);
             return ['variableId'=>$id!==false && IPS_VariableExists($id)?$id:0,'ident'=>$ident,'value'=>$value,
-                'formatted'=>$this->SHIFormatted($point,$value),'unit'=>$point['unit'],'binary'=>is_bool($value),'changedAt'=>$entry['changedAt']??0];
+                'formatted'=>$this->SHIFormatted($point,$value),'unit'=>$point['unit'],'binary'=>is_bool($value),'changedAt'=>$entry['changedAt']??0,
+                'source'=>'Modbus','protocolRegister'=>$point['key']];
         }
         return null;
     }
@@ -253,6 +337,7 @@ trait LuxtronikModbusSHI
             if (!empty($row['enabled']) || !empty($row['visualizationFooter'])) $selected[(int)$row['id']]=true;
         }
         $cache=$this->SHICache();
+        if (!empty($cache['stale'])) $cache['points']=[];
         foreach ($this->SHISelections() as $id=>$point) {
             $entry=$cache['points'][$point['key']]??null;
             $ident=$point['ident'];
@@ -273,9 +358,12 @@ trait LuxtronikModbusSHI
                 }
             }
         }
-        if (isset($cache['points']['input:10300'])) $this->calc_cop('cop',(float)$cache['points']['input:10300']['value']);
-        if (isset($cache['points']['input:10322'],$cache['points']['input:10324'])) {
-            $this->calc_jaz('jaz',(float)$cache['points']['input:10322']['value']+(float)$cache['points']['input:10324']['value']);
+        $power=$this->GetHybridVisualizationPoint('Waermeleistung');
+        if ($power!==null) $this->calc_cop('cop',(float)$power['value']);
+        $heat=$this->GetHybridVisualizationPoint('Waermemengenzaehler_Heizung');
+        $water=$this->GetHybridVisualizationPoint('Waermemengenzaehler_Brauchwasser');
+        if ($heat!==null && $water!==null) {
+            $this->calc_jaz('jaz',(float)$heat['value']+(float)$water['value']);
         }
     }
 
@@ -286,10 +374,17 @@ trait LuxtronikModbusSHI
         $values=[];
         foreach ($this->SHICatalog() as $key=>$point) {
             $entry=$cache['points'][$key]??null;
+            $current=$entry!==null && empty($cache['stale']);
             $values[]=['bank'=>$point['bank'],'address'=>$point['address'],'ident'=>$point['ident'],'name'=>$point['label'],
-                'value'=>$entry['value']??null,'unit'=>$point['unit'],'available'=>$entry!==null,'writable'=>$point['bank']==='holding'];
+                'value'=>$entry['value']??null,'unit'=>$point['unit'],'available'=>$current,'writable'=>$point['bank']==='holding',
+                'source'=>$current?'Modbus':null];
         }
-        return json_encode(['updatedAt'=>$cache['updatedAt']??null,'stale'=>$cache['stale']??true,'values'=>$values],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+        $java=[];
+        if ($this->ReadPropertyBoolean('ModbusJavaSupplement')) foreach ($this->VisualizationCachedPoints() as $ident=>$entry) {
+            $java[]=['ident'=>$ident,'id'=>$entry['id'],'value'=>$entry['value'],'source'=>'Java'];
+        }
+        return json_encode(['updatedAt'=>$cache['updatedAt']??null,'stale'=>$cache['stale']??true,'values'=>$values,
+            'javaSupplementEnabled'=>$this->ReadPropertyBoolean('ModbusJavaSupplement'),'javaSupplement'=>$java],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
     }
 
     private function SHIWriteDefinition(string $ident): array
@@ -379,6 +474,7 @@ trait LuxtronikModbusSHI
             $cache['points']=array_replace($cache['points']??[],$confirmed);
             $this->SetBuffer('SHICache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
             $this->PublishSHIValues();
+            $this->SendDebug('Datenquelle',$point['ident'].': Schreiben über Modbus (holding:'.$point['address'].') bestätigt: '.$this->SHIFormatted($point,$Value),0);
             return true;
         } catch (Throwable $error) {
             if ($attempted) {
@@ -406,6 +502,7 @@ trait LuxtronikModbusSHI
             ['type'=>'NumberSpinner','name'=>'ModbusPort','caption'=>'Modbus-Port'],
             ['type'=>'NumberSpinner','name'=>'ModbusUnitID','caption'=>'Modbus-Geräteadresse (Unit-ID)'],
             ['type'=>'NumberSpinner','name'=>'ModbusTimeout','caption'=>'Modbus-Timeout (Millisekunden, 100–5000)'],
+            ['type'=>'CheckBox','name'=>'ModbusJavaSupplement','caption'=>'Fehlende Messwerte ergänzend über Java lesen'],
             ['type'=>'Label','caption'=>'Alle dokumentierten Werte werden intern gelesen. Zusätzliche Objekte und Bedienpunkte über die ID-Liste auswählen. Die Spalte Schnittstelle zeigt Java, Modbus oder beide Protokolle. Keine automatischen Schreibvorgaben.']]];
         $index=count($form['elements']);
         foreach ($form['elements'] as $i=>$element) if (($element['name']??'')==='IDListe') {$index=$i;break;}
@@ -427,7 +524,10 @@ trait LuxtronikModbusSHI
                     'enabled'=>(bool)($saved[$id]['enabled']??false),'id'=>$id,'name'=>$point['label'],'interface'=>!empty($point['shared'])?'Java + Modbus':'Modbus'];
             }
             if (!$modbus) continue;
-            if (($element['name']??'')==='Port') $element['visible']=false;
+            if (($element['name']??'')==='Port') {
+                $element['visible']=$this->ReadPropertyBoolean('ModbusJavaSupplement');
+                $element['caption']='Java-Port für ergänzende Messwerte (8888 oder 8889)';
+            }
             if (($element['caption']??'')==='Timer / Zusatzfunktionen') {
                 foreach ($element['items'] as &$field) {
                     if (!in_array($field['name']??'',['WWsetVisible','TempsetVisible','RBEsetVisible','kwin','kwhin','kwhout'],true)) $field['visible']=false;
@@ -437,13 +537,13 @@ trait LuxtronikModbusSHI
             }
         }
         unset($element);
-        if ($modbus) array_unshift($form['elements'],['type'=>'Label','caption'=>'SHI-Testversion: Lesen und dokumentierte Schreibfunktionen. Java-Betriebsarten und Zeitprogramme bleiben erhalten, sind hier aber nicht bedienbar. Fehlende Register bleiben unverändert.']);
+        if ($modbus) array_unshift($form['elements'],['type'=>'Label','caption'=>'SHI-Testversion: Modbus liefert seine verfügbaren Werte; bei aktivierter Java-Ergänzung kommen fehlende Messwerte lesend über Java. Schreibbefehle bleiben bei Modbus. Java-Betriebsarten und Zeitprogramme sind hier nicht bedienbar.']);
         $form['status']=[
             ['code'=>102,'icon'=>'active','caption'=>'Instanz aktiv'],['code'=>104,'icon'=>'inactive','caption'=>'Instanz deaktiviert'],
             ['code'=>201,'icon'=>'error','caption'=>'SHI-Verbindung, Antwort oder Schreibbestätigung fehlerhaft'],
             ['code'=>202,'icon'=>'error','caption'=>'SHI-Verbindungseinstellungen ungültig'],
             ['code'=>203,'icon'=>'error','caption'=>'Keine verfügbaren SHI-Messwerte geliefert'],
-            ['code'=>204,'icon'=>'error','caption'=>'SHI teilweise verfügbar; einzelne Werte bleiben unverändert']];
+            ['code'=>204,'icon'=>'error','caption'=>'Messwerte teilweise verfügbar (Modbus/Java)']];
         return $form;
     }
 }

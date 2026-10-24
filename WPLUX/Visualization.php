@@ -3331,8 +3331,11 @@ window.SymconHeatPump = {
             const flow = formatted(cfg.heatingFlow);
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
+                const crowdedFlow = narrowHydraulics && lastCircuit === 3;
+                const flowX = narrowHydraulics && !crowdedFlow ? 725 : 780;
+                const flowY = crowdedFlow ? 575 : 485;
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:780, y:615,
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:flowX, y:flowY,
                     'text-anchor':'start', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 110);
             }
@@ -4212,8 +4215,10 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     private function VisualizationSourceKey(): string
     {
         $modbus = $this->ReadPropertyString('CommunicationMode') === 'modbus';
-        return json_encode([$modbus ? 'modbus' : 'java', $this->ReadPropertyString('IPAddress'),
-            $this->ReadPropertyInteger($modbus ? 'ModbusPort' : 'Port'), $modbus ? $this->ReadPropertyInteger('ModbusUnitID') : 0], JSON_THROW_ON_ERROR);
+        $key=[$modbus ? 'modbus' : 'java', $this->ReadPropertyString('IPAddress'),
+            $this->ReadPropertyInteger($modbus ? 'ModbusPort' : 'Port'), $modbus ? $this->ReadPropertyInteger('ModbusUnitID') : 0];
+        if ($modbus) array_push($key,$this->ReadPropertyInteger('Port'),$this->ReadPropertyBoolean('ModbusJavaSupplement'));
+        return json_encode($key, JSON_THROW_ON_ERROR);
     }
 
     private function VisualizationCachedPoints(): array
@@ -4228,8 +4233,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         $previous = $this->VisualizationCachedPoints();
         $points = $merge ? $previous : [];
         foreach ($values as $id => $value) {
-            $point = self::DATA_POINT_CONFIG[$id] ?? null;
-            if ($point === null) continue;
+            $point = $this->GetDataPointConfig((int)$id);
             $value = match ($point['type']) {
                 'bool' => $this->NormalizeBinaryValue($value), 'int' => (int)$value,
                 'float' => round((float)$value, (int)$point['decimals']), default => (string)$value
@@ -4241,6 +4245,33 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         }
         $this->SetBuffer('VisualizationPointCache', json_encode(['source' => $this->VisualizationSourceKey(), 'points' => $points],
             JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+    }
+
+    /** A current converted Java reading; never falls back to an object or another Ident. */
+    private function GetCachedVisualizationPoint(string $ident): ?array
+    {
+        $points = $this->VisualizationCachedPoints();
+        if (!isset($points[$ident])) return null;
+        $entry = $points[$ident];
+        $definition = $this->GetDataPointConfig($entry['id']);
+        $profileName = $definition['profile'];
+        $profile = $profileName !== '' && IPS_VariableProfileExists($profileName) ? IPS_GetVariableProfile($profileName) : [];
+        $unit = trim((string)($profile['Suffix'] ?? match ($profileName) {
+            '~Temperature' => ' °C', '~Watt' => ' W', 'WPLUX.kW' => ' kW', 'WPLUX.lh' => ' l/h', 'WPLUX.Ver' => ' rpm', default => ''
+        }));
+        $value = $entry['value'];
+        $formatted = is_bool($value) ? ($value ? 'Ein' : 'Aus') : (string)$value;
+        if (is_numeric($value) && $definition['type'] !== 'string') {
+            $digits = (int)($profile['Digits'] ?? ($definition['type'] === 'float' ? $definition['decimals'] : 0));
+            $formatted = (string)($profile['Prefix'] ?? '') . number_format((float)$value, max(0, min(10, $digits)), '.', '') . ($unit !== '' ? ' ' . $unit : '');
+        }
+        foreach ($profile['Associations'] ?? [] as $association) {
+            if ($this->ValueInList($value, [$association['Value']])) { $formatted = (string)$association['Name']; break; }
+        }
+        $id = @$this->GetIDForIdent($ident);
+        return ['variableId' => $id !== false && IPS_VariableExists($id) ? $id : 0,
+            'ident' => $ident, 'value' => $value, 'formatted' => $formatted, 'unit' => $unit, 'binary' => false,
+            'changedAt' => $entry['changedAt'] ?? 0, 'source' => 'Java', 'protocolId' => $entry['id']];
     }
 
     private function GetVisualizationPointData(string $property): ?array
@@ -4256,7 +4287,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return null;
         if ($this->ReadPropertyString('CommunicationMode') === 'modbus' && !in_array($property, ['ComputedCOP','ComputedJAZ'], true)) {
             foreach ($this->GetVisualizationIdents($property) as $ident) {
-                $point = $this->GetSHIVisualizationPoint($ident);
+                $point = $this->GetHybridVisualizationPoint($ident);
                 if ($point !== null) return $point;
             }
             // Explicit external sensors remain usable; old own Java objects are not live SHI readings.
@@ -4265,29 +4296,9 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             return ['variableId'=>$id,'ident'=>(string)(IPS_GetObject($id)['ObjectIdent'] ?? ''),'value'=>GetValue($id),
                 'formatted'=>GetValueFormatted($id),'unit'=>$this->GetVariableUnit($id),'binary'=>false];
         }
-        $points = $this->VisualizationCachedPoints();
         foreach ($this->GetVisualizationIdents($property) as $ident) {
-            if (!isset($points[$ident])) continue;
-            $entry = $points[$ident];
-            $definition = self::DATA_POINT_CONFIG[$entry['id']];
-            $profileName = $definition['profile'];
-            $profile = $profileName !== '' && IPS_VariableProfileExists($profileName) ? IPS_GetVariableProfile($profileName) : [];
-            $unit = trim((string)($profile['Suffix'] ?? match ($profileName) {
-                '~Temperature' => ' °C', '~Watt' => ' W', 'WPLUX.kW' => ' kW', 'WPLUX.lh' => ' l/h', 'WPLUX.Ver' => ' rpm', default => ''
-            }));
-            $value = $entry['value'];
-            $formatted = is_bool($value) ? ($value ? 'Ein' : 'Aus') : (string)$value;
-            if (is_numeric($value) && $definition['type'] !== 'string') {
-                $digits = (int)($profile['Digits'] ?? ($definition['type'] === 'float' ? $definition['decimals'] : 0));
-                $formatted = (string)($profile['Prefix'] ?? '') . number_format((float)$value, max(0, min(10, $digits)), '.', '') . ($unit !== '' ? ' ' . $unit : '');
-            }
-            foreach ($profile['Associations'] ?? [] as $association) {
-                if ($this->ValueInList($value, [$association['Value']])) { $formatted = (string)$association['Name']; break; }
-            }
-            $id = @$this->GetIDForIdent($ident);
-            return ['variableId' => $id !== false && IPS_VariableExists($id) ? $id : 0,
-                'ident' => $ident, 'value' => $value, 'formatted' => $formatted, 'unit' => $unit, 'binary' => false,
-                'changedAt' => $entry['changedAt'] ?? 0];
+            $point = $this->GetCachedVisualizationPoint($ident);
+            if ($point !== null) return $point;
         }
         // Existing own/external assignments remain compatible when no internal reading is available.
         $id = $this->GetVisualizationVariableID($property);

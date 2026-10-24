@@ -28,6 +28,7 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
                 }
                 return $result;
             };
+            $requestCount=0;
             while (!file_exists($folder.'/done')) {
                 $r=[$listener];$w=[];$e=[];
                 if (!stream_select($r,$w,$e,0,100000)) continue;
@@ -40,12 +41,13 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
                     check($h['t']===$lastTransaction+1,'Bad transaction sequence');$lastTransaction=$h['t'];
                     $pdu=$read($connection,$h['length']-1);check(strlen($pdu)===$h['length']-1,'Truncated request');
                     $f=ord($pdu[0]);check(in_array($f,[2,3,4,16],true),'Unapproved Modbus function');
+                    ++$requestCount;
                     $a=unpack('n',substr($pdu,1,2))[1];$count=unpack('n',substr($pdu,3,2))[1];
                     $words=$f===16?array_values(unpack('n*',substr($pdu,6))):[];
                     file_put_contents($folder.'/requests',json_encode(['function'=>$f,'address'=>$a,'count'=>$count,'words'=>$words])."\n",FILE_APPEND);
                     $bank=[2=>'discrete',3=>'holding',4=>'input',16=>'holding'][$f];
                     $fault=$options['fault']??[];
-                    if (($fault['function']??null)===$f && ($fault['address']??null)===$a) {
+                    if (($fault['function']??null)===$f && ($fault['address']??null)===$a && $requestCount>=($fault['after']??0)) {
                         if (($fault['kind']??'')==='silent') {usleep(650000);break;}
                         if (($fault['kind']??'')==='truncate') {fwrite($connection,pack('nnnC',$h['t'],0,5,$h['unit'])."\4\2\0");break;}
                         if (($fault['kind']??'')==='identity') {fwrite($connection,pack('nnnCC',$h['t']+1,0,3,$h['unit'],$f|0x80)."\2");continue;}
@@ -79,6 +81,7 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
     }
     fclose($listener);
     $m=$existing??new Luxtronik();$m->properties['CommunicationMode']='modbus';$m->properties['IPAddress']='127.0.0.1';
+    $m->properties['ModbusJavaSupplement']=$options['javaSupplement']??false;
     $m->properties['ModbusPort']=$port;$m->properties['ModbusUnitID']=$options['unit']??1;
     try {$test($m);} finally {touch($folder.'/done');pcntl_waitpid($pid,$status);}
     $lines=file_exists($folder.'/requests')?file($folder.'/requests',FILE_IGNORE_NEW_LINES):[];
@@ -273,6 +276,104 @@ $tests['shared controls selected in the interface list use the original Java rea
         }
         invoke($m,'RefreshControlValues');
         foreach (['Anpassung_Temp'=>-1.5,'Anpassung_WW'=>50.5,'Anpassung_RBE'=>22.5] as $ident=>$expected) check(GetValue($m->GetIDForIdent($ident))===$expected,'Shared selection changed Java decoding');
+    });
+};
+
+function hybridFrameValues(): array
+{
+    $v=array_fill(0,301,0);
+    $v[14]=654;$v[15]=999;$v[21]=315;$v[39]=1;$v[44]=1;$v[67]=7380;$v[73]=4484;
+    $v[80]=7;$v[231]=55;$v[233]=82;$v[236]=60;$v[254]=617;$v[257]=9999;$v[300]=123;
+    return $v;
+}
+
+$tests['hybrid reads one Java frame for missing measurements while zero Modbus values keep priority'] = static function ():void {
+    withServer([[pack('N*',3004,0),frame(3004,hybridFrameValues())]],static function(Luxtronik $m):void {
+        $id=shiVariable($m,'Heisgastemperatur',42.0,'Mein Heißgas','~Temperature');
+        $m->properties['IDListe']='[{"id":14,"enabled":true},{"id":300,"visualizationFooter":true}]';
+        $requests=withSHI(static function(Luxtronik $m) use($id):void {
+            $m->Update();$p=shiPayload($m);
+            check($m->status===102,'Successful hybrid scan not active');
+            check($p['data']['outdoorTemperature']['value']===0.0 && $p['data']['outdoorTemperature']['source']==='Modbus','Valid Modbus zero replaced');
+            check($p['data']['heatingCircuitPumpRunning']['value']===false && $p['data']['heatingCircuitPumpRunning']['source']==='Modbus','Valid Modbus false replaced');
+            check($p['data']['heatingPumpPower']['value']===0.0 && $p['data']['heatingPumpPower']['source']==='Modbus','Valid zero power replaced');
+            check($p['data']['heatingFlow']['value']===617 && $p['data']['heatingFlow']['source']==='Java','Flow not supplemented');
+            check($p['data']['compressorValue']['value']===55 && $p['data']['condenserTemperature']['value']===8.2,'Java values rescaled or wrong Idents');
+            check($p['data']['heatPumpRuntime']['value']==='2h 3m' && $p['data']['compressorStandstill']['value']==='1h 14m','Java durations lost');
+            check($m->GetIDForIdent('Heisgastemperatur')===$id && GetValue($id)===65.4 && IPS_GetName($id)==='Mein Heißgas','Existing supplementary object replaced');
+            check(GetValue($m->GetIDForIdent('ID_300'))==='123','Selected custom Java ID not retained');
+            check($m->GetIDForIdent('Flow_Rate')===false && $m->GetIDForIdent('Verdichterfrequenz')===false,'Graphic supplementation creates objects');
+            $debug=json_encode($m->debugMessages,JSON_UNESCAPED_UNICODE);
+            check(str_contains($debug,'Aussentemperatur: Modbus (input:10108)') && str_contains($debug,'Flow_Rate: Java (3004, ID 254)'),'Actual data sources absent from debug');
+            $snapshot=json_decode($m->GetSHIData(),true);$java=array_column($snapshot['javaSupplement'],null,'ident');
+            check($java['Flow_Rate']['source']==='Java' && !isset($java['Aussentemperatur']),'Supplement snapshot claims Modbus values');
+        },['javaSupplement'=>true],$m);
+        check(count($requests)===129 && array_filter($requests,fn($r)=>$r['function']===16)===[],'Hybrid scan wrote data');
+    });
+};
+$tests['unsupported or unavailable Modbus measurements use their exact Java ID without reinterpreting SHI-only fields'] = static function ():void {
+    $v=hybridFrameValues();$v[15]=4294967271;
+    withServer([[pack('N*',3004,0),frame(3004,$v)]],static function(Luxtronik $m):void {
+        $m->properties['IDListe']='[{"id":15,"enabled":true},{"id":80,"enabled":true}]';
+        withSHI(static function(Luxtronik $m):void {
+            $m->Update();$p=shiPayload($m);
+            check($p['data']['outdoorTemperature']['value']===-2.5 && $p['data']['outdoorTemperature']['source']==='Java','Unavailable Modbus temperature not supplemented');
+            check($p['data']['operatingStatus']['value']===7 && $p['data']['operatingStatus']['source']==='Java','Reserved SHI status confused with native status');
+            check($p['data']['mixerActual1']['value']===31.5 && $p['data']['mixerActual1']['source']==='Java','Optional register exception not supplemented');
+            check($p['data']['heatingCircuitPumpRunning']['value']===true,'HUP lost');
+            check(!isset($p['data']['mixerPump1']),'FUP1 invented from HUP');
+            check($m->status===204,'Partial SHI availability hidden');
+        },['javaSupplement'=>true,'input'=>[10108=>32767,10002=>6,10140=>['exception'=>2],10351=>32767,10354=>1]],$m);
+    });
+};
+$tests['a failed supplementary Java frame clears current Java data while Modbus values and writes continue'] = static function ():void {
+    $request=pack('N*',3004,0);
+    withServer([[$request,frame(3004,hybridFrameValues())],[$request,pack('N*',3004,0,301,1)]],static function(Luxtronik $m):void {
+        $m->properties['IDListe']='[{"id":14,"enabled":true},{"id":310002,"enabled":true}]';
+        withSHI(static function(Luxtronik $m):void {
+            $m->Update();$id=$m->GetIDForIdent('Heisgastemperatur');check(GetValue($id)===65.4,'Initial Java value missing');
+            $m->Update();$p=shiPayload($m);
+            check($m->status===204 && $p['data']['outdoorTemperature']['value']===2.0,'Java failure invalidates healthy Modbus values');
+            check(!isset($p['data']['heatingFlow'],$p['data']['compressorValue']),'Old Java snapshot still current');
+            check(GetValue($id)===65.4 && $m->GetIDForIdent('Heisgastemperatur')===$id,'Failure overwrites existing supplementary object');
+            check(json_decode($m->GetSHIData(),true)['javaSupplement']===[],'Failed Java frame published partially');
+            check($m->actions['Anpassung_Temp']===true,'Java read failure disables valid Modbus action');
+            $m->RequestAction('Anpassung_Temp',-1.5);
+            check(GetValue($m->GetIDForIdent('Anpassung_Temp'))===-1.5,'Healthy Modbus write not confirmed');
+        },['javaSupplement'=>true,'input'=>[10108=>20],'discrete'=>[10000=>1]],$m);
+    });
+};
+$tests['a failed Modbus scan discards staged readings and uses Java measurements without reviving SHI controls'] = static function ():void {
+    $request=pack('N*',3004,0);$v=hybridFrameValues();$v[15]=4294967271;
+    withServer([[$request,frame(3004,hybridFrameValues())],[$request,frame(3004,$v)]],static function(Luxtronik $m):void {
+        $m->properties['IDListe']='[{"id":15,"enabled":true},{"id":310006,"enabled":true}]';
+        withSHI(static function(Luxtronik $m):void {
+            $m->Update();$id=$m->GetIDForIdent('Aussentemperatur');
+            check(GetValue($id)===2.0 && $m->actions['Anpassung_WW']===true,'Initial Modbus scan failed');
+            $m->Update();$p=shiPayload($m);
+            check($m->status===201 && $p['data']['outdoorTemperature']['source']==='Java' && GetValue($id)===-2.5,'Failed Modbus scan blocks Java supplementation');
+            check(!$m->actions['Anpassung_WW'] && !$p['controls']['warmWaterSetpoint']['configured'],'Stale SHI control revived by Java measurement');
+            check(json_decode($m->GetSHIData(),true)['stale'],'Modbus error hidden');
+            shiThrows(fn()=>$m->RequestAction('Mode_WW',0));
+        },['javaSupplement'=>true,'input'=>[10108=>20],'fault'=>['function'=>4,'address'=>10120,'kind'=>'truncate','after'=>130]],$m);
+    });
+};
+$tests['Java supplementation is optional source-bound and does not introduce Java writes or control reads'] = static function ():void {
+    $m=new Luxtronik();check($m->properties['ModbusJavaSupplement']===true,'Supplement not enabled by default');
+    $m->properties['CommunicationMode']='modbus';$form=fields(json_decode($m->GetConfigurationForm(),true));
+    check($form['Port']['visible'] && $form['ModbusJavaSupplement']['type']==='CheckBox','Saved Java port or supplement switch missing');
+    $m->properties['ModbusJavaSupplement']=false;$form=fields(json_decode($m->GetConfigurationForm(),true));check(!$form['Port']['visible'],'Pure Modbus exposes unused port');
+    withServer([[pack('N*',3004,0),frame(3004,hybridFrameValues())]],static function(Luxtronik $m):void {
+        withSHI(static function(Luxtronik $m):void {
+            $m->Update();check(shiPayload($m)['data']['heatingFlow']['value']===617,'Initial supplement failed');
+            ++$m->properties['Port'];check(!isset(shiPayload($m)['data']['heatingFlow']),'Changing Java port retains old supplementary cache');
+            --$m->properties['Port'];$m->properties['ModbusJavaSupplement']=false;
+            check(!isset(shiPayload($m)['data']['heatingFlow']),'Disabled supplementation still supplies Java data');
+            $m->Update();check(json_decode($m->GetSHIData(),true)['javaSupplement']===[],'Disabled cache not cleared');
+        },['javaSupplement'=>true],$m);
+    });
+    withoutConnection(static function(Luxtronik $m):void {
+        withSHI(static function(Luxtronik $m):void {check($m->SetSHIValue('SHI_LPC_Modus',1),'Explicit Modbus write failed');shiThrows(fn()=>$m->RequestAction('set_223',1));},['javaSupplement'=>true],$m);
     });
 };
 

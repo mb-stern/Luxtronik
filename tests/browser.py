@@ -306,6 +306,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#gHeatPumpFlow > text').count()==1
                 assert page.locator('#textWPSupplyTemperature').count()==0
                 assert page.locator('#textHeatingFlow').get_attribute('x')=='780'
+                assert page.locator('#textHeatingFlow').get_attribute('y')=='485'
                 assert 'Ansteuerung' not in page.locator('#textHeatingPump1').text_content()
                 small_labels=page.evaluate('''()=>{
                     const svg=document.querySelector('#wp-card svg');
@@ -583,7 +584,10 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 # Without buffer and solar, the circuit moves left and the canvas/footer shrink together.
                 slim=json.loads(json.dumps(original))
                 slim['config'].update(tankHP=False,thermalSolarAvailable=False)
+                slim['config']['heatingFlow']='testFlowPosition'
+                slim['data']['testFlowPosition']={'value':612,'formatted':'612 l/h'}
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',slim)
+                assert mixed.locator('#textHeatingFlow').get_attribute('y')=='575'
                 assert mixed.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.width')<1570
                 slim_x=mixed.locator('#gHK1').bounding_box()['x']
                 full=json.loads(json.dumps(slim));full['config']['tankHP']=True
@@ -595,6 +599,12 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert float(mixed.locator('#gHeating').get_attribute('transform').split('(')[1].split()[0])<0
                 screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                 if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'no-buffer-no-solar-{width}.png'))
+                single_flow=json.loads(json.dumps(slim))
+                single_flow['config'].update(heatingCircuitType2='off',heatingCircuitType3='off')
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',single_flow)
+                assert mixed.locator('#textHeatingFlow').get_attribute('x')=='725'
+                assert mixed.locator('#textHeatingFlow').get_attribute('y')=='485'
+                if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'flow-upper-supply-{width}.png'))
                 # Direct circuits omit mixers; a missing secondary sensor uses labelled WP VL.
                 direct=json.loads(json.dumps(original))
                 direct['config'].update(mixers=[],tankHP=True)
@@ -760,6 +770,30 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert shi.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='none'
                 assert shi.locator('#textHeatPumpCycle').text_content()=='Steht seit —'
                 shi.close()
+
+            # A mixed snapshot displays current Modbus data alongside live Java supplements.
+            for width in [1200,390]:
+                hybrid=browser.new_page(viewport={'width':width,'height':850})
+                hybrid.goto(f'http://127.0.0.1:{server.server_port}/hybrid.html')
+                assert hybrid.locator('#wp-error').text_content()==''
+                assert hybrid.locator('#textHeatingFlow').text_content()=='612 l/h'
+                assert hybrid.locator('#textHeatingFlow').get_attribute('x')=='725'
+                assert hybrid.locator('#textHeatingFlow').get_attribute('y')=='485'
+                assert hybrid.locator('#textCompressorSpeedValue').text_content()=='Ist 55 rpm'
+                assert hybrid.locator('#textCondenserTemperature').text_content()=='8.2 °C'
+                assert hybrid.locator('#textHeatPumpCycle').text_content()=='Läuft seit 2h 3m'
+                update=json.loads(Path(artifacts,'hybrid-update.json').read_text())
+                hybrid.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
+                assert hybrid.locator('#textHeatingFlow').text_content()=='600 l/h'
+                assert hybrid.locator('#textHeatPumpCycle').text_content()=='Steht seit 1h 14m'
+                assert hybrid.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='none'
+                update=json.loads(Path(artifacts,'hybrid-missing.json').read_text())
+                hybrid.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
+                assert hybrid.locator('#textHeatingFlow').count()==0
+                assert hybrid.locator('#textCondenserTemperature').text_content()==''
+                assert hybrid.locator('#textHeatPumpCycle').text_content()=='Läuft seit —'
+                assert hybrid.locator('#textHPStatus').text_content()=='Heizen'
+                hybrid.close()
 
             # Native measurements render and update with no measurement objects at all.
             internal_update=json.loads(Path(artifacts,'internal-only-update.json').read_text())

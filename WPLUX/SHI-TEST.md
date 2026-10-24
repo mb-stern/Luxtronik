@@ -15,6 +15,9 @@ echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalt
 - `Kommunikation` auf `Modbus TCP / SHI (Testversion)` stellen und übernehmen.
 - Gleiche Geräte-IP wie Java; Modbus-Port **502**, Unit-ID **1**, Timeout **500 ms**
   pro Anfrage. Port, Unit-ID und Timeout (100–5000 ms) sind separat konfigurierbar.
+- **Fehlende Messwerte ergänzend über Java lesen** ist standardmäßig aktiv.
+  Dafür wird der gespeicherte Java-Port (8888/8889) verwendet und eingeblendet.
+  Für einen reinen Modbus-Test kann die Ergänzung abgeschaltet werden.
 - Literaladressen mit **Offset 0**, Byte- und Wortfolge Big-Endian.
 - Als anfänglichen Aktualisierungstakt beispielsweise **30 Sekunden** verwenden.
 - In der bestehenden Checkboxliste zeigt die Spalte **Schnittstelle**:
@@ -32,9 +35,43 @@ ihre Aktionen werden deaktiviert. Java-Einstellungen bleiben gespeichert.
 Nicht unterstützte Register, Geräteausnahmen 1/2/3 und Ersatzwerte werden
 übersprungen. Die Auswahl bleibt bestehen; vorhandene Objektwerte werden nicht
 durch Null ersetzt. Der letzte Objektwert ist dann kein aktueller SHI-Messwert.
-Die interne Grafik verwendet dafür keine alten Java-Werte. Ein Transportfehler
-verwirft den unvollständigen Lesezyklus und kennzeichnet den letzten Snapshot als
-veraltet. Der Instanzstatus unterscheidet Fehler und teilweise verfügbare Daten.
+Die interne Grafik verwendet dafür keine alten Objektwerte. Ein Transportfehler
+verwirft den unvollständigen Modbus-Lesezyklus und kennzeichnet dessen letzten
+Snapshot als veraltet. Der Instanzstatus unterscheidet Fehler und teilweise
+verfügbare Daten.
+
+## Ergänzende Java-Messwerte und Datenquelle
+
+Ein aktueller gültiger Modbus-Wert hat Vorrang, auch **0 oder Aus**. Wenn für einen
+benötigten bisherigen Ident kein aktueller gültiger Modbus-Messwert vorliegt,
+liest das Modul bei aktivierter Ergänzung **einmal pro Lesezyklus Kommando 3004**
+über den Java-Port. Das gilt für fehlende Zuordnungen, Ersatzwerte und optionale
+Registerausnahmen sowie bei einem verworfenen Modbus-Lesezyklus. Es werden nur
+die benötigten Werte für Grafik, aktivierte Objekte, Fußzeile und COP/JAZ übernommen.
+Idents und numerische Objekt-IDs bleiben erhalten; nicht ausgewählte Messwerte
+werden nur intern gespeichert. Unbestätigte Ident-/Registerzuordnungen werden
+dadurch nicht ergänzt: etwa `SEC_EEV` wird weiterhin nicht zur EEV-Öffnung erklärt.
+
+So können etwa Durchfluss, Verdichter-Ist/-Soll, Drücke, Temperaturen und laufende
+Lauf-/Standzeit weiter über Java kommen. Reine SHI-Werte ohne bestätigtes Java-
+Gegenstück werden nicht umgedeutet. Eine fehlerhafte oder unvollständige Java-
+Antwort wird vollständig verworfen; bestehende Objekte behalten ihre letzten Werte,
+die Grafik übernimmt davon keine alten Java-Daten. Funktionierendes Modbus bleibt
+dabei nutzbar. Umgekehrt bleiben Modbus-Verbindungsfehler im Status sichtbar, auch
+wenn Java noch Messwerte liefert. Die Java-Verbindung hat die bisherige begrenzte
+Zeitüberschreitung von fünf Sekunden. Geräte-IP, beide Ports, Unit-ID und der
+Ergänzungsschalter binden den internen Speicher an die aktuelle Konfiguration.
+
+Im Debug erscheint unter **Datenquelle** die tatsächliche Quelle pro Datenpunkt,
+beispielsweise `Aussentemperatur: Modbus (input:10108)` oder
+`Flow_Rate: Java (3004, ID 254)`, jeweils mit dem Wert. Fehlende aktuelle Quellen
+werden ausdrücklich gemeldet. `GetSHIData()` zeigt den Modbus-Snapshot unter
+`values` und aktuelle ergänzende Java-Werte separat unter `javaSupplement`.
+
+Die Ergänzung ist **ausschließlich lesend**: keine Java-Steuerwertabfrage 3003,
+keine Java-Schreibbefehle, kein automatischer Ersatz fehlgeschlagener Modbus-
+Schreibbefehle. Unterstützte gemeinsame Sollwerte werden weiterhin über Modbus
+geschrieben; neue getrennte Sollwertvariablen werden vorerst nicht eingeführt.
 
 ## Schreiben und Bedienung
 
@@ -55,6 +92,8 @@ Die gemeinsamen numerischen Bedienpunkte `Anpassung_WW`, `Anpassung_Temp` und
 Warmwasser-Soll und Heizkorrektur werden auch aus der Grafik über diesen Weg
 bedient. Die übrigen SHI-Vorgaben sind über die ausgewählten Bedienvariablen oder
 die unten beschriebene PHP-Funktion erreichbar.
+Der [Vergleich der Java- und Modbus-Sollwerte](SHI-JAVA-VERGLEICH.md) erklärt
+gemeinsame Funktionen, abweichende Bereiche und zusätzliche Modbus-Vorgaben.
 
 Vor dem Schreiben prüft das Modul Datentyp, Bereich, Auflösung und die aktuell
 aktivierte Gerätefunktion. Es liest benötigte Modusregister frisch ein und setzt
@@ -99,7 +138,9 @@ Das vorliegende Handbuch enthält keine bestätigten Register für EEV-Öffnunge
 Verdichterfrequenzen, Durchfluss, Mischer-Auf/Zu, laufende Zyklus-/Standzeit oder
 separate Primär-/Sekundär-Vorlauftemperaturen. Mindestlaufzeit und Schaltspielsperre
 sind keine aktuelle Zyklusdauer. Solche Werte werden nicht aus anderen Feldern
-abgeleitet. Dokumentierte Sensor-Ersatztemperaturen 5/75 °C sind ohne zusätzliche
+abgeleitet. Soweit eine bestätigte Java-Zuordnung existiert, kann die lesende
+Java-Ergänzung diese Messwerte liefern. Dokumentierte Sensor-Ersatztemperaturen
+5/75 °C sind ohne zusätzliche
 Fehlerrückmeldung nicht sicher von einem echten Messwert zu unterscheiden.
 
 ## PHP und Gerätetest
@@ -121,7 +162,8 @@ für Bool-Register auch boolesche Werte; keine numerischen Strings oder Rohadres
 Nach Installation der Firmware zuerst nur lesen, Reglerwerte/Einheiten und
 bestehende Objekt-IDs vergleichen. Danach einzelne Vorgaben einschließlich
 Rücknahme prüfen. Für eine Rückmeldung genügen Reglertyp/Firmware, Unit-ID,
-Register/Ident, erwarteter und angezeigter Wert sowie das Debugprotokoll.
+beide Ports, Ergänzungsschalter, Register/Ident, erwarteter und angezeigter Wert
+sowie das Debugprotokoll mit den Datenquellen.
 
 Lokal: `php tests/modbus.php`, `php tests/visualization.php` und optional
 `python3 tests/browser.py`. Die Protokolltests verwenden einen separaten lokalen
