@@ -320,6 +320,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':True}}
                 heater_controls=json.loads(json.dumps(payload['controls']))
                 heater_controls['heaterSwitches'][0]['currentValue']=True
+                heater_controls['heaterSwitches'][0]['enabled']=True
                 heater_controls['heaterSwitches'][2]['configured']=False
                 page.evaluate('(controls)=>window.handleMessage({type:"update",controls})',heater_controls)
                 assert page.locator('#textHeaterButtonState').text_content()=='1 Ein'
@@ -332,12 +333,19 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.evaluate('window.testActions.length')==before
                 page.locator('#wp-mode-menu [data-heater="1"][data-value="false"]').click()
                 assert page.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':False}}
-                heater_controls['heaterSwitches'][1].update(type=1,boolean=False,currentValue=20,stateLabel='Automatik',options=[{'value':10,'name':'Aus'},{'value':20,'name':'Automatik'},{'value':30,'name':'Ein'}])
+                heater_controls['heaterSwitches'][1].update(type=1,boolean=False,enabled=None,currentValue=20,stateLabel='Automatik',options=[{'value':10,'name':'Aus'},{'value':20,'name':'Automatik'},{'value':30,'name':'Ein'}])
                 page.evaluate('(controls)=>window.handleMessage({type:"update",controls})',heater_controls)
                 page.locator('#gHeaterControlButton').dispatch_event('click')
                 assert page.locator('#wp-mode-menu [data-heater="2"][data-value="20"]').text_content()=='Automatik'
                 page.locator('#wp-mode-menu [data-heater="2"][data-value="30"]').click()
                 assert page.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':2,'value':30}}
+                heater_controls['heaterSwitches'][1].update(currentValue=1,stateLabel='Automatik',options=[{'value':0,'name':'Aus','role':'off'},{'value':2,'name':'Ein','role':'on'}])
+                page.evaluate('(controls)=>window.handleMessage({type:"update",controls})',heater_controls)
+                page.locator('#gHeaterControlButton').dispatch_event('click')
+                assert page.locator('#wp-mode-menu [data-heater="2"][data-value="1"]').count()==0
+                assert page.locator('#wp-mode-menu [data-heater="2"][data-value="2"]').text_content()=='Einschalten: Ein'
+                page.locator('#wp-mode-menu [data-heater="2"][data-value="2"]').click()
+                assert page.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':2,'value':2}}
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,controls:p.controls})',payload)
                 # Exact-Ident readings feed the display and schematic compressor speed.
                 def compressor_reading(speed, running=True, configure_speed=True,
@@ -424,6 +432,9 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert str(15+index*5) in mixed.locator('#textMixerTarget'+str(index)).text_content()
                     assert mixed.locator('#gMixerValveSymbol'+str(index)).get_attribute('data-state')==['opening','stopped','closing'][index-1]
                 assert mixed.locator('[id^="textMixerState"]').count()==0
+                assert mixed.locator('#gMixerValveSymbol1 circle[stroke="#ffc51b"]').count()==0
+                assert mixed.locator('#gMixerValveSymbol1 text').last.text_content()=='↑'
+                assert mixed.locator('.wp-valve-recent').count()==0
                 assert '50' in mixed.locator('#textSupplyTemperatureHeating').text_content()
                 assert mixed.locator('#textSupplyTemperatureHeating2').text_content()==''
                 assert mixed.locator('#textRefluxTemperatureHeating3').text_content()==''
@@ -434,6 +445,10 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert mixed.locator('#textComputedJAZ').text_content()=='3.75'
                 fonts=mixed.evaluate("()=>['textComputedCOP','textComputedJAZ','textPowerValue','textInputPower'].map(id=>getComputedStyle(document.querySelector('#'+id)).fontSize)")
                 assert len(set(fonts))==1,fonts
+                assert mixed.locator('#textComputedCOP').get_attribute('textLength') is None
+                assert mixed.locator('#textComputedJAZ').get_attribute('textLength') is None
+                label_fonts=mixed.evaluate("()=>['textLabelCOP','textLabelJAZ','textHeatingPowerLabel'].map(id=>getComputedStyle(document.querySelector('#'+id)).fontSize)")
+                assert len(set(label_fonts))==1,label_fonts
                 geometry=mixed.evaluate("""()=>{
                     const box=(id)=>{const b=document.querySelector('#'+id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom};};
                     return Object.fromEntries(['gMixerValveReadings','gHeatingManifold','heatPumpPanel','switchValve','gHPUnitCabinet','gEfficiency','gRefrigerantCircuit','info'].map(id=>[id,box(id)]));
@@ -462,6 +477,27 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
                 assert mixed.locator('#gMixerValveSymbol1').get_attribute('data-state')=='conflict'
                 assert 'Auf und Zu aktiv' in mixed.locator('#gMixerValveSymbol1').get_attribute('aria-label')
+                # Output changes blink for at most a minute, including a stop command.
+                mixed.clock.install()
+                changed=mixed.evaluate('Date.now()/1000')
+                updated['data']['mixerOpen1'].update(value=False,changedAt=changed)
+                updated['data']['mixerClose1'].update(value=True,changedAt=changed)
+                updated['config']['wwHeatingValve']='testValve'
+                updated['data']['testValve']={'value':True,'binary':True,'changedAt':changed}
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
+                assert mixed.locator('#gMixerValveSymbol1 .wp-valve-recent').count()==1
+                assert mixed.locator('#switchValveFlow.wp-valve-recent').count()==1
+                assert 'Ansteuerung Zu' in mixed.locator('#gMixerValveSymbol1').get_attribute('aria-label')
+                assert mixed.locator('#textWWHeatingValveState').text_content()=='Warmwasser'
+                mixed.clock.fast_forward(60100)
+                assert mixed.locator('.wp-valve-recent').count()==0
+                assert mixed.locator('#gMixerValveSymbol1').get_attribute('data-state')=='closing'
+                updated['data']['mixerClose1'].update(value=False,changedAt=mixed.evaluate('Date.now()/1000'))
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
+                assert mixed.locator('#gMixerValveSymbol1').get_attribute('data-state')=='stopped'
+                assert mixed.locator('#gMixerValveSymbol1 .wp-valve-recent').count()==1
+                mixed.clock.fast_forward(60100)
+                assert mixed.locator('.wp-valve-recent').count()==0
                 # A sole third heating place still has a connected distributor.
                 updated['config'].update(heatingCircuitType1='off',heatingCircuitType2='off')
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
@@ -547,7 +583,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert '42.0' in comp.locator('#textSolarStorageTemperature').text_content()
                 assert comp.locator('#textThermalSolarPumpSpeed').text_content()=='Ein'
                 assert '31.7' in comp.locator('#textHeatingPump1').text_content()
-                assert '1450 U/min' in comp.locator('#textHeatingPumpSpeed').text_content()
+                assert comp.locator('#textHeatingPumpSpeed').count()==0
                 assert comp.locator('#gCirculatingPumpVisual').evaluate('e=>getComputedStyle(e).display')!='none'
                 assert comp.locator('#gPrimaryMixerValve > path.cold').get_attribute('d')=='M720 510H732'
                 original=comp.evaluate("""()=>JSON.parse([...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init(')).textContent.trim().slice('SymconHeatPump.init('.length,-2))""")

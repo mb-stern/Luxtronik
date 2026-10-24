@@ -88,6 +88,11 @@ class IPSModuleStrict
     public array $buffers = [];
     public array $messages = [];
     public array $updates = [];
+    public array $formUpdates = [];
+    protected function UpdateFormField(string $name, string $parameter, mixed $value): void
+    {
+        $this->formUpdates[] = [$name, $parameter, $value];
+    }
     public int $visualizationType = 0;
 
     public function __construct()

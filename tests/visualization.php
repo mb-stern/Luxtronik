@@ -64,6 +64,7 @@ function configuredVisualization(): Luxtronik
     $GLOBALS['testVariables'][$module->GetIDForIdent('Ruecklauftemperatur_Heizkreis')]['formatted'] = '28.9 °C';
     $GLOBALS['testVariables'][$module->GetIDForIdent('Ruecklauf_Soll_Heizkreis')]['formatted'] = '30.0 °C';
     visualizationVariable($module, 'Waermemengenzaehler_Durchfluss', 607.0);
+    $module->properties['kwin']=visualizationVariable($external,'InputPowerForCOP',0.0255);
     for ($i = 1; $i <= 3; ++$i) {
         $id = visualizationVariable($external, 'HeaterSwitch' . $i, false);
         $external->EnableAction('HeaterSwitch' . $i);
@@ -95,7 +96,10 @@ $tests['visualization settings expose only external additions and layout; footer
         check(!isset($sdkFields[$removed]), 'Obsolete mixer configuration retained');
     }
     $pickers = array_filter($sdkFields, fn($e) => ($e['type'] ?? '') === 'SelectVariable');
-    check(array_keys($pickers) === ['VisualizationInputPower', 'VisualizationHeatingPumpSpeed', 'HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3', 'AdditionalValue000', 'AdditionalValue001', 'AdditionalValue002'], 'Unexpected assignment controls beyond heaters, rooms and external values');
+    check(array_keys($pickers) === ['HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3', 'AdditionalValue000', 'AdditionalValue001', 'AdditionalValue002'], 'Removed power or pump pickers retained');
+    check(!str_contains(json_encode($sdkFields),'Mischerdaten stehen beim Ventil'),'Obsolete hint retained');
+    $solarRow=array_values(array_filter($panel[0]['items'],fn($item)=>($item['type']??'')==='RowLayout' && isset(fields($item)['ThermalSolarAvailable'])));
+    check(count($solarRow)===1 && isset(fields($solarRow[0])['VisualizationSolarTarget']),'Solar destination separated from its switch');
     foreach (['LuxtronikInstanceID', 'ManualConfiguration', 'OperatingStatusVariable', 'OutdoorTemperature', 'CompressorValue', 'ExpansionValveOpening'] as $property) {
         check(!isset($fields[$property]), 'Unwanted assignment UI: ' . $property);
     }
@@ -420,16 +424,22 @@ $tests['empty ID list supplies the whole graphic internally without creating mea
     });
 };
 
-$tests['input power prefers native watts then external source then existing COP source'] = static function (): void {
+$tests['input power reuses the COP source and exposes its origin without a second picker'] = static function (): void {
     $module = new Luxtronik(); $external = new Luxtronik();
     $kw = visualizationVariable($external,'COPPower',2.5);
     $watts = visualizationVariable($external,'Power',1800.0);
     $module->properties['kwin']=$kw;
     check(invoke($module,'BuildVisualizationData')['inputPower']['watts']===2500.0,'COP source kW interpreted as W');
     $module->properties['VisualizationInputPower']=$watts;
-    check(invoke($module,'BuildVisualizationData')['inputPower']['watts']===1800.0,'Explicit source ignored');
+    check(invoke($module,'BuildVisualizationData')['inputPower']['watts']===2500.0,'Obsolete SDK source overrides COP source');
     visualizationVariable($module,'Leistungsaufnahme',1250.0,'~Watt');
-    check(invoke($module,'BuildVisualizationData')['inputPower']['watts']===1250.0,'Native source not preferred');
+    $data=invoke($module,'BuildVisualizationData');
+    check($data['inputPower']['watts']===2500.0 && $data['inputPower']['source']==='cop','Native value overrides configured COP input');
+    $GLOBALS['testVariables'][$kw]['value']=0.0;
+    check(invoke($module,'BuildVisualizationData')['inputPower']['watts']===0.0,'Zero COP power incorrectly falls back to a native estimate');
+    $module->properties['kwin']=0;
+    $data=invoke($module,'BuildVisualizationData');
+    check($data['inputPower']['watts']===1250.0 && $data['inputPower']['source']==='luxtronik','Native fallback or its provenance missing');
 };
 
 $tests['heater power sums W and kW but never invents power from booleans or duplicate IDs'] = static function (): void {
@@ -571,6 +581,82 @@ $tests['internal cache is source-bound supports aliases and survives a failed Ja
     });
 };
 
+$tests['renderer changes request one HTML reload and solar destination stays beside its switch'] = static function (): void {
+    $module=new Luxtronik();
+    invoke($module,'RefreshVisualization',true);
+    invoke($module,'RefreshVisualization',true);
+    check(count(array_filter($module->updates,fn($u)=>($u['command']??'')==='reloadHtml'))===1,'Renderer reload repeats or is missing');
+    $module->properties['TankHP']=false;
+    $module->properties['ThermalSolarAvailable']=true;
+    $module->properties['VisualizationSolarTarget']='buffer';
+    $form=json_decode($module->GetConfigurationForm(),true);
+    $labels=[];
+    $collect=static function($node) use (&$collect,&$labels):void {
+        if(!is_array($node)) return;
+        if(($node['type']??'')==='Label' && str_contains($node['caption']??'','Solarziel Pufferspeicher')) $labels[]=$node;
+        foreach($node as $v) if(is_array($v)) $collect($v);
+    };
+    $collect($form);
+    check(count($labels)===1 && $labels[0]['visible']===true,'Inactive buffer does not explain an unavailable solar destination');
+};
+
+$tests['heater configuration selects exact Ein and Aus associations and refreshes unsaved choices'] = static function (): void {
+    foreach ([false,true] as $modern) {
+        $module=new Luxtronik(); $external=new Luxtronik();
+        $GLOBALS['testProfiles']['ThreeStates']=['Associations'=>[['Value'=>0.0,'Name'=>'Aus'],['Value'=>1.0,'Name'=>'Automatik'],['Value'=>2.0,'Name'=>'Ein']]];
+        $id=visualizationVariable($external,'RodMode',1,$modern ? '' : 'ThreeStates');
+        $external->EnableAction('RodMode');
+        if ($modern) $GLOBALS['testVariables'][$id]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'Aus'],['Value'=>1,'Caption'=>'Automatik'],['Value'=>2,'Caption'=>'Ein']])];
+        $module->properties['VisualizationHeaterSwitch1']=$id;
+        $fields=invoke($module,'HeaterConfigurationFields',1);
+        $choices=$fields['items'][1]['items'][0]['options'];
+        check(array_column($choices,'value')===['','0','1','2'],'Config does not offer the actual integer positions');
+        check(str_contains($fields['items'][0]['items'][1]['onChange'],'$VisualizationHeaterSwitch1'),'Choices cannot follow an unsaved variable selection');
+        $module->properties['VisualizationHeaterOnValue1']='2';
+        $module->properties['VisualizationHeaterOffValue1']='0';
+        $control=invoke($module,'BuildControlData')['heaterSwitches'][0];
+        check(array_column($control['options'],'value')===[0,2] && array_column($control['options'],'role')===['off','on'],'Configured states not applied');
+        check($control['enabled']===null && $control['stateLabel']==='Automatik','Intermediate state falsely reported as on/off');
+        $GLOBALS['testRequestedActions']=[];
+        $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>2]);
+        check($GLOBALS['testRequestedActions']===[[$id,2]],'Configured Ein value changed');
+        try { $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>1]); throw new LogicException('Non-selected mode accepted'); }
+        catch (InvalidArgumentException $expected) {}
+        foreach ([0=>false,2=>true] as $value=>$enabled) {
+            $GLOBALS['testVariables'][$id]['value']=$value;
+            check(invoke($module,'BuildControlData')['heaterSwitches'][0]['enabled']===$enabled,'Integer state not recognized');
+        }
+        foreach (['2','99'] as $invalid) {
+            $module->properties['VisualizationHeaterOffValue1']=$invalid;
+            check(!invoke($module,'BuildControlData')['heaterSwitches'][0]['configured'],'Ambiguous or missing association enabled');
+        }
+        $before=$module->properties; $actions=$GLOBALS['testRequestedActions'];
+        $module->UpdateHeaterConfiguration(1,$id);
+        check(count($module->formUpdates)===4 && $module->formUpdates[0][2]===$choices,'Unsaved picker options not refreshed');
+        check($module->properties===$before && $GLOBALS['testRequestedActions']===$actions,'Form selection actuated or persisted a device');
+    }
+};
+
+$tests['valve change times distinguish first observation stable commands and source changes'] = static function (): void {
+    $module=new Luxtronik();
+    invoke($module,'StoreVisualizationPoints',[40=>false,41=>true,21=>24.9]);
+    $data=invoke($module,'BuildVisualizationData');
+    check($data['mixerClose1']['changedAt']===0,'First active command falsely marked as changed');
+    invoke($module,'StoreVisualizationPoints',[40=>false,41=>true,21=>25.0]);
+    check(invoke($module,'BuildVisualizationData')['mixerClose1']['changedAt']===0,'Temperature update marked an unchanged valve');
+    invoke($module,'StoreVisualizationPoints',[40=>true,41=>false]);
+    $data=invoke($module,'BuildVisualizationData');
+    $stamp=$data['mixerOpen1']['changedAt'];
+    check($stamp>microtime(true)-1 && $data['mixerClose1']['changedAt']>0,'Observed output change has no timestamp');
+    invoke($module,'StoreVisualizationPoints',[40=>true,41=>false]);
+    check(invoke($module,'BuildVisualizationData')['mixerOpen1']['changedAt']===$stamp,'Stable command restarted the blink window');
+    invoke($module,'StoreVisualizationPoints',[41=>true],true);
+    check(invoke($module,'BuildVisualizationData')['mixerOpen1']['changedAt']===$stamp,'Merged scan lost another output timestamp');
+    $module->properties['IPAddress']='192.0.2.19';
+    invoke($module,'StoreVisualizationPoints',[40=>true,41=>true]);
+    check(invoke($module,'BuildVisualizationData')['mixerOpen1']['changedAt']===0,'Change times leaked across devices');
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
@@ -589,8 +675,6 @@ if ($dir!==false && $dir!=='') {
     $components->properties['TankHP']=true;
     $components->properties['VisualizationCirculation']=true;
     invoke($components,'StoreVisualizationPoints',[10=>35.0,11=>30.0,12=>32.0,13=>28.5,17=>48.5,18=>50.0,21=>30.0,22=>32.0,26=>65.0,27=>42.0,39=>true,40=>true,41=>false,46=>true,52=>true,80=>0,183=>31.7]);
-    $external = new Luxtronik();
-    $components->properties['VisualizationHeatingPumpSpeed']=visualizationVariable($external,'PumpRPM',1450);
     file_put_contents($dir.'/components.html','<meta charset="utf-8">'.$components->GetVisualizationTile());
     $module=configuredVisualization();
     file_put_contents($dir.'/configured.html','<meta charset="utf-8">'.$module->GetVisualizationTile());

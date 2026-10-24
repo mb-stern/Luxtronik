@@ -34,12 +34,15 @@ Der zusätzliche Bereich **HTML-SDK / Visualisierung** bleibt bewusst schlank:
 - Unter **Heizstäbe** bis zu drei Ist-Leistungsvariablen (W oder kW laut Profil;
   ohne Einheit W) und jeweils eine optionale Schaltvariable mit Aktion und
   Assoziationen. Legacy-Profile und moderne Aufzählungen werden unterstützt.
-- Solarwärme wahlweise an Warmwasserspeicher oder Puffer (Heizunterstützung).
-- Ansteuerung der Heizwasserpumpe über ID 183 in Prozent. Eine separat gemessene
-  Drehzahl kann optional als externe Variable in U/min gewählt werden; sie wird
-  nicht aus dem Prozentwert berechnet.
-- Eine optionale externe Eingangsleistung. Vorrang hat `Leistungsaufnahme` (ID 268,
-  Watt), danach die externe SDK-Quelle, danach die bisherige COP-Quelle `kwin` (kW).
+- Solarwärme wahlweise an Warmwasserspeicher oder Puffer (Heizunterstützung),
+  direkt neben dem Solarthermie-Schalter. Für das Solarziel Puffer muss auch der
+  Pufferspeicher aktiviert sein.
+- Ansteuerung der Heizwasserpumpe über ID 183 in Prozent. Eine separate
+  U/min-Drehzahl ist nicht bestätigt und wird nicht angezeigt.
+- Eingangsleistung aus der bereits konfigurierten COP-Quelle `kwin` (kW), ohne
+  weiteren Picker. Ist diese nicht konfiguriert, wird der übertragene Wert
+  `Leistungsaufnahme` (ID 268, Watt) verwendet. Das allein bestätigt keine echte
+  Strommessung. Die verwendete Quelle steht im Tooltip des Leistungswerts.
 - **Drei optionale Fremdvariablen**, jeweils nur Bezeichnung und Variablenauswahl.
   Sie erscheinen als frei benannte Werte in der Fußzeile.
 
@@ -61,11 +64,14 @@ angeschlossene Verbraucher, etwa mehrere Fußbodenheizungs-Schleifen.
 Die separaten Mischerdaten nutzen `Mischkreis_N_Vorlauftemperatur`,
 `Mischkreis_N_Vorlauf_Soll_Temperatur`, `Ausgang_Mischkreis_N_Auf` und
 `Ausgang_Mischkreis_N_Zu` (N = 1–3). Auf/Zu zeigt die Ansteuerung des Motors,
-keine gemessene Ventilposition: beide Ausgänge aus bedeutet keine Bewegung.
-Das Ventilsymbol zeigt Öffnen (+), Schließen (−), Stillstand (•), unbekannten
-Zustand (?) oder widersprüchliche Auf-/Zu-Ansteuerung (!). Der Ring bewegt sich
-nur bei einem aktiven Richtungsbefehl; eine Ventilstellung wird nicht errechnet.
-Ist/Soll stehen direkt beim Ventil;
+keine gemessene Ventilposition: beide Ausgänge aus bedeutet keine Ansteuerung.
+Das Ventilsymbol zeigt im kleinen Antrieb den Auf-Befehl (↑), Zu-Befehl (↓), keine Ansteuerung (•),
+unbekannten Zustand (?) oder widersprüchliche Auf-/Zu-Ansteuerung (!). Der Pfeil
+blinkt dezent für eine Minute nach einer beobachteten Ausgangsänderung; ein gelber Ring entfällt.
+Danach bleibt auch ein dauerhaft aktiver Befehl ruhig. Die erste Abfrage löst kein
+Blinken aus. Dasselbe gilt für die angeforderte Richtung Heizung/Warmwasser am
+Umschaltventil. Eine tatsächliche Ventilstellung wird nicht errechnet.
+Ist/Soll stehen unmittelbar neben dem Ventil;
 der frühere Mischkreis-Kasten entfällt. Für Mischkreis 1 werden die IDs 21, 22, 40
 und 41 automatisch verarbeitet. Für weitere aktivierte Heizkreisplätze werden
 auch die entsprechenden Mischerdaten automatisch eingebunden.
@@ -80,6 +86,8 @@ und die interne Datenauswahl. Das Solarziel muss zur tatsächlichen Anlage passe
 Instanzvariablen `copfaktor` und `jazfaktor`, sobald sie vorhanden sind. Die Grafik übernimmt
 deren berechnete Werte und Live-Änderungen; Berechnung und Zählerkonfiguration
 bleiben im bestehenden Luxtronik-Modul.
+Beschriftungen und Werte verwenden dieselben Schriftstile wie die anderen
+Leistungsfelder; COP/JAZ werden nicht horizontal verkleinert.
 
 Heizleistung und Eingangsleistung stehen ebenfalls im Infobereich. Der
 Rücklauf-Sollwert steht bei den aktiven Heizkreisen. Bei mehreren Kreisen heißt er
@@ -101,7 +109,11 @@ konfigurierten Heizstäbe mit Ein-/Ausschaltung. Geschaltet wird ausschließlich
 Variable mit aktiver Aktion. Die Bedienung übernimmt Beschriftungen und
 tatsächliche Assoziationswerte, auch für Integer, Float und String. Eine
 Integer-Auswahl wird nicht auf Boolean oder 0/1 reduziert. Für Boolean ohne
-eigene Assoziationen stehen Ein/Aus zur Verfügung. Die Grafik setzt den Variablenwert nicht
+eigene Assoziationen stehen Ein/Aus zur Verfügung. Im Konfigurationsbereich jedes
+Heizstabs lassen sich **Ein-Wert** und **Aus-Wert** aus dessen Assoziationen wählen,
+beispielsweise Ein = 2 und Aus = 0. Ohne Auswahl bleiben alle Profilwerte bedienbar.
+Ein Zwischenzustand wie Automatik wird weiterhin mit seinem Namen angezeigt.
+Die Grafik setzt den Variablenwert nicht
 direkt, sondern wartet auf dessen gemeldeten Zustand. Ohne Schaltaktion bleibt
 der Eintrag lesend. Bei deaktivierter Luxtronik-Instanz wird nicht geschaltet.
 Externe Heizstäbe können auch im SHI-Betrieb bedient werden; dabei werden keine
@@ -180,6 +192,9 @@ steuert die im Objektbaum angelegten Messwertvariablen und die Fußzeile. Die
 bisherigen Bedien- und Berechnungsvariablen bleiben durch ihre vorhandenen
 Optionen gesteuert. Der interne Speicher ist an Verbindung und Betriebsart
 gebunden; fehlerhafte Abfragen überschreiben keine vollständigen Messwerte.
+Wenn sich HTML/JavaScript oder SVG durch ein Modulupdate ändern, fordert das Modul
+beim nächsten Aufbau einmal das Neuladen der Grafik an. Zeigt ein Browser weiterhin
+die alte Darstellung, die Visualisierung vollständig schließen und neu öffnen.
 
 ```sh
 php tests/modbus.php
