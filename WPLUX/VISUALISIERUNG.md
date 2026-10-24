@@ -71,11 +71,10 @@ für Mischer und Pumpen bleiben erhalten. Dies ist keine separate Kompaktansicht
 
 Der allgemeine Vorlauf nutzt `Vorlauftemperatur_Heizkreis` (ID 10). Ein separater
 allgemeiner Sekundärvorlauf ist in der verwendeten Schnittstelle nicht bestätigt.
-Mischkreise zeigen ihren eigenen Vorlauf (IDs 21, 24, 137). Fehlt dieser, verwendet
-die Heizkreisanzeige den normalen Vorlauf mit der Beschriftung **WP VL**. Es wird
-kein zusätzlicher Messwert errechnet. Ein eigener Rücklauf je Mischer ist nicht bestätigt. Ohne ausdrücklich konfigurierte
-Rücklaufquelle erscheint der vorhandene gemeinsame Wärmepumpen-Rücklauf als RL;
-der Tooltip benennt diese Quelle. VL, RL und RL Soll stehen gleich groß im Heizkreiskasten.
+Mischkreise zeigen ihren eigenen Vorlauf (IDs 21, 24, 137). Fehlt dieser,
+bleibt die Heizkreisanzeige leer. Ein eigener Rücklauf je Mischer ist nicht
+bestätigt; die allgemeinen Temperaturen bleiben im Gerätebereich vor dem
+Boiler-Umschaltventil. Es werden keine zusätzlichen Messwerte errechnet.
 
 Die separaten Mischerdaten nutzen `Mischkreis_N_Vorlauftemperatur`,
 `Mischkreis_N_Vorlauf_Soll_Temperatur`, `Ausgang_Mischkreis_N_Auf` und
@@ -117,8 +116,11 @@ bleiben im bestehenden Luxtronik-Modul.
 Beschriftungen und Werte verwenden dieselben Schriftstile wie die anderen
 Leistungsfelder; COP/JAZ werden nicht horizontal verkleinert.
 
-Heizleistung und Eingangsleistung stehen ebenfalls im Infobereich. Der
-Rücklauf-Sollwert steht bei den aktiven Heizkreisen. Der Tooltip bezeichnet ihn ausdrücklich als gemeinsamen Wärmepumpen-Sollwert.
+Heizleistung und Eingangsleistung stehen ebenfalls im Infobereich. Die allgemeinen Werte für Vorlauf, Rücklauf und Rücklauf-Soll stehen direkt
+an der Wärmepumpe vor der Aufteilung für Warmwasser und Heizung. Die Heizkreise
+zeigen ausschließlich den Vorlauf des zugeordneten Mischkreises, ohne Ersatz
+durch WP-Temperaturen. Ohne Ventilzuordnung gilt Heizkreis 1–3 → Mischkreis 1–3.
+Fehlende Heizkreisfühler werden ausgeblendet.
 Der Durchfluss liest ausschließlich `Flow_Rate` (ID 254, l/h) und steht am
 gemeinsamen Wärmepumpenausgang. WMZ-Durchfluss (155) und Wärmequellendurchfluss
 (173) werden dafür nicht ersatzweise verwendet.

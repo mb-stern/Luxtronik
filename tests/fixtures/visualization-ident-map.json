@@ -60,10 +60,7 @@
         "Liquefaction_Temperature"
     ],
     "SupplyTemperatureHeating1": [
-        "Vorlauftemperatur_Heizkreis"
-    ],
-    "RefluxTemperatureHeating1": [
-        "Ruecklauftemperatur_Heizkreis"
+        "Mischkreis_1_Vorlauftemperatur"
     ],
     "HeatingCircuitPumpRunning1": [
         "Ausgang_Heizungsumwaelzpumpe"

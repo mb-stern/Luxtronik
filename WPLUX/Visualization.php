@@ -29,8 +29,7 @@ trait LuxtronikVisualization
         'EvaporatorTemperature' => ['Vapourisation_Temperature'],
         'CondenserPressure' => ['Hochdruck'],
         'CondenserTemperature' => ['Liquefaction_Temperature'],
-        'SupplyTemperatureHeating1' => ['Vorlauftemperatur_Heizkreis'],
-        'RefluxTemperatureHeating1' => ['Ruecklauftemperatur_Heizkreis'],
+        'SupplyTemperatureHeating1' => ['Mischkreis_1_Vorlauftemperatur'],
         'HeatingCircuitPumpRunning1' => ['Ausgang_Heizungsumwaelzpumpe'],
         'HeatingCircuitPumpValue1' => ['Steuersignal_Umwaelzpumpe'],
         'TankTempWWUp' => ['Temperatur_Brauchwasser_Oben'],
@@ -42,6 +41,9 @@ trait LuxtronikVisualization
     ];
 
     private const VISUALIZATION_EXTRA_IDENT_MAP = [
+        'HeatPumpReturnTemperature' => ['Ruecklauftemperatur_Heizkreis'],
+        'SupplyTemperatureHeating2' => ['Mischkreis_2_Vorlauftemperatur'],
+        'SupplyTemperatureHeating3' => ['Mischkreis_3_Vorlauftemperatur'],
         'MixerActual1' => ['Mischkreis_1_Vorlauftemperatur'], 'MixerTarget1' => ['Mischkreis_1_Vorlauf_Soll_Temperatur'],
         'MixerOpen1' => ['Ausgang_Mischkreis_1_Auf'], 'MixerClose1' => ['Ausgang_Mischkreis_1_Zu'],
         'MixerActual2' => ['Mischkreis_2_Vorlauftemperatur'], 'MixerTarget2' => ['Mischkreis_2_Vorlauf_Soll_Temperatur'],
@@ -3157,76 +3159,47 @@ window.SymconHeatPump = {
             setText('#textHeatingCircuitName3', cfg.heatingCircuitName3 || 'HK3');
 
             [
-                [1, cfg.supplyTemperatureHeating, cfg.refluxTemperatureHeating, cfg.heatingCircuitPumpValue],
-                [2, cfg.supplyTemperatureHeating2, cfg.refluxTemperatureHeating2, cfg.heatingCircuitPumpValue2],
-                [3, cfg.supplyTemperatureHeating3, cfg.refluxTemperatureHeating3, cfg.heatingCircuitPumpValue3]
-            ].forEach(([n, supply, reflux, pumpValueItem]) => {
+                [1, cfg.supplyTemperatureHeating, cfg.heatingCircuitPumpValue],
+                [2, cfg.supplyTemperatureHeating2, cfg.heatingCircuitPumpValue2],
+                [3, cfg.supplyTemperatureHeating3, cfg.heatingCircuitPumpValue3]
+            ].forEach(([n, supply, pumpValueItem]) => {
                 const mixer = mixers.find(item => (item.circuit || item.number) === n);
                 if (mixer) {
-                    supply = formatted(mixer.actual) ? mixer.actual : cfg.supplyTemperature;
-                    // Use a configured circuit return, otherwise the confirmed common WP return.
-                    if (!formatted(reflux)) reflux = cfg.heatPumpReturnTemperature;
+                    supply = mixer.actual;
                     pumpValueItem = mixer.number === 1 ? cfg.heatingCircuitPumpValue : '';
-                } else {
-                    if (!formatted(supply) || (cfg.tankHP && n === 1)) supply = cfg.supplyTemperature;
-                    if (!formatted(reflux)) reflux = cfg.heatPumpReturnTemperature;
                 }
                 const supplySelector = n === 1 ? '#textSupplyTemperatureHeating' : '#textSupplyTemperatureHeating' + n;
-                const refluxSelector = n === 1 ? '#textRefluxTemperatureHeating' : '#textRefluxTemperatureHeating' + n;
-                const wpFallback = supply === cfg.supplyTemperature || (!mixer && n === 1 && supply === cfg.supplyTemperatureHeating);
-                const supplyLabel = svg.querySelector(supplySelector)?.previousElementSibling;
-                if (supplyLabel) supplyLabel.textContent = wpFallback ? 'WP VL' : 'VL';
-                setText(supplySelector, formatted(supply));
-                setText(refluxSelector, formatted(reflux));
-                const returnValue = svg.querySelector(refluxSelector);
-                if (returnValue) {
-                    const returnLabel = returnValue.previousElementSibling;
-                    let reading = svg.querySelector('#gHeatingReturnReading' + n);
-                    if (!reading) {
-                        reading = node(returnValue.parentElement,'g',{id:'gHeatingReturnReading' + n});
-                        node(reading,'title',{});
-                        reading.appendChild(returnLabel);
-                        reading.appendChild(returnValue);
+                const value = svg.querySelector(supplySelector);
+                const name = svg.querySelector('#textHeatingCircuitName' + n);
+                const offset = (n - 1) * 120;
+                if (name) {
+                    name.setAttribute('y',String(232 + offset));
+                    name.setAttribute('x','1392.5');
+                    name.setAttribute('text-anchor','middle');
+                    name.style.fontSize = '18px';
+                    name.removeAttribute('textLength');
+                    name.removeAttribute('lengthAdjust');
+                    if (name.getComputedTextLength() > 235) {
+                        name.setAttribute('textLength','235');
+                        name.setAttribute('lengthAdjust','spacingAndGlyphs');
                     }
-                    const common = reflux === cfg.heatPumpReturnTemperature || data[reflux]?.ident === 'Ruecklauftemperatur_Heizkreis';
-                    reading.querySelector('title').textContent = common ? 'RL: gemeinsamer Rücklauf der Wärmepumpe; kein eigener Heizkreisfühler.' : 'Rücklauf Heizkreis ' + n;
                 }
-                {
-                    const hasTarget = formatted(cfg.returnTemperatureSetpoint) !== '';
-                    const offset = (n - 1) * 120;
-                    const name = svg.querySelector('#textHeatingCircuitName' + n);
-                    if (name) {
-                        name.setAttribute('y',String((hasTarget ? 225 : 232) + offset));
-                        name.setAttribute('x','1392.5');
-                        name.setAttribute('text-anchor','middle');
-                        name.style.fontSize = '18px';
-                        name.removeAttribute('textLength');
-                        name.removeAttribute('lengthAdjust');
-                        if (name.getComputedTextLength() > 235) {
-                            name.setAttribute('textLength','235');
-                            name.setAttribute('lengthAdjust','spacingAndGlyphs');
-                        }
+                if (value) {
+                    const reading = formatted(supply);
+                    value.textContent = reading;
+                    value.style.display = reading !== '' ? 'inline' : 'none';
+                    value.style.fontSize = '18px';
+                    value.setAttribute('x','1510');
+                    value.setAttribute('y',String(270 + offset));
+                    value.setAttribute('text-anchor','end');
+                    const label = value.previousElementSibling;
+                    if (label) {
+                        label.textContent = 'VL';
+                        label.style.display = reading !== '' ? 'inline' : 'none';
+                        label.style.fontSize = '18px';
+                        label.setAttribute('y',String(270 + offset));
                     }
-                    [[supplySelector, hasTarget ? 247 : 265], [refluxSelector, hasTarget ? 273 : 297]].forEach(([selector, y]) => {
-                        const el = svg.querySelector(selector);
-                        if (!el) return;
-                        el.style.fontSize = '18px';
-                        el.setAttribute('x','1510');
-                        el.setAttribute('text-anchor','end');
-                        if (el.previousElementSibling) el.previousElementSibling.style.fontSize = '18px';
-                        el.setAttribute('y', y + offset);
-                        if (el.previousElementSibling) el.previousElementSibling.setAttribute('y', y + offset);
-                    });
                 }
-                // A mixed circuit does not imply a measured return temperature.
-                [[supplySelector, supply], [refluxSelector, reflux]].forEach(([selector, key]) => {
-                    const element = svg.querySelector(selector);
-                    if (!element) return;
-                    const visible = formatted(key) !== '';
-                    element.style.display = visible ? 'inline' : 'none';
-                    const label = element.previousElementSibling;
-                    if (label && ['VL', 'WP VL', 'RL'].includes(label.textContent.trim())) label.style.display = visible ? 'inline' : 'none';
-                });
 
                 // HUP percentage belongs to mixer 1; no invented RPM or percentages for other pumps.
                 const pumpText = pumpValueItem ? formatted(pumpValueItem) : '';
@@ -3306,7 +3279,6 @@ window.SymconHeatPump = {
                     status.setAttribute('lengthAdjust', 'spacingAndGlyphs');
                 }
             }
-            const circuitTargets = group('gCircuitReturnTargets', svg.querySelector('#gHeating'));
             const flow = formatted(cfg.heatingFlow);
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
@@ -3318,13 +3290,19 @@ window.SymconHeatPump = {
                     'text-anchor':'start', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 110);
             }
-            [hk1, hk2, hk3].forEach((enabled, index) => {
-                if (!enabled || !formatted(cfg.returnTemperatureSetpoint)) return;
-                const y = 299 + index * 120;
-                const row = node(circuitTargets,'g',{id:'gHeatingReturnTarget' + (index + 1)});
-                node(row,'title',{},'RL Soll: gemeinsamer Rücklauf-Sollwert der Wärmepumpe.');
-                node(row,'text',{id:'textHeatingReturnTargetLabel' + (index + 1),class:'sm',x:1378,y,style:'font-size:18px'},'RL Soll');
-                node(row,'text',{id:'textHeatingReturnTarget' + (index + 1),class:'sm',x:1510,y,'text-anchor':'end',style:'font-size:18px'},formatted(cfg.returnTemperatureSetpoint));
+            // Common WP temperatures belong before the DHW/heating split, in every operating mode.
+            const wpTemperatures = group('gHeatPumpTemperatures', svg.querySelector('#heatPump'));
+            wpTemperatures.setAttribute('transform','translate(365 470)');
+            [
+                ['textWPSupplyTemperature','VL',cfg.supplyTemperature],
+                ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature],
+                ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint]
+            ].forEach(([id,label,key], index) => {
+                const reading = formatted(key);
+                if (!reading) return;
+                const x = index * 135;
+                node(wpTemperatures,'text',{id:id + 'Label',class:'sm',x,y:0,'text-anchor':'middle'},label);
+                fittedText(wpTemperatures,{id,class:'sm',x,y:26,'text-anchor':'middle'},reading,115);
             });
 
             // Touch handling. Bind once per SVG element.
@@ -3711,7 +3689,12 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         if ($this->ReadPropertyString('CommunicationMode') === 'modbus' && $property === 'MixerPump1') return ['SHI_Pumpe_Mischkreis_1'];
         if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return [];
-        if ($property === 'HeatPumpReturnTemperature') return ['Ruecklauftemperatur_Heizkreis'];
+        if (preg_match('/^SupplyTemperatureHeating([1-3])$/D', $property, $match)) {
+            $circuit = (int)$match[1];
+            $mixer = $this->ReadPropertyInteger('VisualizationHeatingCircuitMixer' . $circuit);
+            return self::VISUALIZATION_EXTRA_IDENT_MAP['MixerActual' . ($mixer > 0 ? $mixer : $circuit)];
+        }
+
         return self::VISUALIZATION_EXTRA_IDENT_MAP[$property] ?? self::LUXTRONIK_IDENT_MAP[$property] ?? [];
     }
 
@@ -3731,9 +3714,14 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             }
         }
         if ($property === 'InputPower') return 0;
-        if (isset(self::VISUALIZATION_EXTRA_IDENT_MAP[$property]) && $property !== 'ThermalSolarPump') return 0;
+        if (isset(self::VISUALIZATION_EXTRA_IDENT_MAP[$property])
+            && !in_array($property, ['ThermalSolarPump','HeatPumpReturnTemperature','SupplyTemperatureHeating2','SupplyTemperatureHeating3'], true)) return 0;
         $configured = $this->ReadPropertyInteger($property);
-        return $configured > 0 && IPS_VariableExists($configured) ? $configured : 0;
+        if ($configured <= 0 || !IPS_VariableExists($configured)) return 0;
+        // A legacy binding to the common WP sensor is no longer a circuit measurement.
+        if (str_starts_with($property, 'SupplyTemperatureHeating')
+            && (IPS_GetObject($configured)['ObjectIdent'] ?? '') === 'Vorlauftemperatur_Heizkreis') return 0;
+        return $configured;
     }
 
     private function GetLuxtronikWebInterfaceURL(): string
@@ -4231,7 +4219,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             if (in_array($property, ['SolarStorageTemperature', 'ThermalSolarPump'], true) && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
             if ($property === 'BufferReturnTemperature' && !$this->ReadPropertyBoolean('TankHP')) continue;
             if ($property === 'CirculatingPumpRunning' && !$this->ReadPropertyBoolean('VisualizationCirculation')) continue;
-            foreach ($candidates as $ident) $idents[$ident] = true;
+            foreach ($this->GetVisualizationIdents($property) as $ident) $idents[$ident] = true;
         }
         $result = [];
         foreach (self::DATA_POINT_CONFIG as $id => $point) {

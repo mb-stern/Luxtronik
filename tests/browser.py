@@ -273,7 +273,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#textDHWSoll').count()==0
                 assert page.locator('#main #textHeatingFlow').text_content()=='607 l/h'
                 assert page.locator('#gHeatPumpFlow > text').count()==1
-                assert page.locator('#textWPSupplyTemperature').count()==0
+                assert page.locator('#heatPump #textWPSupplyTemperature').text_content()=='25.5'
                 assert page.locator('#textHeatingFlow').get_attribute('x')=='780'
                 assert page.locator('#textHeatingFlow').get_attribute('y')=='485'
                 assert 'Ansteuerung' not in page.locator('#textHeatingPump1').text_content()
@@ -286,19 +286,18 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 for suffix in ['Up','Middle','Down']:
                     assert page.locator('#textTankTempWW'+suffix).count()==0
                 assert page.locator('#symconBoilerSupplyTemperature,#symconBoilerRefluxTemperature').count()==0
-                for index in [1,2,3]:
-                    assert page.locator('#textHeatingReturnTarget'+str(index)).text_content()=='30.0 °C'
-                positions=page.evaluate('''()=>{
-                    const box=(id)=>document.querySelector('#'+id).getBoundingClientRect();
-                    return {rlBottom:box('textRefluxTemperatureHeating').bottom,targetTop:box('textHeatingReturnTarget1').top};
-                }''')
-                assert positions['rlBottom']<positions['targetTop'],positions
-                for n in [1,2,3]:
-                    ids=['textSupplyTemperatureHeating'+('' if n==1 else str(n)),'textRefluxTemperatureHeating'+('' if n==1 else str(n)),'textHeatingReturnTarget'+str(n)]
-                    sizes=page.evaluate('(ids)=>ids.map(id=>getComputedStyle(document.getElementById(id)).fontSize)',ids)
-                    assert len(set(sizes))==1,sizes
-                    assert page.locator('#textHeatingReturnTargetLabel'+str(n)).text_content()=='RL Soll'
-                    assert ('28.9' if n==1 else '25.5') in page.locator('#'+ids[1]).text_content()
+                assert page.locator('[id^="textHeatingReturnTarget"],[id^="textRefluxTemperatureHeating"]').count()==0
+                assert page.locator('#heatPump #textWPReturnTemperature').text_content()=='28.9 °C'
+                assert page.locator('#textWPReturnTarget').text_content()=='30.0 °C'
+                sizes=page.evaluate("()=>['textWPSupplyTemperature','textWPReturnTemperature','textWPReturnTarget'].map(id=>getComputedStyle(document.getElementById(id)).fontSize)")
+                assert len(set(sizes))==1,sizes
+                geometry=page.evaluate("""()=>{
+                    const b=id=>document.getElementById(id).getBoundingClientRect();
+                    return {panel:b('heatPumpPanel').toJSON(),values:b('gHeatPumpTemperatures').toJSON(),valve:b('switchValve').toJSON()};
+                }""")
+                assert geometry['panel']['x']<geometry['values']['x']<geometry['values']['right']<geometry['panel']['right'],geometry
+                assert geometry['panel']['y']<geometry['values']['y']<geometry['values']['bottom']<geometry['panel']['bottom'],geometry
+                assert geometry['values']['right']<geometry['valve']['x'],geometry
 
                 assert page.locator('#textHeaterRodStatus,#gHeaterRodWaves').count()==0
                 assert page.locator('#pathBoilerHeatBolt').get_attribute('class')=='wp-boiler-heater-active'
@@ -491,9 +490,10 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert mixed.locator('#gMixerValveSymbol1 text').last.text_content()=='↑'
                 assert mixed.locator('.wp-valve-recent').count()==0
                 assert '30' in mixed.locator('#textSupplyTemperatureHeating').text_content()
-                assert mixed.locator('#textWPSupplyTemperature').count()==0
+                assert '50' in mixed.locator('#textWPSupplyTemperature').text_content()
                 assert '35' in mixed.locator('#textSupplyTemperatureHeating2').text_content()
-                assert '40' in mixed.locator('#textRefluxTemperatureHeating3').text_content()
+                assert '40' in mixed.locator('#textWPReturnTemperature').text_content()
+                assert mixed.locator('[id^="textRefluxTemperatureHeating"]').count()==0
                 assert mixed.locator('#gMixerReadings').count()==0
                 assert mixed.locator('[id^="gHKMixer"]').count()==3
                 assert mixed.locator('[id^="pathHKMixingReturn"]').count()==3
@@ -574,7 +574,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert mixed.locator('#textHeatingFlow').get_attribute('x')=='725'
                 assert mixed.locator('#textHeatingFlow').get_attribute('y')=='485'
                 if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'flow-upper-supply-{width}.png'))
-                # Direct circuits omit mixers; a missing secondary sensor uses labelled WP VL.
+                # Circuit temperatures remain MK measurements even without a drawn mixer valve.
                 direct=json.loads(json.dumps(original))
                 direct['config'].update(mixers=[],tankHP=True)
                 direct['config']['returnTemperatureSetpoint']='testDirectReturnTarget'
@@ -583,17 +583,24 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert mixed.locator('[id^="gMixerValveSymbol"]').count()==0
                 for n in [1,2,3]:
                     selector='#textSupplyTemperatureHeating'+('' if n==1 else str(n))
-                    assert '50' in mixed.locator(selector).text_content()
-                    assert mixed.locator(selector).evaluate('e=>e.previousElementSibling.textContent')=='WP VL'
-                    sizes=mixed.evaluate("n=>['textSupplyTemperatureHeating'+(n===1?'':n),'textRefluxTemperatureHeating'+(n===1?'':n),'textHeatingReturnTarget'+n].map(id=>getComputedStyle(document.getElementById(id)).fontSize)",n)
-                    assert len(set(sizes))==1,sizes
+                    assert str(25+n*5) in mixed.locator(selector).text_content()
+                    assert mixed.locator(selector).evaluate('e=>e.previousElementSibling.textContent')=='VL'
+                assert mixed.locator('#textWPReturnTarget').text_content()=='27.0 °C'
 
                 missing=json.loads(json.dumps(original))
                 missing['data'].pop('mixerActual1')
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',missing)
                 assert mixed.locator('#textMixerActual1').text_content()=='Ist —'
-                assert '50' in mixed.locator('#textSupplyTemperatureHeating').text_content()
-                assert mixed.locator('#textSupplyTemperatureHeating').evaluate('e=>e.previousElementSibling.textContent')=='WP VL'
+                assert mixed.locator('#textSupplyTemperatureHeating').is_hidden()
+                assert '50' in mixed.locator('#textWPSupplyTemperature').text_content()
+                # DHW charging changes WP temperatures, never the measured mixed circuit supplies.
+                hotwater=json.loads(json.dumps(original))
+                for key,value in [('supplyTemperature',60),('heatPumpReturnTemperature',55)]:
+                    hotwater['data'][hotwater['config'][key]].update(value=value,formatted=str(value)+'.0 °C')
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',hotwater)
+                assert mixed.locator('#textWPSupplyTemperature').text_content()=='60.0 °C'
+                assert mixed.locator('#textWPReturnTemperature').text_content()=='55.0 °C'
+                assert '30' in mixed.locator('#textSupplyTemperatureHeating').text_content()
                 # Missing relays are unknown; both inactive relays mean neither direction is driven.
                 updated=json.loads(json.dumps(original))
                 updated['data'].pop('mixerOpen1')

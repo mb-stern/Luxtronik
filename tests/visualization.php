@@ -257,9 +257,9 @@ $tests['three heating places and mixer readings remain independent and use exist
         check($payload['data']['mixerTarget' . $i]['value'] === 15.0 + $i * 5, 'Wrong mixed-circuit target Ident');
     }
     check(count($payload['config']['mixers']) === 3, 'Mixer readings incomplete');
-    check($payload['data']['supplyTemperatureHeating']['value'] === 50.0, 'HK1 no longer uses original map');
+    check($payload['data']['supplyTemperatureHeating']['value'] === 30.0, 'HK1 does not use MK1 sensor');
     check($payload['data']['heatPumpReturnTemperature']['value'] === 40.0, 'Heat pump return lost');
-    check(!isset($payload['data']['supplyTemperatureHeating2']), 'Invented HK2 temperature');
+    check($payload['data']['supplyTemperatureHeating2']['value'] === 35.0, 'HK2 does not use MK2 sensor');
     check(!isset($payload['data']['refluxTemperatureHeating3']), 'Invented HK3 return');
     check($payload['data']['mixerOpen1']['value'] === true && $payload['data']['mixerClose1']['value'] === false, 'Relay signals conflated');
     check($payload['data']['mixerOpen2']['value'] === false && $payload['data']['mixerClose2']['value'] === false, 'Idle signals changed');
@@ -890,6 +890,35 @@ $tests['retired footer selections neither create variables nor subscribe externa
         check(!isset($module->messages[$id][VM_UPDATE]),'Removed external footer value still subscribed');
         foreach (array_keys($payload['config']+$payload['data']) as $key) check(!str_contains(strtolower($key),'footer'),'Footer payload retained');
     });
+};
+
+$tests['WP temperatures and numbered circuit supplies remain separate during hot water charging'] = static function (): void {
+    $module=new Luxtronik();$module->properties['IDListe']='[]';
+    for($n=1;$n<=3;++$n) {
+        $module->properties['VisualizationHeatingCircuit'.$n]=true;
+        $module->properties['VisualizationHeatingCircuitMixer'.$n]=0;
+    }
+    $required=invoke($module,'GetVisualizationRequiredPointIDs');
+    foreach([10,11,12,21,24,137] as $id) check(isset($required[$id]),'Temperature not polled without objects or mixer valve: '.$id);
+    invoke($module,'StoreVisualizationPoints',[10=>60.0,11=>55.0,12=>27.0,21=>30.0,24=>32.0,137=>34.0,39=>true]);
+    $p=visualizationPayload($module);
+    foreach(['supplyTemperature'=>60.0,'heatPumpReturnTemperature'=>55.0,'returnTemperatureSetpoint'=>27.0,
+        'supplyTemperatureHeating'=>30.0,'supplyTemperatureHeating2'=>32.0,'supplyTemperatureHeating3'=>34.0] as $key=>$expected) {
+        check($p['data'][$p['config'][$key]]['value']===$expected,'WP and circuit readings conflated: '.$key);
+    }
+    check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Temperature binding creates objects');
+    $module->properties['VisualizationHeatingCircuitMixer1']=3;
+    check(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating']['value']===34.0,'Selected mixer ignored');
+    invoke($module,'StoreVisualizationPoints',[10=>65.0,11=>60.0,12=>28.0,39=>true]);
+    $p=visualizationPayload($module);
+    check(!isset($p['data'][$p['config']['supplyTemperatureHeating']]),'Absent mixer temperature replaced by WP temperature');
+    $wp=visualizationVariable($module,'Vorlauftemperatur_Heizkreis',65.0);
+    $module->properties['SupplyTemperatureHeating1']=$wp;
+    check(!isset(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating']),'Legacy WP assignment reintroduced as a circuit sensor');
+    check($module->properties['SupplyTemperatureHeating1']===$wp,'Saved binding was rewritten');
+    $external=new Luxtronik();$sensor=visualizationVariable($external,'ExistingCircuitSensor',22.0);
+    $module->properties['SupplyTemperatureHeating2']=$sensor;
+    check(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating2']['value']===22.0,'Explicit external circuit sensor lost without internal MK sensor');
 };
 
 $failed=0;
