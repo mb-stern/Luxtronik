@@ -224,7 +224,8 @@ $tests['SHI keeps existing COP and JAZ IDs and external-meter semantics'] = stat
         $module->ApplyChanges();
         check($module->GetIDForIdent('copfaktor') === $copID && GetValue($copID) === 5.0, 'COP changed identity or semantics');
         check($module->GetIDForIdent('jazfaktor') === $jazID && GetValue($jazID) === 2.0, 'JAZ changed identity or semantics');
-        check(GetValue($module->GetIDForIdent('Waermeleistung')) === 10.0, 'Graphic heat output missing without ID selection');
+        check($module->GetIDForIdent('Waermeleistung') === false, 'Unselected graphic value created a variable');
+        check(invoke($module,'BuildVisualizationData')['heatingPumpPower']['value'] === 10.0,'Internal SHI power rescaled or missing');
     });
 };
 $tests['SHI rejects malformed MBAP and PDU frames atomically'] = static function (): void {
@@ -276,7 +277,8 @@ $tests['SHI unsupported selections survive while independent graphic points are 
         $id = $module->GetIDForIdent('Heisgastemperatur');
         $module->Update();
         check($module->GetIDForIdent('Heisgastemperatur') === $id && $module->status === 102, 'Unsupported value lost or graphic scan failed');
-        check($module->GetIDForIdent('Aussentemperatur') !== false, 'Graphic values depend on ID selection');
+        check($module->GetIDForIdent('Aussentemperatur') === false, 'Graphic created an unselected variable');
+        check(invoke($module,'BuildVisualizationData')['outdoorTemperature']['value']===0.0,'Internal SHI values depend on ID selection');
         $form = fields(json_decode($module->GetConfigurationForm(), true));
         $rows = array_column($form['IDListe']['values'], null, 'id');
         check($rows[14]['enabled'] && $rows[300]['enabled'], 'Selections lost');
@@ -293,6 +295,17 @@ $tests['invalid SHI settings fail before network activity'] = static function ()
             check($module->status === 202 && count($module->errors) === 1, 'Configuration error not reported');
         });
     }
+};
+
+$tests['empty SHI ID list updates internal measurements without creating variables'] = static function (): void {
+    withModbus([], static function(Luxtronik $module):void {
+        $module->Update();
+        $data=invoke($module,'BuildVisualizationData');
+        check($module->properties['IDListe']==='[]','ID list changed');
+        check(isset($data['mixerActual1'],$data['inputPower']),'Internal SHI measurements missing');
+        check($data['mixerActual1']['variableId']===0 && $data['inputPower']['variableId']===0,'SHI cache depends on objects');
+        check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Unselected SHI measurements created variables');
+    });
 };
 
 $tests['footer selection enables a supported SHI point without any write'] = static function (): void {

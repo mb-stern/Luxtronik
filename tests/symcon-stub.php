@@ -29,9 +29,16 @@ function IPS_GetKernelRunlevel(): int { return KR_READY; }
 function IPS_GetName(int $id): string { return $GLOBALS['testVariables'][$id]['name'] ?? ''; }
 function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '']; }
 function IPS_GetParent(int $id): int { return $GLOBALS['testVariables'][$id]['instance'] ?? 0; }
+function IPS_GetVariablePresentation(int $id): array { return $GLOBALS['testVariables'][$id]['presentation'] ?? []; }
 function GetValueFormatted(int $id): string {
     $variable = $GLOBALS['testVariables'][$id];
     $profile = $GLOBALS['testProfiles'][$variable['profile']] ?? [];
+    if (isset($variable['formatted'])) return $variable['formatted'];
+    $presentation = IPS_GetVariablePresentation($id);
+    $options = isset($presentation['OPTIONS']) ? json_decode($presentation['OPTIONS'],true) : ($profile['Associations'] ?? []);
+    foreach (is_array($options) ? $options : [] as $option) {
+        if ((string)$option['Value'] === (string)$variable['value']) return (string)($option['Caption'] ?? $option['Name']);
+    }
     return $variable['formatted'] ?? (string)$variable['value'] . ($profile['Suffix'] ?? '');
 }
 

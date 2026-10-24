@@ -1252,14 +1252,13 @@ class Luxtronik extends IPSModuleStrict
             }
         }
 
-        // The integrated graphic owns its core measurements independently of IDListe.
-        $enabledIds += $this->GetVisualizationRequiredPointIDs();
-
         $daten_raw = $this->ReadData(3004);
         if ($daten_raw === null) {
             return;
         }
         $JavaWerte = count($daten_raw);
+        $graphicPoints = $this->GetVisualizationRequiredPointIDs();
+        $graphicValues = [];
 
         // Init für JAZ (falls 151/152 nicht vorkommen)
         $value_out_heizung = 0;
@@ -1267,6 +1266,11 @@ class Luxtronik extends IPSModuleStrict
 
         // Alle Werte einmal durchgehen
         for ($i = 0; $i < $JavaWerte; ++$i) {
+
+            // Cache measurements for HTML-SDK without registering Symcon objects.
+            if (isset($graphicPoints[$i])) {
+                $graphicValues[$i] = $this->convertValueBasedOnID($daten_raw[$i], $i);
+            }
 
             // --- Werte erfassen für COP/JAZ unabhängig von Auswahl ---
             if ($i == 257) { // Wärmeleistung an Funktion senden zur Berechnung des COP
@@ -1306,6 +1310,8 @@ class Luxtronik extends IPSModuleStrict
                 $this->DeleteVariableIfExists($java_dataset[$i] ?? ('ID_' . $i));
             }
         }
+
+        $this->StoreVisualizationPoints($graphicValues);
 
         // JAZ berechnen
         $value_out = $value_out_heizung + $value_out_warmwasser;

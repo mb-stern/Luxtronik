@@ -108,8 +108,9 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration und Fußzeile per Checkbox.
 - Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
 - Drei Heizkreisplätze; Mischerdaten automatisch, Mischer- und Warmwasserventil nahe der Wärmepumpe.
-- Grafik unabhängig von der ID-Liste; Durchfluss am WP-Ausgang und RL-Soll beim Heizkreis.
+- Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss am WP-Ausgang und RL-Soll beim Heizkreis.
 - Warmwasser mit Ist/Soll und summierter Heizstableistung samt gelbem Blitz; Heizstäbe über konfigurierbare Schalter bedienbar.
+- Assoziationen statt Boolean-Zwang; Puffer/Solar/Zirkulation optional, Solarziel wählbar, HUP-Ansteuerung und optionale Drehzahl.
 
 Weitere Änderungen werden unter 5.0 ergänzt. Versions- und Buildnummer werden
 nicht für einzelne Änderungen erhöht, sondern erst für eine vereinbarte Veröffentlichung.

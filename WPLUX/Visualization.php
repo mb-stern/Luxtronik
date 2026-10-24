@@ -3,7 +3,8 @@
 /**
  * Heat-pump visualization adapted from mb-stern/Waermepumpe, development,
  * aae3f06c0b8e148b5671386797368771bcd3e8e1. Source license: heat-pump/LICENSE.
- * The graphic reads already converted instance values; it does not query devices.
+ * The graphic reads converted protocol values from an internal buffer and optional
+ * external variables. It does not create measurement objects or query devices.
  */
 trait LuxtronikVisualization
 {
@@ -50,6 +51,9 @@ trait LuxtronikVisualization
         'ComputedCOP' => ['copfaktor'], 'ComputedJAZ' => ['jazfaktor'],
         'InputPower' => ['Leistungsaufnahme'],
         'HeatingFlow' => ['Waermemengenzaehler_Durchfluss'],
+        'BufferReturnTemperature' => ['Ruecklauftemperatur_im_Trennspeicher'],
+        'SolarStorageTemperature' => ['Fuehler_Solarspeicher'],
+        'ThermalSolarPump' => ['Ausgang_Solarladepumpe'],
         'DHWSetpoint' => ['Warmwasser_Soll_Temperatur', 'Anpassung_WW']
     ];
 
@@ -64,6 +68,7 @@ trait LuxtronikVisualization
         $this->RegisterPropertyBoolean('VisualizationMixedCircuit3', false);
         $this->RegisterPropertyInteger('HeatPumpReturnTemperature', 0);
         $this->RegisterPropertyInteger('VisualizationInputPower', 0);
+        $this->RegisterPropertyInteger('VisualizationHeatingPumpSpeed', 0);
         for ($i = 1; $i <= 3; ++$i) {
             $this->RegisterPropertyBoolean('VisualizationHeatingCircuit' . $i, $i === 1);
             $this->RegisterPropertyInteger('VisualizationRoomVariable' . $i, 0);
@@ -72,6 +77,8 @@ trait LuxtronikVisualization
             $this->RegisterPropertyInteger('VisualizationHeaterSwitch' . $i, 0);
         }
         $this->RegisterPropertyBoolean('VisualizationRoomIcons', true);
+        $this->RegisterPropertyBoolean('VisualizationCirculation', false);
+        $this->RegisterPropertyString('VisualizationSolarTarget', 'hotwater');
 
         // Zentrale Status- und Steuerungszuordnung
         $this->RegisterPropertyInteger('OperatingStatusVariable', 0);
@@ -710,10 +717,10 @@ HTML;
         $config['mixers'] = [];
         for ($i = 1; $i <= 3; ++$i) {
             // Mixer 1 is always shown. Further mixer telemetry appears when available.
-            if ($i > 1 && $this->GetVisualizationVariableID('MixerActual' . $i) === 0
-                && $this->GetVisualizationVariableID('MixerTarget' . $i) === 0
-                && $this->GetVisualizationVariableID('MixerOpen' . $i) === 0
-                && $this->GetVisualizationVariableID('MixerClose' . $i) === 0) continue;
+            if ($i > 1 && $this->GetVisualizationPointData('MixerActual' . $i) === null
+                && $this->GetVisualizationPointData('MixerTarget' . $i) === null
+                && $this->GetVisualizationPointData('MixerOpen' . $i) === null
+                && $this->GetVisualizationPointData('MixerClose' . $i) === null) continue;
             $config['mixers'][] = ['number' => $i,
                 'actual' => $this->DataKey('MixerActual' . $i, 'mixerActual' . $i),
                 'target' => $this->DataKey('MixerTarget' . $i, 'mixerTarget' . $i),
@@ -722,7 +729,12 @@ HTML;
         }
         $config['roomTemperatures'] = $this->GetVisualizationRoomSources();
         $config['inputPower'] = $this->DataKey('InputPower', 'inputPower');
+        $config['circulation'] = $this->ReadPropertyBoolean('VisualizationCirculation');
         $config['heatingFlow'] = $this->DataKey('HeatingFlow', 'heatingFlow');
+        $config['heatingPumpSpeed'] = $this->DataKey('VisualizationHeatingPumpSpeed', 'heatingPumpSpeed');
+        $config['bufferReturnTemperature'] = $this->DataKey('BufferReturnTemperature', 'bufferReturnTemperature');
+        $config['solarStorageTemperature'] = $this->DataKey('SolarStorageTemperature', 'solarStorageTemperature');
+        $config['solarTarget'] = $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer' ? 'buffer' : 'hotwater';
         $config['dhwSetpoint'] = $this->DataKey('DHWSetpoint', 'dHWSetpoint');
         $config['computedCOP'] = $this->DataKey('ComputedCOP', 'computedCOP');
         $config['computedJAZ'] = $this->DataKey('ComputedJAZ', 'computedJAZ');
@@ -750,6 +762,7 @@ HTML;
             'fanSpeed' => ['FanSpeed', false],
             'compressorRunning' => ['CompressorRunning', true],
             'heatingPumpPower' => ['HeatingPumpPower', false],
+            'heatingPumpSpeed' => ['VisualizationHeatingPumpSpeed', false],
             'circulatingPumpRunning' => ['CirculatingPumpRunning', true],
             'storageChargingPumpRunning' => ['StorageChargingPumpRunning', true],
             'tankTempHPUp' => ['TankTempHPUp', false],
@@ -816,7 +829,7 @@ HTML;
         }
 
         if ($this->HasOperatingStatus()) {
-            $statusValue = GetValue($this->GetVisualizationVariableID('OperatingStatusVariable'));
+            $statusValue = $this->GetVisualizationPointData('OperatingStatusVariable')['value'];
 
             $data['heatingPumpHeatingMode'] = $this->BinaryData(
                 $this->ValueMatchesCsv($statusValue, $this->ReadPropertyString('OperatingStatusHeatingValues'))
@@ -832,23 +845,21 @@ HTML;
             );
         }
 
-        $fanSpeedId = $this->GetVisualizationVariableID('FanSpeed');
-        if ($fanSpeedId > 0 && IPS_VariableExists($fanSpeedId)) {
-            $fanValue = GetValue($fanSpeedId);
-            $data['hpRunning'] = $this->BinaryData(
-                is_numeric($fanValue)
-                    ? (float) $fanValue > 0.0
-                    : $this->NormalizeBinaryValue($fanValue)
-            );
+        $fan = $this->GetVisualizationPointData('FanSpeed');
+        if ($fan !== null) {
+            $fanValue = $fan['value'];
+            $data['hpRunning'] = $this->BinaryData(is_numeric($fanValue)
+                ? (float)$fanValue > 0.0 : $this->NormalizeBinaryValue($fanValue));
         }
 
         foreach (self::VISUALIZATION_EXTRA_IDENT_MAP as $property => $idents) {
             $key = lcfirst($property);
-            $this->AddVariableData($data, $key, $property, str_starts_with($property, 'MixerOpen') || str_starts_with($property, 'MixerClose'));
+            $this->AddVariableData($data, $key, $property, str_starts_with($property, 'MixerOpen') || str_starts_with($property, 'MixerClose') || $property === 'ThermalSolarPump');
         }
-        $input = $this->GetVisualizationVariableID('InputPower');
-        if ($input > 0) {
-            $power = $this->VisualizationPowerData($input, $input === $this->ReadPropertyInteger('kwin') ? 'kW' : 'W');
+        $input = $this->GetVisualizationPointData('InputPower');
+        if ($input !== null) {
+            $power = $this->VisualizationPowerReading($input,
+                $input['variableId'] > 0 && $input['variableId'] === $this->ReadPropertyInteger('kwin') ? 'kW' : 'W');
             if ($power !== null) $data['inputPower'] = $power;
             else unset($data['inputPower']);
         }
@@ -884,22 +895,15 @@ HTML;
         string $property,
         bool $binary
     ): void {
-        $variableId = $this->GetVisualizationVariableID($property);
-
-        if ($variableId <= 0 || !IPS_VariableExists($variableId)) {
-            return;
+        $reading = $this->GetVisualizationPointData($property);
+        if ($reading === null) return;
+        $reading['binary'] = $binary;
+        if ($binary) {
+            $reading['value'] = $this->NormalizeBinaryValue($reading['value']);
+            $reading['formatted'] = '';
+            $reading['unit'] = '';
         }
-
-        $value = GetValue($variableId);
-
-        $data[$key] = [
-            'variableId'=> $variableId,
-            'ident'     => (string) (IPS_GetObject($variableId)['ObjectIdent'] ?? ''),
-            'value'     => $binary ? $this->NormalizeBinaryValue($value) : $value,
-            'formatted' => $binary ? '' : GetValueFormatted($variableId),
-            'unit'      => $binary ? '' : $this->GetVariableUnit($variableId),
-            'binary'    => $binary
-        ];
+        $data[$key] = $reading;
     }
 
     private function BinaryData(bool $value): array
@@ -913,9 +917,7 @@ HTML;
 
     private function DataKey(string $property, string $key): string
     {
-        $variableId = $this->GetVisualizationVariableID($property);
-
-        return $variableId > 0 && IPS_VariableExists($variableId) ? $key : '';
+        return $this->GetVisualizationPointData($property) !== null ? $key : '';
     }
 
     private function DataKeyWithFallback(
@@ -931,8 +933,7 @@ HTML;
 
     private function HasOperatingStatus(): bool
     {
-        $variableId = $this->GetVisualizationVariableID('OperatingStatusVariable');
-        return $variableId > 0 && IPS_VariableExists($variableId);
+        return $this->GetVisualizationPointData('OperatingStatusVariable') !== null;
     }
 
     private function ValueMatchesCsv(mixed $value, string $csv): bool
@@ -961,9 +962,7 @@ HTML;
         $operatingStatusValue = null;
 
         if ($hasOperatingStatus) {
-            $operatingStatusValue = GetValue(
-                $this->GetVisualizationVariableID('OperatingStatusVariable')
-            );
+            $operatingStatusValue = $this->GetVisualizationPointData('OperatingStatusVariable')['value'];
         }
 
         return [
@@ -999,9 +998,7 @@ HTML;
         string $statusValuesProperty
     ): bool {
         if ($this->HasOperatingStatus()) {
-            $status = GetValue(
-                $this->GetVisualizationVariableID('OperatingStatusVariable')
-            );
+            $status = $this->GetVisualizationPointData('OperatingStatusVariable')['value'];
 
             return $this->ValueMatchesCsv(
                 $status,
@@ -1009,13 +1006,8 @@ HTML;
             );
         }
 
-        $variableId = $this->GetVisualizationVariableID($directProperty);
-
-        if ($variableId <= 0 || !IPS_VariableExists($variableId)) {
-            return false;
-        }
-
-        return $this->NormalizeBinaryValue(GetValue($variableId));
+        $reading = $this->GetVisualizationPointData($directProperty);
+        return $reading !== null && $this->NormalizeBinaryValue($reading['value']);
     }
 
     private function BuildControlInfo(string $property): array
@@ -1143,6 +1135,8 @@ HTML;
 
     private function GetVariableProfileName(int $variableId): string
     {
+        $presentation = $this->VisualizationPresentation($variableId);
+        if (!empty($presentation['PROFILE'])) return (string)$presentation['PROFILE'];
         $variable = IPS_GetVariable($variableId);
 
         return $variable['VariableCustomProfile'] !== ''
@@ -1197,11 +1191,9 @@ HTML;
 
     private function GetVariableUnit(int $variableId): string
     {
-        $variable = IPS_GetVariable($variableId);
-
-        $profileName = $variable['VariableCustomProfile'] !== ''
-            ? $variable['VariableCustomProfile']
-            : $variable['VariableProfile'];
+        $presentation = $this->VisualizationPresentation($variableId);
+        if (isset($presentation['SUFFIX'])) return trim((string)$presentation['SUFFIX']);
+        $profileName = $this->GetVariableProfileName($variableId);
 
         if ($profileName === '' || !IPS_VariableProfileExists($profileName)) {
             return '';
@@ -2640,21 +2632,29 @@ window.SymconHeatPump = {
             menu.appendChild(title);
             const heaters = Array.isArray(currentControls.heaterSwitches) ? currentControls.heaterSwitches : [];
             heaters.forEach((heater) => {
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.dataset.heater = String(heater.number);
-                button.disabled = !heater.configured;
-                const command = heater.configured ? (heater.currentValue ? 'Ausschalten' : 'Einschalten') : 'Nicht schaltbar';
+                const heading = document.createElement('div');
+                heading.className = 'wp-mode-title';
                 const power = typeof heater.powerWatts === 'number' ? (heater.powerWatts / 1000).toFixed(2) + ' kW' : '—';
-                button.textContent = heater.label + ': ' + command + ' · ' + power;
-                button.addEventListener('click', (clickEvent) => {
-                    clickEvent.preventDefault();
-                    clickEvent.stopPropagation();
-                    if (!heater.configured) return;
-                    requestAction('SetHeaterSwitch', JSON.stringify({number:heater.number, value:!heater.currentValue}));
-                    closeModeMenu();
+                heading.textContent = heater.label + ': ' + (heater.stateLabel || '—') + ' · ' + power;
+                menu.appendChild(heading);
+                const options = Array.isArray(heater.options) && heater.options.length ? heater.options : [{name:'Nicht schaltbar', value:null}];
+                options.forEach((option) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.dataset.heater = String(heater.number);
+                    button.dataset.value = String(option.value);
+                    button.disabled = !heater.configured;
+                    button.textContent = String(option.name);
+                    if (option.value === heater.currentValue) button.classList.add('active');
+                    button.addEventListener('click', (clickEvent) => {
+                        clickEvent.preventDefault();
+                        clickEvent.stopPropagation();
+                        if (!heater.configured) return;
+                        requestAction('SetHeaterSwitch', JSON.stringify({number:heater.number, value:option.value}));
+                        closeModeMenu();
+                    });
+                    menu.appendChild(button);
                 });
-                menu.appendChild(button);
             });
             menu.style.display = 'block';
         };
@@ -5814,7 +5814,7 @@ window.SymconHeatPump = {
             const heaterButton = svg.querySelector('#gHeaterControlButton');
             if (heaterButton) {
                 const onCount = heaterControls.filter((heater) => heater.currentValue === true).length;
-                setText('#textHeaterButtonState', onCount > 0 ? onCount + ' Ein' : heaterControls.some((heater) => heater.currentValue === false) ? 'Aus' : 'Übersicht');
+                setText('#textHeaterButtonState', heaterControls.some((heater) => !heater.boolean) ? 'Übersicht' : onCount > 0 ? onCount + ' Ein' : heaterControls.some((heater) => heater.currentValue === false) ? 'Aus' : 'Übersicht');
                 heaterButton.style.cursor = 'pointer';
                 if (!heaterButton.dataset.bound) {
                     bindTap(heaterButton, openHeaterMenu);
@@ -5920,9 +5920,9 @@ window.SymconHeatPump = {
                 manifoldBody.setAttribute('height', String(95 + (lastCircuit - 1) * 120));
             }
             const manifoldReturnY = useManifold ? 295 + (lastCircuit - 1) * 120 : 440;
-            ['#gBuffer > path.cold:last-child', '#gNoBuffer > path.cold'].forEach((selector) => {
+            [['#pathBufferManifoldReturn', true], ['#gNoBuffer > path.cold', false]].forEach(([selector, buffer]) => {
                 const path = svg.querySelector(selector);
-                if (path) path.setAttribute('d', selector.includes('gBuffer')
+                if (path) path.setAttribute('d', buffer
                     ? 'M1105 ' + manifoldReturnY + (manifoldReturnY === 440 ? 'H1070' : 'H1085V440H1070')
                     : 'M1105 ' + manifoldReturnY + 'H720V835H675');
             });
@@ -5930,7 +5930,14 @@ window.SymconHeatPump = {
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
             show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
             show('#gDHW', previewAll || !!cfg.tankWW);
-            show('#gSolar', previewAll || (!!cfg.tankWW && !!cfg.thermalSolarAvailable));
+            const solarBuffer = cfg.solarTarget === 'buffer';
+            show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? !!cfg.tankHP && heating : !!cfg.tankWW)));
+            const solarPipe = svg.querySelector('#gSolar > path.sol');
+            if (solarPipe) solarPipe.setAttribute('d', solarBuffer
+                ? 'M1064 310H1240V680H1260M1260 820H1230V340H1064'
+                : 'M1064 790H1185V680H1260M1260 820H1185V835H1064');
+            const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
+            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(55 -155)' : '');
 
             // Optionale Pumpen nur dort zeigen, wo sie hydraulisch hingehören.
             show(
@@ -5939,7 +5946,7 @@ window.SymconHeatPump = {
             );
             show(
                 '#gCirculatingPumpVisual',
-                previewAll || (!!cfg.tankWW && !!cfg.circulatingPumpRunning)
+                previewAll || (!!cfg.tankWW && !!cfg.circulation && !!cfg.circulatingPumpRunning)
             );
 
             // Vollansicht bedeutet bewusst: maximale Anlagenkonfiguration.
@@ -6049,28 +6056,44 @@ window.SymconHeatPump = {
             const mixerGroup = group('gMixerReadings', svg.querySelector('#heatPump'));
             const relay = (key) => raw(key) === null || raw(key) === undefined ? '—' : (binary(key) ? 'Ein' : 'Aus');
             const mixerSymbol = (parent, mixer, x, y, radius) => {
-                const symbol = node(parent, 'g', {transform:'translate(' + x + ' ' + y + ')'});
-                node(symbol, 'title', {}, 'Mischer ' + mixer.number + ': Auf ' + relay(mixer.open) + ', Zu ' + relay(mixer.close) + '. Keine Positionsrückmeldung.');
+                const known = raw(mixer.open) !== null && raw(mixer.open) !== undefined && raw(mixer.close) !== null && raw(mixer.close) !== undefined;
+                const state = !known ? 'unknown' : binary(mixer.open) && binary(mixer.close) ? 'conflict'
+                    : binary(mixer.open) ? 'opening' : binary(mixer.close) ? 'closing' : 'stopped';
+                const labels = {unknown:'Status unbekannt',conflict:'Auf und Zu aktiv',opening:'Öffnet',closing:'Schließt',stopped:'Steht'};
+                const symbol = node(parent, 'g', {id:'gMixerValveSymbol' + mixer.number, role:'img',
+                    'aria-label':'Mischer ' + mixer.number + ': ' + labels[state], 'data-state':state,
+                    transform:'translate(' + x + ' ' + y + ')'});
+                node(symbol, 'title', {}, 'Mischer ' + mixer.number + ': ' + labels[state] + '. Auf ' + relay(mixer.open) + ', Zu ' + relay(mixer.close) + '. Keine Positionsrückmeldung.');
                 node(symbol, 'circle', {r:radius, fill:'var(--wp-button)', stroke:'var(--wp-icon)', 'stroke-width':2});
-                node(symbol, 'path', {d:'M-5-10L0 0L5-10Z M-5 10L0 0L5 10Z M-10-5L0 0L-10 5Z',
-                    fill:'none', stroke:'var(--wp-icon)', 'stroke-width':1.5});
+                node(symbol, 'path', {d:'M-6-14L0-5L6-14Z M-6 14L0 5L6 14Z M-14-6L-5 0L-14 6Z',
+                    fill:'var(--wp-icon)', stroke:'var(--wp-icon)', 'stroke-width':1});
+                const moving = state === 'opening' || state === 'closing';
+                node(symbol, 'circle', {r:radius+5, fill:'none', stroke:state === 'conflict' ? '#f04444' : '#ffc51b',
+                    'stroke-width':3, 'stroke-dasharray':moving ? '12 12' : state === 'conflict' ? 'none' : '0 160',
+                    class:moving ? 'wp-mixer-motion' : '', style:state === 'closing' ? 'animation-direction:reverse' : ''});
+                node(symbol, 'text', {x:0,y:5,'text-anchor':'middle',style:'font-size:15px;font-weight:bold'},
+                    {opening:'+',closing:'−',stopped:'•',unknown:'?',conflict:'!'}[state]);
                 return symbol;
             };
+            let mixerStyle = svg.querySelector('#mixerMotionStyle');
+            if (!mixerStyle) {
+                mixerStyle = node(svg, 'style', {id:'mixerMotionStyle'});
+                mixerStyle.textContent = '@keyframes mixerMotorMotion{to{transform:rotate(360deg)}}.wp-mixer-motion{transform-box:fill-box;transform-origin:center;animation:mixerMotorMotion 2s linear infinite}@media(prefers-reduced-motion:reduce){.wp-mixer-motion{animation:none}}';
+            }
             mixerGroup.remove();
             const mixerValve = group('gPrimaryMixerValve', svg.querySelector('#main'));
             const mixerReadings = group('gMixerValveReadings', svg.querySelector('#main'));
             if (mixers.length && heating) {
-                node(mixerValve, 'path', {class:'cold', d:'M720 565H750V524'});
-                mixerSymbol(mixerValve, mixers[0], 750, 510, 14);
+                node(mixerValve, 'path', {class:'cold', d:'M720 510H732'});
+                mixerSymbol(mixerValve, mixers[0], 750, 510, 18);
                 mixers.forEach((mixer, index) => {
                     const readings = node(mixerReadings, 'g', {transform:'translate(773 ' + (470 + index * 55) + ')'});
                     node(readings, 'text', {class:'sm', x:0, y:0, style:'font-size:13px'}, 'Mischer ' + mixer.number);
                     fittedText(readings, {id:'textMixerActual' + mixer.number, class:'sm', x:0, y:15, style:'font-size:13px'},
-                        'Ist ' + (formatted(mixer.actual) || '—'), 118);
+                        'Ist ' + (formatted(mixer.actual) || '—'), mixer.number === 1 ? 118 : 78);
                     fittedText(readings, {id:'textMixerTarget' + mixer.number, class:'sm', x:0, y:30, style:'font-size:13px'},
-                        'Soll ' + (formatted(mixer.target) || '—'), 118);
-                    node(readings, 'text', {id:'textMixerOpen' + mixer.number, class:'sm', x:0, y:45, style:'font-size:11px'}, 'Auf: ' + relay(mixer.open));
-                    node(readings, 'text', {id:'textMixerClose' + mixer.number, class:'sm', x:60, y:45, style:'font-size:11px'}, 'Zu: ' + relay(mixer.close));
+                        'Soll ' + (formatted(mixer.target) || '—'), mixer.number === 1 ? 118 : 78);
+                    if (mixer.number > 1) mixerSymbol(mixerReadings, mixer, 872, 480 + index * 55, 12);
                 });
             }
 
@@ -6089,14 +6112,14 @@ window.SymconHeatPump = {
             }
             const efficiency = group('gEfficiency', info);
             [[cfg.computedCOP, 'COP', 365, 480], [cfg.computedJAZ, 'JAZ', 505, 650]].forEach(([key, label, x, right]) => {
-                node(efficiency, 'text', {class:'sm', x, y:248}, label);
+                node(efficiency, 'text', {class:'lb', x, y:248}, label);
                 fittedText(efficiency, {id:'textComputed' + label, class:'md', x:right, y:248,
-                    'text-anchor':'end', style:'font-size:22px'}, formatted(key) || '—', 65);
+                    'text-anchor':'end'}, formatted(key) || '—', 65);
             });
             const inputPower = group('gInputPower', info);
             const inputWatts = data[cfg.inputPower]?.watts;
             const powerText = (watts) => typeof watts === 'number' && Number.isFinite(watts) ? (watts / 1000).toFixed(2) + ' kW' : '—';
-            fittedText(inputPower, {id:'textInputPower', class:'md', x:650, y:385, 'text-anchor':'end', style:'font-size:23px'}, powerText(inputWatts), 100);
+            fittedText(inputPower, {id:'textInputPower', class:'md', x:650, y:385, 'text-anchor':'end'}, powerText(inputWatts), 100);
             const heatOutput = svg.querySelector('#textPowerValue');
             if (heatOutput) {
                 heatOutput.setAttribute('x', '650');
@@ -6145,6 +6168,16 @@ window.SymconHeatPump = {
                 ['#textTankTempHPMiddle', cfg.tankTempHPMiddle, 158],
                 ['#textTankTempHPDown', cfg.tankTempHPDown, 232]
             ]);
+            const bufferReading = group('gBufferReturnReading', svg.querySelector('#gBuffer'));
+            if (formatted(cfg.bufferReturnTemperature)) {
+                fittedText(bufferReading, {id:'textBufferReturnTemperature', class:'sm', x:985, y:500,
+                    'text-anchor':'middle', style:'font-size:16px'}, 'RL extern ' + formatted(cfg.bufferReturnTemperature), 180);
+            }
+            const solarReading = group('gSolarStorageReading', svg.querySelector('#gSolar'));
+            if (formatted(cfg.solarStorageTemperature)) {
+                fittedText(solarReading, {id:'textSolarStorageTemperature', class:'sm', x:1295, y:900,
+                    style:'font-size:14px'}, 'Speicher ' + formatted(cfg.solarStorageTemperature), 215);
+            }
 
             setText('#textHeatingCircuitName1', cfg.heatingCircuitName1 || 'HK1');
             setText('#textHeatingCircuitName2', cfg.heatingCircuitName2 || 'HK2');
@@ -6184,8 +6217,26 @@ window.SymconHeatPump = {
                 // Unter der Pumpe nur die separat konfigurierte Drehzahl /
                 // den Durchfluss anzeigen. Nicht konfiguriert = leer.
                 const pumpText = pumpValueItem ? formatted(pumpValueItem) : '';
-                setText('#textHeatingPump' + n, pumpText);
+                setText('#textHeatingPump' + n, n === 1 && pumpText ? 'Ansteuerung ' + pumpText + (pumpText.includes('%') ? '' : ' %') : pumpText);
+                const pumpLabel = svg.querySelector('#textHeatingPump' + n);
+                if (pumpLabel) {
+                    pumpLabel.style.fontSize = '14px';
+                    pumpLabel.removeAttribute('textLength');
+                    pumpLabel.removeAttribute('lengthAdjust');
+                    if (pumpLabel.getComputedTextLength() > 150) {
+                        pumpLabel.setAttribute('textLength', '150');
+                        pumpLabel.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+                    }
+                }
             });
+            const pumpSpeedGroup = group('gHeatingPumpSpeed', svg.querySelector('#gHeating'));
+            const pumpSpeed = formatted(cfg.heatingPumpSpeed);
+            if (hk1 && pumpSpeed) {
+                const x = Number(svg.querySelector('#textHeatingPump1')?.getAttribute('x') || 1195);
+                const value = isNaN(Number(pumpSpeed)) ? pumpSpeed : pumpSpeed + ' U/min';
+                fittedText(pumpSpeedGroup, {id:'textHeatingPumpSpeed', class:'sm', x, y:285,
+                    'text-anchor':'middle', style:'font-size:14px'}, 'Drehzahl ' + value, 150);
+            }
 
             setText('#textEvaporatorPressure', formatted(cfg.evaporatorPressure));
             setText('#textEvaporatorTemperature', formatted(cfg.evaporatorTemperature));
@@ -6216,7 +6267,7 @@ window.SymconHeatPump = {
             setText('#textPowerValue', formatted(cfg.heatingPumpPower));
             setText('#textCompressorSpeedValue', formatted(cfg.compressorValue));
             setText('#textThermalSolarPanelTemp', formatted(cfg.thermalSolarPanelTemp));
-            setText('#textThermalSolarPumpSpeed', formatted(cfg.thermalSolarPumpSpeed));
+            setText('#textThermalSolarPumpSpeed', formatted(cfg.thermalSolarPumpSpeed) || (cfg.thermalSolarPump ? relay(cfg.thermalSolarPump) : '—'));
 
             // Wärmepumpen-Status: ausschließlich der formatierte Profilwert
             // der konfigurierten Betriebsstatusvariable. Keine erfundenen Texte.
@@ -6468,7 +6519,9 @@ window.SymconHeatPump = {
             const heatingActive = [cfg.heatingCircuitPumpRunning,
                 cfg.heatingCircuitPumpRunning2, cfg.heatingCircuitPumpRunning3].some(binary);
             const chargingActive = binary(cfg.storageChargingPumpRunning);
-            const solarActive = Number(raw(cfg.thermalSolarPumpSpeed)) > 0;
+            const solarActive = Number(raw(cfg.thermalSolarPumpSpeed)) > 0 || binary(cfg.thermalSolarPump);
+            const solarRotor = svg.querySelector('#solarPumpRotor');
+            if (solarRotor) solarRotor.style.setProperty('animation', solarActive ? 'symcon-modern-rotate 1.4s linear infinite' : 'none', 'important');
             const flows = [
                 ['#gRefrigerantCircuit path.hot, #gRefrigerantCircuit path.cold', compressorActive],
                 ['#main path.hot, #main path.cold', compressorActive],
@@ -7001,12 +7054,19 @@ window.SymconHeatPump = {
 SYMC0N_HEATPUMP_JAVASCRIPT;
     }
 
+    private function GetVisualizationIdents(string $property): array
+    {
+        if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
+            && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return [];
+        if ($property === 'HeatPumpReturnTemperature') return ['Ruecklauftemperatur_Heizkreis'];
+        return self::VISUALIZATION_EXTRA_IDENT_MAP[$property] ?? self::LUXTRONIK_IDENT_MAP[$property] ?? [];
+    }
+
     private function GetVisualizationVariableID(string $property): int
     {
-        $idents = self::VISUALIZATION_EXTRA_IDENT_MAP[$property] ?? self::LUXTRONIK_IDENT_MAP[$property] ?? [];
-        if ($property === 'HeatPumpReturnTemperature') $idents = ['Ruecklauftemperatur_Heizkreis'];
         if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return 0;
+        $idents = $this->GetVisualizationIdents($property);
         foreach ($idents as $ident) {
             $id = @$this->GetIDForIdent($ident);
             if ($id !== false && IPS_VariableExists($id)) {
@@ -7020,7 +7080,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             }
             return 0;
         }
-        if (isset(self::VISUALIZATION_EXTRA_IDENT_MAP[$property])) return 0;
+        if (isset(self::VISUALIZATION_EXTRA_IDENT_MAP[$property]) && $property !== 'ThermalSolarPump') return 0;
         $configured = $this->ReadPropertyInteger($property);
         return $configured > 0 && IPS_VariableExists($configured) ? $configured : 0;
     }
@@ -7070,6 +7130,46 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             && (int)($variable['VariableCustomAction'] ?: $variable['VariableAction']) > 0;
     }
 
+    private function VisualizationPresentation(int $id): array
+    {
+        return function_exists('IPS_GetVariablePresentation') ? IPS_GetVariablePresentation($id) : [];
+    }
+
+    /** Supports modern OPTIONS and legacy profile associations for every scalar type. */
+    private function VisualizationAssociations(int $id): array
+    {
+        $type = (int)IPS_GetVariable($id)['VariableType'];
+        $presentation = $this->VisualizationPresentation($id);
+        $rows = [];
+        if (isset($presentation['OPTIONS'])) {
+            $rows = is_string($presentation['OPTIONS']) ? json_decode($presentation['OPTIONS'], true) : $presentation['OPTIONS'];
+            $rows = is_array($rows) ? $rows : [];
+        } else {
+            $name = $this->GetVariableProfileName($id);
+            if ($name !== '' && IPS_VariableProfileExists($name)) $rows = IPS_GetVariableProfile($name)['Associations'] ?? [];
+        }
+        $options = [];
+        foreach ($rows as $row) {
+            if (!is_array($row) || !array_key_exists('Value', $row)) continue;
+            $value = $row['Value'];
+            $valid = match ($type) {
+                0 => is_bool($value) || (is_numeric($value) && in_array((float)$value, [0.0, 1.0], true)),
+                1 => is_int($value) || (is_numeric($value) && is_finite((float)$value) && floor((float)$value) === (float)$value
+                    && (float)$value > PHP_INT_MIN && (float)$value < PHP_INT_MAX),
+                2 => !is_bool($value) && is_numeric($value) && is_finite((float)$value),
+                3 => is_string($value) || is_numeric($value), default => false
+            };
+            if (!$valid) continue;
+            $options[] = ['value' => $this->CastValueForVariableType($value, $type),
+                'name' => (string)($row['Caption'] ?? $row['Name'] ?? $value),
+                'icon' => (string)(array_key_exists('IconValue', $row) ? (!empty($row['IconActive']) ? $row['IconValue'] : '') : ($row['Icon'] ?? ''))];
+        }
+        if ($options === [] && $type === VARIABLETYPE_BOOLEAN && $rows === []) {
+            $options = [['value'=>false,'name'=>'Aus'], ['value'=>true,'name'=>'Ein']];
+        }
+        return $options;
+    }
+
     private function BuildVisualizationHeaters(): array
     {
         $heaters = [];
@@ -7079,12 +7179,16 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             if ($switchID <= 0 && $powerID <= 0) continue;
             $exists = $switchID > 0 && IPS_VariableExists($switchID);
             $variable = $exists ? IPS_GetVariable($switchID) : [];
-            $boolean = $exists && (int)$variable['VariableType'] === VARIABLETYPE_BOOLEAN;
+            $type = $exists ? (int)$variable['VariableType'] : -1;
+            $options = $exists ? $this->VisualizationAssociations($switchID) : [];
+            $current = $exists ? GetValue($switchID) : null;
+            $label = $exists ? GetValueFormatted($switchID) : '';
+            foreach ($options as $option) if ($current === $option['value']) { $label = $option['name']; break; }
             $action = (int)($variable['VariableCustomAction'] ?? 0) ?: (int)($variable['VariableAction'] ?? 0);
             $power = $powerID > 0 ? $this->VisualizationPowerData($powerID, 'W') : null;
             $heaters[] = ['number' => $i, 'label' => 'Heizstab ' . $i, 'variableId' => $exists ? $switchID : 0,
-                'configured' => $boolean && $action > 1 && $action !== $this->InstanceID && IPS_GetParent($switchID) !== $this->InstanceID && $this->ReadPropertyBoolean('InstanceStatus'),
-                'currentValue' => $boolean ? (bool)GetValue($switchID) : null,
+                'configured' => $options !== [] && $action > 1 && $action !== $this->InstanceID && IPS_GetParent($switchID) !== $this->InstanceID && $this->ReadPropertyBoolean('InstanceStatus'),
+                'currentValue' => $current, 'stateLabel' => $label, 'options' => $options, 'type' => $type, 'boolean' => $type === VARIABLETYPE_BOOLEAN,
                 'powerWatts' => $power['watts'] ?? null];
         }
         return $heaters;
@@ -7094,14 +7198,23 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     {
         $payload = is_string($value) ? json_decode($value, true, 512, JSON_THROW_ON_ERROR) : $value;
         if (!is_array($payload) || !isset($payload['number']) || !is_int($payload['number'])
-            || $payload['number'] < 1 || $payload['number'] > 3 || !isset($payload['value']) || !is_bool($payload['value'])) {
+            || $payload['number'] < 1 || $payload['number'] > 3 || !isset($payload['value'])) {
             throw new InvalidArgumentException('Ungültiger Heizstab-Schaltauftrag.');
         }
         foreach ($this->BuildVisualizationHeaters() as $heater) {
             if ($heater['number'] !== $payload['number']) continue;
-            if (!$heater['configured']) throw new RuntimeException('Keine aktive externe Boolean-Schaltaktion für diesen Heizstab.');
+            if (!$heater['configured']) throw new RuntimeException('Keine aktive externe Schaltaktion mit Assoziationen für diesen Heizstab.');
+            $raw = $payload['value'];
+            $validType = match ($heater['type']) {
+                0 => is_bool($raw), 1 => is_int($raw),
+                2 => (is_int($raw) || is_float($raw)) && is_finite((float)$raw), 3 => is_string($raw), default => false
+            };
+            $newValue = $validType ? $this->CastValueForVariableType($raw, $heater['type']) : null;
+            if (!$validType || !in_array($newValue, array_column($heater['options'], 'value'), true)) {
+                throw new InvalidArgumentException('Der Wert ist keine gültige Assoziation dieses Heizstabs.');
+            }
             // Only the configured target is resolved server-side. Never set the variable directly.
-            if (!\RequestAction($heater['variableId'], $payload['value'])) {
+            if (!\RequestAction($heater['variableId'], $newValue)) {
                 throw new RuntimeException('Die Heizstab-Schaltaktion wurde nicht ausgeführt.');
             }
             $this->RefreshVisualization();
@@ -7252,17 +7365,21 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             ['type' => 'RowLayout', 'items' => [
                 ['type' => 'CheckBox', 'name' => 'TankHP', 'caption' => 'Pufferspeicher'],
                 ['type' => 'CheckBox', 'name' => 'TankWW', 'caption' => 'Warmwasserspeicher'],
+                ['type' => 'CheckBox', 'name' => 'VisualizationCirculation', 'caption' => 'Warmwasser-Zirkulation'],
                 ['type' => 'CheckBox', 'name' => 'ThermalSolarAvailable', 'caption' => 'Solarthermie']
             ]],
             ['type' => 'RowLayout', 'items' => array_map(static fn(int $i): array =>
                 ['type' => 'CheckBox', 'name' => 'VisualizationHeatingCircuit' . $i, 'caption' => 'Heizkreis ' . $i], range(1, 3))],
             ['type' => 'Label', 'caption' => 'Mischerdaten stehen beim Ventil. COP/JAZ erscheinen im Infobereich.'],
             $this->VariableSelect('Externe Eingangsleistung (W/kW; optional, sonst bisherige COP-Leistungsquelle)', 'VisualizationInputPower'),
+            $this->VariableSelect('Drehzahl Heizwasserpumpe (optional, U/min)', 'VisualizationHeatingPumpSpeed'),
+            ['type' => 'Select', 'name' => 'VisualizationSolarTarget', 'caption' => 'Solarwärme an',
+                'options' => [['caption'=>'Warmwasserspeicher','value'=>'hotwater'],['caption'=>'Pufferspeicher (Heizunterstützung)','value'=>'buffer']]],
             ['type' => 'ExpansionPanel', 'caption' => 'Heizstäbe', 'items' => [
                 ['type' => 'Label', 'caption' => 'Gemessene Leistungen in W oder kW laut Variablenprofil; ohne Einheit wird W verwendet. Schaltzustände liefern keine Leistung.'],
                 ...array_map(fn(int $i): array => ['type' => 'RowLayout', 'items' => [
                     $this->VariableSelect('Ist-Leistung Heizstab ' . $i, 'HeaterRod' . $i),
-                    $this->VariableSelect('Schalter Heizstab ' . $i . ' (Boolean mit Aktion)', 'VisualizationHeaterSwitch' . $i)
+                    $this->VariableSelect('Schalter Heizstab ' . $i . ' (mit Aktion/Assoziationen)', 'VisualizationHeaterSwitch' . $i)
                 ]], range(1, 3))
             ]],
             ['type' => 'ExpansionPanel', 'caption' => 'Bis zu drei Innentemperaturen', 'items' => $this->VisualizationRoomFields()],
@@ -7286,6 +7403,70 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         return true;
     }
 
+    private function VisualizationSourceKey(): string
+    {
+        $modbus = $this->ReadPropertyString('CommunicationMode') === 'modbus';
+        return json_encode([$modbus ? 'modbus' : 'java', $this->ReadPropertyString('IPAddress'),
+            $this->ReadPropertyInteger($modbus ? 'ModbusPort' : 'Port'), $modbus ? $this->ReadPropertyInteger('ModbusUnitID') : 0], JSON_THROW_ON_ERROR);
+    }
+
+    private function VisualizationCachedPoints(): array
+    {
+        $cache = json_decode($this->GetBuffer('VisualizationPointCache'), true);
+        return is_array($cache) && ($cache['source'] ?? '') === $this->VisualizationSourceKey() ? ($cache['points'] ?? []) : [];
+    }
+
+    /** Receives engineering values, never raw protocol words; does not create objects. */
+    private function StoreVisualizationPoints(array $values, bool $merge = false): void
+    {
+        $points = $merge ? $this->VisualizationCachedPoints() : [];
+        foreach ($values as $id => $value) {
+            $point = self::DATA_POINT_CONFIG[$id] ?? null;
+            if ($point === null) continue;
+            $value = match ($point['type']) {
+                'bool' => $this->NormalizeBinaryValue($value), 'int' => (int)$value,
+                'float' => round((float)$value, (int)$point['decimals']), default => (string)$value
+            };
+            $points[$point['name']] = ['value' => $value, 'id' => $id];
+        }
+        $this->SetBuffer('VisualizationPointCache', json_encode(['source' => $this->VisualizationSourceKey(), 'points' => $points],
+            JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+    }
+
+    private function GetVisualizationPointData(string $property): ?array
+    {
+        if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
+            && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return null;
+        $points = $this->VisualizationCachedPoints();
+        foreach ($this->GetVisualizationIdents($property) as $ident) {
+            if (!isset($points[$ident])) continue;
+            $entry = $points[$ident];
+            $definition = self::DATA_POINT_CONFIG[$entry['id']];
+            $profileName = $definition['profile'];
+            $profile = $profileName !== '' && IPS_VariableProfileExists($profileName) ? IPS_GetVariableProfile($profileName) : [];
+            $unit = trim((string)($profile['Suffix'] ?? match ($profileName) {
+                '~Temperature' => ' °C', '~Watt' => ' W', 'WPLUX.kW' => ' kW', 'WPLUX.lh' => ' l/h', default => ''
+            }));
+            $value = $entry['value'];
+            $formatted = is_bool($value) ? ($value ? 'Ein' : 'Aus') : (string)$value;
+            if (is_numeric($value) && $definition['type'] !== 'string') {
+                $digits = (int)($profile['Digits'] ?? ($definition['type'] === 'float' ? $definition['decimals'] : 0));
+                $formatted = (string)($profile['Prefix'] ?? '') . number_format((float)$value, max(0, min(10, $digits)), '.', '') . ($unit !== '' ? ' ' . $unit : '');
+            }
+            foreach ($profile['Associations'] ?? [] as $association) {
+                if ($this->ValueInList($value, [$association['Value']])) { $formatted = (string)$association['Name']; break; }
+            }
+            $id = @$this->GetIDForIdent($ident);
+            return ['variableId' => $id !== false && IPS_VariableExists($id) ? $id : 0,
+                'ident' => $ident, 'value' => $value, 'formatted' => $formatted, 'unit' => $unit, 'binary' => false];
+        }
+        // Existing own/external assignments remain compatible when no internal reading is available.
+        $id = $this->GetVisualizationVariableID($property);
+        if ($id <= 0 || !IPS_VariableExists($id)) return null;
+        return ['variableId' => $id, 'ident' => (string)(IPS_GetObject($id)['ObjectIdent'] ?? ''),
+            'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
+    }
+
     private function GetVisualizationRequiredPointIDs(): array
     {
         $idents = [];
@@ -7293,6 +7474,9 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             if (preg_match('/^Mixer(?:Actual|Target|Open|Close)([23])$/D', $property, $match)
                 && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[1])) continue;
             if ($property === 'ThermalSolarPanelTemp' && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
+            if (in_array($property, ['SolarStorageTemperature', 'ThermalSolarPump'], true) && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
+            if ($property === 'BufferReturnTemperature' && !$this->ReadPropertyBoolean('TankHP')) continue;
+            if ($property === 'CirculatingPumpRunning' && !$this->ReadPropertyBoolean('VisualizationCirculation')) continue;
             foreach ($candidates as $ident) $idents[$ident] = true;
         }
         $result = [];
@@ -7305,13 +7489,18 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     private function VisualizationPowerData(int $id, string $fallbackUnit): ?array
     {
         if (!IPS_VariableExists($id)) return null;
-        $value = GetValue($id);
+        return $this->VisualizationPowerReading(['variableId' => $id, 'value' => GetValue($id),
+            'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false], $fallbackUnit);
+    }
+
+    private function VisualizationPowerReading(array $reading, string $fallbackUnit): ?array
+    {
+        $value = $reading['value'];
         if (is_bool($value) || !is_numeric($value) || !is_finite((float)$value) || $value < 0) return null;
-        $unit = trim($this->GetVariableUnit($id));
+        $unit = trim($reading['unit']);
         if ($unit === '') $unit = $fallbackUnit;
         if (!in_array(strtolower($unit), ['w', 'kw'], true)) return null;
-        return ['variableId' => $id, 'value' => $value, 'watts' => $value * (strtolower($unit) === 'kw' ? 1000 : 1),
-            'formatted' => GetValueFormatted($id), 'unit' => $unit, 'binary' => false];
+        return array_replace($reading, ['watts' => $value * (strtolower($unit) === 'kw' ? 1000 : 1), 'unit' => $unit]);
     }
 
     private function GetVisualizationRoomSources(): array
@@ -7324,6 +7513,13 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             $icon = '';
             if ($this->ReadPropertyBoolean('VisualizationRoomIcons')) {
                 $icon = (string)(IPS_GetObject($id)['ObjectIcon'] ?? '');
+                if ($icon === '') {
+                    $presentation = $this->VisualizationPresentation($id);
+                    $icon = (string)($presentation['ICON'] ?? '');
+                    foreach ($this->VisualizationAssociations($id) as $option) {
+                        if (GetValue($id) === $option['value'] && !empty($option['icon'])) { $icon = $option['icon']; break; }
+                    }
+                }
                 if ($icon === '') {
                     $profile = $this->GetVariableProfileName($id);
                     if ($profile !== '' && IPS_VariableProfileExists($profile)) $icon = (string)(IPS_GetVariableProfile($profile)['Icon'] ?? '');

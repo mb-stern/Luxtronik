@@ -10,14 +10,19 @@ die Vollansicht.
 
 Die Luxtronik-Instanz in der Kachelvisualisierung mit ihrer individuellen
 Darstellung verwenden. Die internen Messpunkte der Grafik werden bei der normalen
-Aktualisierung unabhängig von der ID-Liste angelegt und aktualisiert. Java nutzt
+Aktualisierung unabhängig von der ID-Liste intern zwischengespeichert. Dafür
+werden keine Symcon-Messwertvariablen angelegt. Java nutzt
 weiterhin eine gemeinsame 3004-Abfrage. SHI liest zusätzlich nur bestätigte
-Input-Register. Die gespeicherte ID-Auswahl wird nicht verändert. Bedienvariablen
+Input-Register. Nur die ID-Liste einschließlich Fußzeilen-Auswahl bestimmt,
+welche Messwertvariablen im Objektbaum angelegt werden. Die gespeicherte Auswahl
+wird nicht verändert. Bedienvariablen
 werden weiterhin über die bisherigen Optionen aktiviert.
 
 Der zusätzliche Bereich **HTML-SDK / Visualisierung** bleibt bewusst schlank:
 
 - Komponenten-Checkboxen für Puffer, Warmwasserspeicher und Solarthermie.
+- Optionale Warmwasser-Zirkulation mit Pumpe, Leitung und Hahn; ihr Zustand
+  stammt intern von `Ausgang_Zirkulationspumpe` (ID 46).
 - Checkboxen für die drei Heizkreisplätze der ursprünglichen Grafik.
 - Mischkreis 1 erscheint standardmäßig mit Ist/Soll und Ventilsymbol nahe der
   Wärmepumpe. Weitere Mischerdaten erscheinen automatisch bei vorhandenen Idents;
@@ -27,7 +32,12 @@ Der zusätzliche Bereich **HTML-SDK / Visualisierung** bleibt bewusst schlank:
   wird das Variablensymbol verwendet, sonst ein Haus. Je Raum sind Name, Icon
   oder beides wählbar; eine zusätzliche Überschrift „Innentemperatur“ entfällt.
 - Unter **Heizstäbe** bis zu drei Ist-Leistungsvariablen (W oder kW laut Profil;
-  ohne Einheit W) und jeweils eine optionale Boolean-Schaltvariable mit Aktion.
+  ohne Einheit W) und jeweils eine optionale Schaltvariable mit Aktion und
+  Assoziationen. Legacy-Profile und moderne Aufzählungen werden unterstützt.
+- Solarwärme wahlweise an Warmwasserspeicher oder Puffer (Heizunterstützung).
+- Ansteuerung der Heizwasserpumpe über ID 183 in Prozent. Eine separat gemessene
+  Drehzahl kann optional als externe Variable in U/min gewählt werden; sie wird
+  nicht aus dem Prozentwert berechnet.
 - Eine optionale externe Eingangsleistung. Vorrang hat `Leistungsaufnahme` (ID 268,
   Watt), danach die externe SDK-Quelle, danach die bisherige COP-Quelle `kwin` (kW).
 - **Drei optionale Fremdvariablen**, jeweils nur Bezeichnung und Variablenauswahl.
@@ -52,10 +62,19 @@ Die separaten Mischerdaten nutzen `Mischkreis_N_Vorlauftemperatur`,
 `Mischkreis_N_Vorlauf_Soll_Temperatur`, `Ausgang_Mischkreis_N_Auf` und
 `Ausgang_Mischkreis_N_Zu` (N = 1–3). Auf/Zu zeigt die Ansteuerung des Motors,
 keine gemessene Ventilposition: beide Ausgänge aus bedeutet keine Bewegung.
-Fehlende Signale erscheinen als „—“. Ist/Soll und Auf/Zu stehen direkt beim Ventil;
+Das Ventilsymbol zeigt Öffnen (+), Schließen (−), Stillstand (•), unbekannten
+Zustand (?) oder widersprüchliche Auf-/Zu-Ansteuerung (!). Der Ring bewegt sich
+nur bei einem aktiven Richtungsbefehl; eine Ventilstellung wird nicht errechnet.
+Ist/Soll stehen direkt beim Ventil;
 der frühere Mischkreis-Kasten entfällt. Für Mischkreis 1 werden die IDs 21, 22, 40
 und 41 automatisch verarbeitet. Für weitere aktivierte Heizkreisplätze werden
 auch die entsprechenden Mischerdaten automatisch eingebunden.
+
+Der Puffer nutzt `Ruecklauftemperatur_im_Trennspeicher` (ID 13) als **RL extern**;
+daraus werden keine drei Speicherfühler abgeleitet. Solarthermie nutzt
+`Fuehler_Solarkollektor` (26), `Fuehler_Solarspeicher` (27) und
+`Ausgang_Solarladepumpe` (52). Die Komponenten-Schalter steuern die Darstellung
+und die interne Datenauswahl. Das Solarziel muss zur tatsächlichen Anlage passen.
 
 **Status, COP und JAZ** erscheinen im oberen Infobereich. COP/JAZ nutzen die eigenen
 Instanzvariablen `copfaktor` und `jazfaktor`, sobald sie vorhanden sind. Die Grafik übernimmt
@@ -79,7 +98,10 @@ werden nur einmal summiert. Bei fehlender oder ungültiger Leistung erscheint �
 Der Button **Heizstäbe** zwischen Heizkorrektur und LUX-Bedienfeld zeigt die
 konfigurierten Heizstäbe mit Ein-/Ausschaltung. Geschaltet wird ausschließlich
 über `RequestAction` der in der Konfiguration ausgewählten externen
-Boolean-Variable mit aktiver Aktion. Die Grafik setzt den Variablenwert nicht
+Variable mit aktiver Aktion. Die Bedienung übernimmt Beschriftungen und
+tatsächliche Assoziationswerte, auch für Integer, Float und String. Eine
+Integer-Auswahl wird nicht auf Boolean oder 0/1 reduziert. Für Boolean ohne
+eigene Assoziationen stehen Ein/Aus zur Verfügung. Die Grafik setzt den Variablenwert nicht
 direkt, sondern wartet auf dessen gemeldeten Zustand. Ohne Schaltaktion bleibt
 der Eintrag lesend. Bei deaktivierter Luxtronik-Instanz wird nicht geschaltet.
 Externe Heizstäbe können auch im SHI-Betrieb bedient werden; dabei werden keine
@@ -153,8 +175,11 @@ Quellmaterials liegt unter `heat-pump/LICENSE`.
 
 Die Java- und SHI-Kommunikation bleibt bestehen. Bestehende Modul-/Bibliotheks-IDs,
 Variablen-Idents sowie die Typen und Standardwerte bisheriger Einstellungen wurden
-erhalten. Messpunkte der Grafik werden automatisch aktiviert; die ID-Liste
-steuert zusätzliche Werte und die Fußzeile.
+erhalten. Messpunkte der Grafik werden intern zwischengespeichert; die ID-Liste
+steuert die im Objektbaum angelegten Messwertvariablen und die Fußzeile. Die
+bisherigen Bedien- und Berechnungsvariablen bleiben durch ihre vorhandenen
+Optionen gesteuert. Der interne Speicher ist an Verbindung und Betriebsart
+gebunden; fehlerhafte Abfragen überschreiben keine vollständigen Messwerte.
 
 ```sh
 php tests/modbus.php

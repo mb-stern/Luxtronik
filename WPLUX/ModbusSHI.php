@@ -85,7 +85,6 @@ trait LuxtronikModbusSHI
         // Use only confirmed SHI mappings for the graphic; never fall back to Java.
         $graphicPoints = array_intersect_key($this->GetVisualizationRequiredPointIDs(), self::SHI_DATA_POINTS);
         foreach ($graphicPoints as $id => $_) {
-            $selected[$id] = true;
             $requested[$id] = self::SHI_DATA_POINTS[$id];
         }
         $unsupported = array_keys(array_diff_key($selected, self::SHI_DATA_POINTS));
@@ -141,6 +140,7 @@ trait LuxtronikModbusSHI
                 $client->close();
             }
         }
+        $this->StoreVisualizationPoints($values, true);
         foreach ($values as $id => $value) {
             if (!isset($selected[$id])) {
                 continue;

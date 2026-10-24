@@ -95,7 +95,7 @@ $tests['visualization settings expose only external additions and layout; footer
         check(!isset($sdkFields[$removed]), 'Obsolete mixer configuration retained');
     }
     $pickers = array_filter($sdkFields, fn($e) => ($e['type'] ?? '') === 'SelectVariable');
-    check(array_keys($pickers) === ['VisualizationInputPower', 'HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3', 'AdditionalValue000', 'AdditionalValue001', 'AdditionalValue002'], 'Unexpected assignment controls beyond heaters, rooms and external values');
+    check(array_keys($pickers) === ['VisualizationInputPower', 'VisualizationHeatingPumpSpeed', 'HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3', 'AdditionalValue000', 'AdditionalValue001', 'AdditionalValue002'], 'Unexpected assignment controls beyond heaters, rooms and external values');
     foreach (['LuxtronikInstanceID', 'ManualConfiguration', 'OperatingStatusVariable', 'OutdoorTemperature', 'CompressorValue', 'ExpansionValveOpening'] as $property) {
         check(!isset($fields[$property]), 'Unwanted assignment UI: ' . $property);
     }
@@ -391,10 +391,12 @@ function mixedCircuitVisualization(): Luxtronik
     return $module;
 }
 
-$tests['empty ID list still supplies core graphic and exact mixer Idents through one Java read'] = static function (): void {
+$tests['empty ID list supplies the whole graphic internally without creating measurement variables'] = static function (): void {
     $values = array_fill(0, 269, 0);
-    foreach ([10=>250, 11=>245, 15=>89, 17=>485, 18=>500, 21=>249, 22=>200, 40=>1, 41=>0, 155=>607, 257=>65, 268=>1500] as $id=>$value) $values[$id]=$value;
-    withServer([[pack('N*',3004,0),frame(3004,$values)], [pack('N*',3004,0),frame(3004,$values)]], static function (Luxtronik $module): void {
+    foreach ([10=>250, 11=>245, 12=>270, 15=>4294967261, 17=>485, 18=>500, 21=>249, 22=>200, 40=>1, 41=>0, 80=>5, 155=>607, 257=>6500, 268=>1500] as $id=>$value) $values[$id]=$value;
+    $updated=$values; $updated[21]=251;
+    withServer([[pack('N*',3004,0),frame(3004,$values)], [pack('N*',3004,0),frame(3004,$updated)]], static function (Luxtronik $module): void {
+        invoke($module,'CreateVariableProfiles');
         $module->Update();
         $payload=visualizationPayload($module);
         check($module->properties['IDListe']==='[]','Automatic readings changed saved selections');
@@ -402,9 +404,18 @@ $tests['empty ID list still supplies core graphic and exact mixer Idents through
         check($payload['data']['mixerOpen1']['value']===true && $payload['data']['mixerClose1']['value']===false,'Native motor signals missing');
         check($payload['data']['inputPower']['watts']==1500 && $payload['data']['dHWSetpoint']['value']===50.0,'Input power or DHW setpoint missing');
         check($payload['data']['heatingFlow']['value']==607,'Heat-meter flow missing');
-        $id=$module->GetIDForIdent('Mischkreis_1_Vorlauftemperatur');
+        check($payload['data']['operatingStatus']['formatted']==='Keine Anforderung','Status requires a variable');
+        check($payload['data']['outdoorTemperature']['value']===-3.5 && $payload['data']['heatingPumpPower']['value']===6.5,'Cache rescaled converted values');
+        foreach ($payload['data'] as $reading) check(($reading['variableId'] ?? 0)===0,'Internal measurement depends on an IPS object');
+        check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Graphic created measurement variables');
+        $GLOBALS['testInternalVisualizationHtml']=$module->GetVisualizationTile();
+        // A variable left by the earlier build is subject to the original deselection rule.
+        visualizationVariable($module,'Mischkreis_1_Vorlauftemperatur',99.0);
         $module->Update();
-        check($module->GetIDForIdent('Mischkreis_1_Vorlauftemperatur')===$id,'Core variable deleted by empty ID list');
+        check($module->GetIDForIdent('Mischkreis_1_Vorlauftemperatur')===false,'Unselected measurement object retained for the graphic');
+        check(end($module->updates)['data']['mixerActual1']['value']===25.1,'Internal live update requires VM_UPDATE');
+        check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Later scan created objects');
+        $GLOBALS['testInternalVisualizationUpdate']=end($module->updates);
         check($payload['config']['instanceFooter']===[],'Automatic points added to footer');
     });
 };
@@ -485,6 +496,81 @@ $tests['heater switching rejects malformed unconfigured disabled own and non-act
     check($GLOBALS['testRequestedActions']===[], 'Rejected action reached external handler');
 };
 
+$tests['integer heater associations preserve arbitrary raw values in legacy and modern presentations'] = static function (): void {
+    foreach ([false,true] as $modern) {
+        $module=new Luxtronik(); $external=new Luxtronik();
+        $profile='HeaterModes';
+        $GLOBALS['testProfiles'][$profile]=['Associations'=>[['Value'=>10.0,'Name'=>'Aus'],['Value'=>20.0,'Name'=>'Automatik'],['Value'=>30.0,'Name'=>'Ein']]];
+        $id=visualizationVariable($external,'Mode',20,$modern ? '' : $profile); $external->EnableAction('Mode');
+        if ($modern) $GLOBALS['testVariables'][$id]['presentation']=['PRESENTATION'=>'{52D9E126-D7D2-2CBB-5E62-4CF7BA7C5D82}',
+            'OPTIONS'=>json_encode([['Value'=>10,'Caption'=>'Aus'],['Value'=>20,'Caption'=>'Automatik'],['Value'=>30,'Caption'=>'Ein']])];
+        $module->properties['VisualizationHeaterSwitch1']=$id;
+        $module->properties['AdditionalValue000']=$id;
+        $control=invoke($module,'BuildControlData')['heaterSwitches'][0];
+        check($control['configured'] && $control['currentValue']===20 && $control['stateLabel']==='Automatik','Integer mode not recognized');
+        check(array_column($control['options'],'value')===[10,20,30],'Association values changed or collapsed to Boolean');
+        check(invoke($module,'BuildVisualizationData')['additionalValue000']['formatted']==='Automatik','Read-only picker lost association label');
+        $GLOBALS['testRequestedActions']=[];
+        $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>30]);
+        check($GLOBALS['testRequestedActions']===[[$id,30]],'Integer action did not use the actual association value');
+        foreach ([true,1,25,'30'] as $invalid) {
+            try { $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>$invalid]); }
+            catch (InvalidArgumentException $expected) { continue; }
+            throw new RuntimeException('Unlisted or incorrectly typed association accepted');
+        }
+        check(count($GLOBALS['testRequestedActions'])===1,'Rejected value reached action');
+    }
+};
+$tests['modern presentation units and Float and String enumerations remain typed'] = static function (): void {
+    $module=new Luxtronik(); $external=new Luxtronik();
+    $power=visualizationVariable($external,'Power',2.5);
+    $GLOBALS['testVariables'][$power]['presentation']=['SUFFIX'=>' kW'];
+    $module->properties['HeaterRod1']=$power;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===2500.0,'Modern power unit ignored');
+    foreach ([[2,0.5,1.5],[3,'off','auto']] as [$type,$initial,$target]) {
+        if ($type===3) { $external->RegisterVariableString('StringMode','String mode'); $id=$external->GetIDForIdent('StringMode'); $GLOBALS['testVariables'][$id]['value']=$initial; }
+        else $id=visualizationVariable($external,'FloatMode',$initial);
+        $GLOBALS['testVariables'][$id]['action']=$external->InstanceID;
+        $GLOBALS['testVariables'][$id]['presentation']=['OPTIONS'=>json_encode([['Value'=>$initial,'Caption'=>'Aus'],['Value'=>$target,'Caption'=>'Automatik']])];
+        $module->properties['VisualizationHeaterSwitch1']=$id;
+        $GLOBALS['testRequestedActions']=[];
+        $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>$target]);
+        check($GLOBALS['testRequestedActions']===[[$id,$target]],'Enum scalar type changed');
+    }
+};
+$tests['buffer solar circulation and pump data are internal and component-controlled'] = static function (): void {
+    $module=new Luxtronik();
+    $module->properties['TankHP']=false; $module->properties['ThermalSolarAvailable']=false; $module->properties['VisualizationCirculation']=false;
+    $points=invoke($module,'GetVisualizationRequiredPointIDs');
+    foreach ([13,26,27,46,52] as $id) check(!isset($points[$id]),'Disabled component requests data');
+    $module->properties['TankHP']=true; $module->properties['ThermalSolarAvailable']=true; $module->properties['VisualizationCirculation']=true;
+    $points=invoke($module,'GetVisualizationRequiredPointIDs');
+    foreach ([13,26,27,46,52] as $id) check(isset($points[$id]),'Enabled component data not requested');
+    invoke($module,'StoreVisualizationPoints',[13=>28.5,26=>65.0,27=>42.0,46=>true,52=>true,183=>31.7]);
+    $data=invoke($module,'BuildVisualizationData');
+    check($data['bufferReturnTemperature']['value']===28.5 && $data['solarStorageTemperature']['value']===42.0,'Storage data rescaled');
+    check($data['thermalSolarPump']['value']===true && $data['circulatingPumpRunning']['value']===true,'Pump state missing');
+    check($data['heatingCircuitPumpValue']['value']===31.7,'HUP control missing');
+    check(!isset($data['heatingPumpSpeed']),'Pump rpm invented from percentage');
+    check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Component values created objects');
+};
+$tests['internal cache is source-bound supports aliases and survives a failed Java scan atomically'] = static function (): void {
+    $module=new Luxtronik();
+    invoke($module,'StoreVisualizationPoints',[231=>50,268=>1500.0]);
+    $data=invoke($module,'BuildVisualizationData');
+    check($data['compressorValue']['ident']==='Verdichterfrequenz' && $data['compressorValue']['variableId']===0,'Internal alias requires a variable');
+    $module->properties['IPAddress']='192.0.2.10';
+    check(!isset(invoke($module,'BuildVisualizationData')['inputPower']),'Readings leaked across devices');
+    $values=array_fill(0,269,0); $values[21]=249;
+    withServer([[pack('N*',3004,0),frame(3004,$values)],[pack('N*',3004,0),pack('N*',3003,0,0)]],static function (Luxtronik $module):void {
+        $module->Update(); $buffer=$module->buffers['VisualizationPointCache'];
+        $module->Update();
+        check($module->buffers['VisualizationPointCache']===$buffer,'Failed scan changed internal values');
+        check(invoke($module,'BuildVisualizationData')['mixerActual1']['value']===24.9,'Last complete measurement lost');
+        check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Cache needs objects');
+    });
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
@@ -496,6 +582,16 @@ if ($failed) exit(1);
 $dir=getenv('WP_TEST_ARTIFACT_DIR');
 if ($dir!==false && $dir!=='') {
     if(!is_dir($dir)) mkdir($dir,0777,true);
+    file_put_contents($dir.'/internal-only.html','<meta charset="utf-8">'.$GLOBALS['testInternalVisualizationHtml']);
+    file_put_contents($dir.'/internal-only-update.json',json_encode($GLOBALS['testInternalVisualizationUpdate']));
+    $components = new Luxtronik();
+    $components->properties['ThermalSolarAvailable']=true;
+    $components->properties['TankHP']=true;
+    $components->properties['VisualizationCirculation']=true;
+    invoke($components,'StoreVisualizationPoints',[10=>35.0,11=>30.0,12=>32.0,13=>28.5,17=>48.5,18=>50.0,21=>30.0,22=>32.0,26=>65.0,27=>42.0,39=>true,40=>true,41=>false,46=>true,52=>true,80=>0,183=>31.7]);
+    $external = new Luxtronik();
+    $components->properties['VisualizationHeatingPumpSpeed']=visualizationVariable($external,'PumpRPM',1450);
+    file_put_contents($dir.'/components.html','<meta charset="utf-8">'.$components->GetVisualizationTile());
     $module=configuredVisualization();
     file_put_contents($dir.'/configured.html','<meta charset="utf-8">'.$module->GetVisualizationTile());
     file_put_contents($dir.'/visualization.html','<meta charset="utf-8">'.(new Luxtronik())->GetVisualizationTile());
