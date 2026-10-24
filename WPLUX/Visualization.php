@@ -3116,14 +3116,18 @@ window.SymconHeatPump = {
 
             // Only the measured DHW temperature belongs in the tank; the setpoint is in the top button.
             const dhwReadings = group('gDHWTemperatures', svg.querySelector('#gDHW'));
-            fittedText(dhwReadings, {id:'textDHWIst', class:'md', x:1055, y:710, 'text-anchor':'end'}, formatted(cfg.tankTempWWMiddle) || '—', 130);
+            fittedText(dhwReadings, {id:'textDHWIst', class:'md', x:982, y:710, 'text-anchor':'middle'}, formatted(cfg.tankTempWWMiddle) || '—', 130);
             const boilerPower = group('gBoilerHeaterPower', svg.querySelector('#gDHW'));
             const total = heaterWatts;
             if (data.heaterRodTotalPower) {
                 const active = typeof total === 'number' && total > 0;
-                node(boilerPower, 'path', {id:'pathBoilerHeatBolt', d:'M945 782L934 804H944L939 824L958 798H948L954 782Z',
-                    fill:'#ffc51b', class:active ? 'wp-boiler-heater-active' : '', opacity:active ? 1 : .35});
-                fittedText(boilerPower, {id:'textBoilerHeaterPower', class:'md', x:1055, y:813, 'text-anchor':'end'}, heaterPowerText, 110);
+                const powerRow = node(boilerPower, 'g', {id:'gBoilerHeaterPowerRow'});
+                node(powerRow, 'path', {id:'pathBoilerHeatBolt', d:'M11 0L0 22H10L5 42L24 16H14L20 0Z',
+                    transform:'translate(0 -29) scale(.8)', fill:'#ffc51b',
+                    class:active ? 'wp-boiler-heater-active' : '', opacity:active ? 1 : .35});
+                fittedText(powerRow, {id:'textBoilerHeaterPower', class:'md', x:27, y:0}, heaterPowerText, 95);
+                const powerBounds = powerRow.getBBox();
+                powerRow.setAttribute('transform', 'translate(' + (982 - powerBounds.x - powerBounds.width / 2) + ' 813)');
                 node(boilerPower,'title',{},heaterPowerDescription);
             }
             let heaterStyle = svg.querySelector('#boilerHeaterStyle');
