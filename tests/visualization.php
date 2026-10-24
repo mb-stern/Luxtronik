@@ -809,102 +809,59 @@ $tests['SHI graphic uses its current internal snapshot and shared numeric contro
     $GLOBALS['testHybridVisualizationMissing']=visualizationPayload($module);
 };
 
-$tests['heater power sums active legacy and modern power associations instead of enum indexes'] = static function (): void {
-    $module=new Luxtronik();$external=new Luxtronik();
-    $GLOBALS['testProfiles']['HeaterStagesPower']=['Type'=>1,'Suffix'=>'','Associations'=>[
-        ['Value'=>0,'Name'=>'Aus'],['Value'=>1,'Name'=>'1.500,0 W'],['Value'=>2,'Name'=>'3 kW']]];
-    $a=visualizationVariable($external,'AssociationPower',1,'HeaterStagesPower');
-    $b=visualizationVariable($external,'ModernAssociationPower',20);
-    $GLOBALS['testVariables'][$b]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'Aus'],['Value'=>20,'Caption'=>'Stufe 2 (2,5 kW)']])];
-    $c=visualizationVariable($external,'MeasuredPower',0.5);
-    $GLOBALS['testVariables'][$c]['presentation']=['SUFFIX'=>"\u{00A0}Kilowatt\u{202F}"];
-    $module->properties['HeaterRod1']=$a;$module->properties['HeaterRod2']=$b;$module->properties['HeaterRod3']=$c;
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===4500.0,'Association labels or units not summed');
-    check(invoke($module,'BuildControlData')['heaterSwitches'][0]['powerWatts']===1500.0,'Menu uses enum index instead of associated power');
-    $module->GetVisualizationTile();
-    $GLOBALS['testVariables'][$a]['value']=2;$module->MessageSink(1,$a,VM_UPDATE,[]);
-    check(end($module->updates)['data']['heaterRodTotalPower']['value']==6000.0,'Live stage power not updated');
-    $GLOBALS['testVariables'][$a]['value']=0;$module->MessageSink(2,$a,VM_UPDATE,[]);
-    check(end($module->updates)['data']['heaterRodTotalPower']['value']==3000.0,'Declared off association not zero');
-    $GLOBALS['testVariables'][$b]['presentation']['OPTIONS']=json_encode([['Value'=>20,'Caption'=>'2000 Watt']]);
-    $module->MessageSink(3,$b,VM_CHANGEPROFILEACTION,[]);
-    check(end($module->updates)['data']['heaterRodTotalPower']['value']==2500.0,'Changed presentation association not refreshed');
-};
-$tests['heater switch power associations work without a meter while commands retain their original typed values'] = static function (): void {
-    $module=new Luxtronik();$external=new Luxtronik();
-    $id=visualizationVariable($external,'PowerSwitch',0);
-    $external->EnableAction('PowerSwitch');
-    $GLOBALS['testVariables'][$id]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'Aus'],['Value'=>2,'Caption'=>'3 kW']])];
-    $module->properties['VisualizationHeaterSwitch1']=$id;
-    $module->properties['VisualizationHeaterOffValue1']='0';$module->properties['VisualizationHeaterOnValue1']='2';
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===0.0,'Declared switch off power unavailable');
-    $GLOBALS['testRequestedActions']=[];
-    $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>2]);
-    check($GLOBALS['testRequestedActions']===[[$id,2]],'Associated watts sent as command value');
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===0.0,'Unreported switch result optimistically used');
-    $module->GetVisualizationTile();$GLOBALS['testVariables'][$id]['value']=2;
-    $module->MessageSink(1,$id,VM_UPDATE,[]);
-    check(end($module->updates)['data']['heaterRodTotalPower']['value']==3000.0,'Reported switch association not used for power');
-    check(end($module->updates)['controls']['heaterSwitches'][0]['powerWatts']==3000.0,'Menu and sum use different power');
-    $GLOBALS['testHeaterAssociationsHtml']=$module->GetVisualizationTile();
-    $GLOBALS['testVariables'][$id]['value']=0;$module->MessageSink(2,$id,VM_UPDATE,[]);
-    $GLOBALS['testHeaterAssociationsUpdate']=visualizationPayload($module);
-    $module->properties['VisualizationHeaterSwitch2']=$id;
-    $GLOBALS['testVariables'][$id]['value']=2;
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===3000.0,'Same switch power counted twice');
-    $meter=visualizationVariable($external,'RealPower',0.0);$GLOBALS['testVariables'][$meter]['presentation']=['SUFFIX'=>' W'];
-    $module->properties['VisualizationHeaterSwitch2']=0;$module->properties['HeaterRod1']=$meter;
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===0.0,'Explicit zero meter overridden by switch association');
-    $GLOBALS['testVariables'][$meter]['value']=-1.0;
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===null,'Invalid explicit meter masked by switch association');
-};
-$tests['power captions support typed associations but do not turn plain states energy or ranges into watts'] = static function (): void {
-    $module=new Luxtronik();$external=new Luxtronik();
-    $switch=visualizationVariable($external,'BareSwitch',1);$module->properties['VisualizationHeaterSwitch1']=$switch;
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===null,'Bare integer switch counted as watts');
-    $bool=visualizationVariable($external,'BooleanPower',true);
-    $GLOBALS['testVariables'][$bool]['presentation']=['OPTIONS'=>json_encode([['Value'=>false,'Caption'=>'0 W'],['Value'=>true,'Caption'=>'1,5 kW']])];
-    $module->properties['VisualizationHeaterSwitch1']=$bool;
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===1500.0,'Explicit boolean power mapping ignored');
-    $external->RegisterVariableString('StringPower','String power');$string=$external->GetIDForIdent('StringPower');
-    $GLOBALS['testVariables'][$string]['value']='boost';$GLOBALS['testVariables'][$string]['presentation']=['SUFFIX'=>' kW','OPTIONS'=>json_encode([['Value'=>'boost','Caption'=>'2,5']])];
-    $module->properties['VisualizationHeaterSwitch1']=$string;
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===2500.0,'Numeric association caption ignores profile unit');
-    foreach (['Ein','Automatik','2 kWh','-3000W','1 kW / 3 kW','0–3 kW','50 %','6 A'] as $caption) {
-        $GLOBALS['testVariables'][$switch]['presentation']=['OPTIONS'=>json_encode([['Value'=>1,'Caption'=>$caption]])];
-        $module->properties['VisualizationHeaterSwitch1']=$switch;
-        check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===null,'Non-power caption interpreted as watts: '.$caption);
+$tests['heater measurements sum W and kW independently of all three switch associations'] = static function (): void {
+    $module=new Luxtronik();$external=new Luxtronik();$meters=[];$switches=[];
+    $GLOBALS['testProfiles']['HeaterMeasuredW']=['Type'=>2,'Suffix'=>' W','Associations'=>[['Value'=>0,'Name'=>'Automatisch']]];
+    for ($n=1;$n<=3;++$n) {
+        $meter=visualizationVariable($external,'Meter'.$n,0.0,$n===2?'HeaterMeasuredW':'');
+        if ($n!==2) $GLOBALS['testVariables'][$meter]['presentation']=['SUFFIX'=>' kW'];
+        $switch=visualizationVariable($external,'Switch'.$n,0);$external->EnableAction('Switch'.$n);
+        $GLOBALS['testVariables'][$switch]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'Automatisch'],['Value'=>2,'Caption'=>'Aktiv']])];
+        $module->properties['HeaterRod'.$n]=$meter;
+        $module->properties['VisualizationHeaterSwitch'.$n]=$switch;
+        $module->properties['VisualizationHeaterOffValue'.$n]='0';$module->properties['VisualizationHeaterOnValue'.$n]='2';
+        $meters[$n]=$meter;$switches[$n]=$switch;
     }
+    $module->GetVisualizationTile();$GLOBALS['testRequestedActions']=[];
+    for ($n=1;$n<=3;++$n) {
+        $module->RequestAction('SetHeaterSwitch',['number'=>$n,'value'=>2]);
+        check(end($GLOBALS['testRequestedActions'])===[$switches[$n],2],'Control raw association changed');
+        foreach (invoke($module,'BuildControlData')['heaterSwitches'] as $heater) check($heater['powerWatts']===0.0,'Command erased power before measurement update');
+        $GLOBALS['testVariables'][$switches[$n]]['value']=2;
+        $GLOBALS['testVariables'][$meters[$n]]['value']=$n===2?1360.0:1.36;
+        $module->MessageSink(1,$meters[$n],VM_UPDATE,[]);
+        $p=visualizationPayload($module);
+        check($p['data']['heaterRodTotalPower']['value']===1360.0,'Measured sum differs from actual one active heater');
+        foreach ($p['controls']['heaterSwitches'] as $heater) check($heater['powerWatts']===($heater['number']===$n?1360.0:0.0),'Switching one heater erased another heater power');
+        if ($n===3) {
+            $GLOBALS['testHeaterAssociationsHtml']=$module->GetVisualizationTile();
+            $GLOBALS['testHeaterZeroHtml']=$GLOBALS['testHeaterAssociationsHtml'];
+        }
+        $GLOBALS['testVariables'][$switches[$n]]['value']=0;$GLOBALS['testVariables'][$meters[$n]]['value']=0.0;
+    }
+    $GLOBALS['testHeaterAssociationsUpdate']=visualizationPayload($module);
+    // A signed standby reading is a real number, not an unavailable meter.
+    $GLOBALS['testVariables'][$meters[2]]['value']=-0.2;
+    $GLOBALS['testVariables'][$meters[3]]['value']=1.36;
+    $p=visualizationPayload($module);
+    check(abs($p['data']['heaterRodTotalPower']['value']-1359.8)<0.000001,'Signed meter value discarded');
+    check($p['controls']['heaterSwitches'][1]['powerWatts']===-0.2,'Standby reading shown as unavailable');
+    $GLOBALS['testHeaterSignedUpdate']=$p;
+    $GLOBALS['testVariables'][$meters[2]]['value']=500.0;
+    $GLOBALS['testVariables'][$meters[1]]['value']=1.0;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===2860.0,'Simultaneous meter powers not summed');
+    $module->properties['HeaterRod1']=$meters[3];
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===1860.0,'Duplicate meter counted twice');
+    // A switch-only heater must not invalidate available meters or contribute a guessed power.
+    $module->properties['HeaterRod1']=0;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===1860.0,'Switch state interpreted as power');
+    $GLOBALS['testVariables'][$meters[2]]['value']=0.0;
+    $GLOBALS['testVariables'][$meters[2]]['presentation']=['SUFFIX'=>' W','OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'999 kW']])];
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===1360.0,'Caption replaced actual numeric reading');
+    unset($GLOBALS['testVariables'][$meters[2]]);
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===null,'Missing selected meter fabricated as zero');
 };
 
-$tests['zero power remains zero with Automatic associations while other heaters contribute measured power'] = static function (): void {
-    foreach ([false,true] as $modern) {
-        $module=new Luxtronik();$external=new Luxtronik();
-        $GLOBALS['testProfiles']['ZeroAutoPower']=['Type'=>1,'Suffix'=>'','Associations'=>[['Value'=>0,'Name'=>'Automatisch']]];
-        foreach ([1,2] as $n) {
-            $id=visualizationVariable($external,'ZeroPower'.$n,0,$modern?'':'ZeroAutoPower');
-            if ($modern) $GLOBALS['testVariables'][$id]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'Automatisch']])];
-            $module->properties['HeaterRod'.$n]=$id;
-        }
-        $third=visualizationVariable($external,'ActivePower',1.38);
-        $GLOBALS['testVariables'][$third]['presentation']=['SUFFIX'=>' kW'];
-        $module->properties['HeaterRod3']=$third;
-        $total=invoke($module,'BuildVisualizationData')['heaterRodTotalPower'];
-        check($total['value']===1380.0 && $total['complete'] && $total['knownCount']===3,'Valid zero association poisons total');
-        $controls=invoke($module,'BuildControlData')['heaterSwitches'];
-        check($controls[0]['powerWatts']===0.0 && $controls[1]['powerWatts']===0.0 && $controls[2]['powerWatts']===1380.0,'Menu differs from summed zero power');
-        $GLOBALS['testHeaterZeroHtml']=$module->GetVisualizationTile();
-        $GLOBALS['testVariables'][$module->properties['HeaterRod1']]['value']=99;
-        $GLOBALS['testVariables'][$module->properties['HeaterRod1']]['presentation']=['SUFFIX'=>' kWh'];
-        $partial=visualizationPayload($module);
-        check($partial['data']['heaterRodTotalPower']['value']===null && $partial['data']['heaterRodTotalPower']['knownWatts']===1380.0,'Unknown source loses known partial power');
-        $GLOBALS['testHeaterPartialUpdate']=$partial;
-    }
-    $module=new Luxtronik();$external=new Luxtronik();
-    $id=visualizationVariable($external,'ZeroStage',0);$module->properties['HeaterRod1']=$id;
-    $GLOBALS['testVariables'][$id]['presentation']=['OPTIONS'=>json_encode([['Value'=>0,'Caption'=>'1.5 kW']])];
-    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===1500.0,'Explicit power association at enum zero ignored');
-};
 $tests['obsolete timer callbacks stop at the first unavailable interface and restore normal warning handling'] = static function (): void {
     $module=new Luxtronik();$GLOBALS['testGlobalLogs']=[];
     $module->interfaceWarning='InstanceInterface is not available';$before=$module->interfaceReads;
@@ -952,7 +909,7 @@ if ($dir!==false && $dir!=='') {
     file_put_contents($dir.'/hybrid-update.json',json_encode($GLOBALS['testHybridVisualizationUpdate']));
     file_put_contents($dir.'/hybrid-missing.json',json_encode($GLOBALS['testHybridVisualizationMissing']));
     file_put_contents($dir.'/heater-zero.html','<meta charset="utf-8">'.$GLOBALS['testHeaterZeroHtml']);
-    file_put_contents($dir.'/heater-partial-update.json',json_encode($GLOBALS['testHeaterPartialUpdate']));
+    file_put_contents($dir.'/heater-signed-update.json',json_encode($GLOBALS['testHeaterSignedUpdate']));
     file_put_contents($dir.'/heater-associations.html','<meta charset="utf-8">'.$GLOBALS['testHeaterAssociationsHtml']);
     file_put_contents($dir.'/heater-associations-update.json',json_encode($GLOBALS['testHeaterAssociationsUpdate']));
     file_put_contents($dir.'/internal-only.html','<meta charset="utf-8">'.$GLOBALS['testInternalVisualizationHtml']);

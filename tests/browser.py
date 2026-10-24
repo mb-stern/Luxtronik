@@ -719,41 +719,32 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert frequency.locator('#textHeatPumpCycle').text_content()=='Lauf-/Standzeit —'
                 frequency.close()
 
-            # Enum indexes stay control values; associated power feeds both heater displays.
+            # Each meter stays independent when another heater is switched.
             for width in [1200,390]:
                 heaters=browser.new_page(viewport={'width':width,'height':850})
                 heaters.goto(f'http://127.0.0.1:{server.server_port}/heater-associations.html')
                 assert heaters.locator('#wp-error').text_content()==''
-                assert heaters.locator('#textHeaterButtonState').text_content()=='3.00 kW'
-                assert heaters.locator('#textBoilerHeaterPower').text_content()=='3.00 kW'
-                assert heaters.locator('#pathBoilerHeatBolt').get_attribute('class')=='wp-boiler-heater-active'
+                for target in ['#textHeaterButtonState','#textBoilerHeaterPower']:
+                    assert heaters.locator(target).text_content()=='1.36 kW'
                 heaters.evaluate('() => {window.testActions=[];window.requestAction=(ident,value)=>window.testActions.push({ident,payload:JSON.parse(value)});}')
                 heaters.locator('#gHeaterControlButton').dispatch_event('click')
-                assert '3.00 kW' in heaters.locator('#wp-mode-menu').text_content()
-                heaters.locator('#wp-mode-menu [data-heater="1"][data-value="0"]').click()
-                assert heaters.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':0}}
-                assert heaters.locator('#textHeaterButtonState').text_content()=='3.00 kW'
-                update=json.loads(Path(artifacts,'heater-associations-update.json').read_text())
-                heaters.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
-                assert heaters.locator('#textHeaterButtonState').text_content()=='0.00 kW'
-                assert heaters.locator('#textBoilerHeaterPower').text_content()=='0.00 kW'
-                assert heaters.locator('#pathBoilerHeatBolt').get_attribute('class')==''
-                heaters.locator('#gHeaterControlButton').dispatch_event('click')
+                titles=heaters.locator('#wp-mode-menu .wp-mode-title').all_text_contents()
+                assert titles[1:]==['Heizstab 1: Automatisch · 0.00 kW','Heizstab 2: Automatisch · 0.00 kW','Heizstab 3: Aktiv · 1.36 kW'],titles
                 heaters.locator('#wp-mode-menu [data-heater="1"][data-value="2"]').click()
                 assert heaters.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':2}}
-                heaters.close()
-
-            # Valid zero meters with Automatic labels contribute zero, not unknown power.
-            for width in [1200,390]:
-                heaters=browser.new_page(viewport={'width':width,'height':850})
-                heaters.goto(f'http://127.0.0.1:{server.server_port}/heater-zero.html')
+                assert heaters.locator('#textHeaterButtonState').text_content()=='1.36 kW'
+                signed=json.loads(Path(artifacts,'heater-signed-update.json').read_text())
+                heaters.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',signed)
                 for target in ['#textHeaterButtonState','#textBoilerHeaterPower']:
-                    assert heaters.locator(target).text_content()=='1.38 kW'
-                partial=json.loads(Path(artifacts,'heater-partial-update.json').read_text())
-                heaters.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',partial)
+                    assert heaters.locator(target).text_content()=='1.36 kW'
+                heaters.locator('#gHeaterControlButton').dispatch_event('click')
+                assert '—' not in heaters.locator('#wp-mode-menu').text_content()
+                assert '≥' not in heaters.locator('#wp-card').text_content()
+                update=json.loads(Path(artifacts,'heater-associations-update.json').read_text())
+                heaters.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
                 for target in ['#textHeaterButtonState','#textBoilerHeaterPower']:
-                    assert heaters.locator(target).text_content()=='≥ 1.38 kW'
-                assert heaters.locator('#pathBoilerHeatBolt').get_attribute('class')=='wp-boiler-heater-active'
+                    assert heaters.locator(target).text_content()=='0.00 kW'
+                assert heaters.locator('#pathBoilerHeatBolt').get_attribute('class')==''
                 heaters.close()
 
             # SHI has its own states, current measurements and shared numeric controls.

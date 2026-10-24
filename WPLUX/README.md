@@ -114,7 +114,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Timer-Aufrufe bei nicht mehr verfügbarer Instanzschnittstelle mit einer Meldung abbrechen.
 - Lauf- oder Standzeit unter dem Wärmepumpenbild aus den Reglerwerten ID 67/73.
 - Einheitliche Mindestschrift wie Verdampfer/Kondensator; Durchflusswert oben am roten Vorlauf, Pumpenwert ohne Zusatztext.
-- Warmwasserspeicher mit Isttemperatur und summierter Heizstableistung aus W/kW-Werten (einschließlich 0) oder aktiven Leistungsassoziationen samt gelbem Blitz; Sollwert nur im oberen Button. Heizstäbe-Button mit Leistung und konfigurierbaren Schaltern.
+- Warmwasserspeicher mit Isttemperatur und summierter Heizstableistung direkt aus den konfigurierten W/kW-Messwerten, unabhängig von Schaltzuständen samt gelbem Blitz; Sollwert nur im oberen Button. Heizstäbe-Button mit Leistung und konfigurierbaren Schaltern.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
 
 Version 4.7 (19.10.2026)

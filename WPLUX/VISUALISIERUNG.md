@@ -127,16 +127,14 @@ Der Warmwasserspeicher zeigt die Isttemperatur (`Warmwasser_Ist_Temperatur`);
 der Sollwert steht ausschließlich im oberen Button. Gespeicherte Zuordnungen
 weiterer Fühler bleiben erhalten. Die Summe der ausgewählten Heizstableistungen
 steht mit einem gelben Blitz im Boiler; bei Leistung über null pulsiert er.
-W/kW-Einheiten und explizite Leistungsassoziationen wie `3 kW` werden ausgewertet.
-Eine gewählte Ist-Leistung von 0 zählt auch mit der Assoziation „Automatisch“
-als 0 W. Ohne separate Ist-Leistung kann eine Leistungsassoziation der
-Schaltvariable dienen; ein bloßes Ein/Aus liefert keine Wattzahl. Doppelt
-ausgewählte Quellen werden nur einmal summiert. Fehlen alle Leistungsangaben,
-erscheint „—“; bei teilweise fehlenden Angaben bleibt die bekannte Teilsumme
-mit `≥` sichtbar.
+Die numerischen Ist-Leistungen werden mit ihrer W/kW-Einheit addiert. Null und
+vorzeichenbehaftete Messwerte bleiben gültig. Schaltzustände und deren
+Assoziationen beeinflussen diese Rechnung nicht. Doppelt ausgewählte Quellen
+werden nur einmal summiert. Ohne gültige konfigurierte Leistungsquelle erscheint
+„—“; eine fehlende ausgewählte Quelle wird nicht als 0 ausgegeben.
 
 Der Button **Heizstäbe** zwischen Heizkorrektur und LUX-Bedienfeld zeigt die
-summierte Ist-Leistung in kW, gegebenenfalls als gekennzeichnete Teilsumme. Er öffnet die
+summierte Ist-Leistung in kW. Er öffnet die
 konfigurierten Heizstäbe mit Ein-/Ausschaltung. Geschaltet wird ausschließlich
 über `RequestAction` der in der Konfiguration ausgewählten externen
 Variable mit aktiver Aktion. Die Bedienung übernimmt Beschriftungen und

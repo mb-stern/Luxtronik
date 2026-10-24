@@ -784,20 +784,17 @@ HTML;
         $total = 0.0;
         $sources = [];
         $complete = true;
-        $knownCount = 0;
         $selected = false;
         for ($i = 1; $i <= 3; ++$i) {
             $id = $this->ReadPropertyInteger('HeaterRod' . $i);
-            if ($id <= 0) $id = $this->ReadPropertyInteger('VisualizationHeaterSwitch' . $i);
             if ($id <= 0 || isset($sources[$id])) continue;
             $selected = true;
             $sources[$id] = true;
             $power = $this->VisualizationHeaterPower($i);
             if ($power === null) $complete = false;
-            else {$total += $power['watts'];++$knownCount;}
+            else $total += $power['watts'];
         }
-        if ($selected) $data['heaterRodTotalPower'] = ['value' => $complete ? $total : null, 'unit' => 'W', 'binary' => false,
-            'complete'=>$complete,'knownWatts'=>$total,'knownCount'=>$knownCount];
+        if ($selected) $data['heaterRodTotalPower'] = ['value' => $complete ? $total : null, 'unit' => 'W', 'binary' => false];
         foreach ($this->GetVisualizationRoomSources() as $entry) {
             $id = $entry['variableId'];
             $data[$entry['key']] = ['variableId' => $id, 'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
@@ -2655,13 +2652,9 @@ window.SymconHeatPump = {
             const controls = currentControls || {};
             const previewAll = cfg.fullConfigurationPreview === true;
             const powerText = (watts) => typeof watts === 'number' && Number.isFinite(watts) ? (watts / 1000).toFixed(2) + ' kW' : '—';
-            const heaterPower = data.heaterRodTotalPower;
-            const partialHeaterPower = heaterPower?.complete === false && heaterPower.knownCount > 0;
-            const heaterWatts = partialHeaterPower ? heaterPower.knownWatts : heaterPower?.value;
-            const heaterPowerText = (partialHeaterPower ? '≥ ' : '') + powerText(heaterWatts);
-            const heaterPowerDescription = partialHeaterPower
-                ? 'Bekannte Teilsumme; für weitere Heizstäbe liegt keine gültige Leistungsangabe vor.'
-                : 'Summe der konfigurierten Heizstableistungen in W/kW und ihrer aktiven Leistungsassoziationen.';
+            const heaterWatts = data.heaterRodTotalPower?.value;
+            const heaterPowerText = powerText(heaterWatts);
+            const heaterPowerDescription = 'Summe der konfigurierten Ist-Leistungsvariablen; W/kW laut Profil.';
             clearTimeout(valveActivityTimer);
             valveActivityTimer = null;
             const valveExpiries = [];
@@ -3796,7 +3789,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     }
 
     /** Supports modern OPTIONS and legacy profile associations for every scalar type. */
-    private function VisualizationAssociations(int $id, bool $booleanFallback = true): array
+    private function VisualizationAssociations(int $id): array
     {
         $type = (int)IPS_GetVariable($id)['VariableType'];
         $presentation = $this->VisualizationPresentation($id);
@@ -3824,7 +3817,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 'name' => (string)($row['Caption'] ?? $row['Name'] ?? $value),
                 'icon' => (string)(array_key_exists('IconValue', $row) ? (!empty($row['IconActive']) ? $row['IconValue'] : '') : ($row['Icon'] ?? ''))];
         }
-        if ($booleanFallback && $options === [] && $type === VARIABLETYPE_BOOLEAN && $rows === []) {
+        if ($options === [] && $type === VARIABLETYPE_BOOLEAN && $rows === []) {
             $options = [['value'=>false,'name'=>'Aus'], ['value'=>true,'name'=>'Ein']];
         }
         return $options;
@@ -4082,7 +4075,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                         ['caption'=>'Mischkreis 2','value'=>2],['caption'=>'Mischkreis 3','value'=>3]]]
             ]],range(1,3)),
             ['type' => 'ExpansionPanel', 'caption' => 'Heizstäbe', 'items' => [
-                ['type' => 'Label', 'caption' => 'Leistungen in W/kW oder aus der aktiven Leistungsassoziation, z.B. 1500 W oder 3 kW. Ohne separate Ist-Leistung wird das Schaltprofil verwendet. Ein/Aus allein legt keine Wattzahl fest.'],
+                ['type' => 'Label', 'caption' => 'Ist-Leistungsvariablen werden mit ihrer Einheit W/kW summiert. Schaltvariablen und deren Assoziationen dienen ausschließlich der Bedienung.'],
                 ...array_map(fn(int $i): array => $this->HeaterConfigurationFields($i), range(1, 3))
             ]],
             ['type' => 'ExpansionPanel', 'caption' => 'Innentemperaturen', 'items' => $this->VisualizationRoomFields()]
@@ -4246,68 +4239,25 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function VisualizationHeaterPower(int $number): ?array
     {
-        $id=$this->ReadPropertyInteger('HeaterRod'.$number);
-        if ($id>0) return $this->VisualizationPowerData($id,'W');
-        // The switch may declare a wattage in its active association or unit. Never default an index to watts.
-        return $this->VisualizationPowerData($this->ReadPropertyInteger('VisualizationHeaterSwitch'.$number),'');
-    }
-
-    private function VisualizationPowerData(int $id, string $fallbackUnit): ?array
-    {
-        if (!IPS_VariableExists($id)) return null;
-        $reading=['variableId'=>$id,'value'=>GetValue($id),'formatted'=>GetValueFormatted($id),
-            'unit'=>$this->GetVariableUnit($id),'binary'=>false];
-        $zero = $fallbackUnit!=='' && ($reading['value']===false || (is_numeric($reading['value']) && (float)$reading['value']===0.0))
-            && ($reading['unit']==='' || $this->VisualizationPowerUnit($reading['unit'])!==null)
-            ? array_replace($reading,['watts'=>0.0,'powerSource'=>'value']) : null;
-        // An enum's raw value can be a stage index, not its associated wattage.
-        foreach ($this->VisualizationAssociations($id,false) as $option) {
-            if ($option['value']!==$reading['value']) continue;
-            $label=trim($option['name']);
-            $watts=$this->VisualizationAssociationPower($label,$reading['unit']!==''?$reading['unit']:$fallbackUnit);
-            if ($watts!==null) return array_replace($reading,['watts'=>$watts,'powerSource'=>'association']);
-            if ($zero!==null) return $zero;
-            // Without a physical power unit, do not count an arbitrary enum index as watts.
-            if ($this->VisualizationPowerUnit($reading['unit'])===null
-                || preg_match('/(?<!\p{L})(?:k?watts?|kw|w)(?!\p{L})/iu',$label)
-                || preg_match('/[0-9]\s*(?:k?wh|[av]|%|°)/iu',$label)) return null;
-            break;
+        $id = $this->ReadPropertyInteger('HeaterRod' . $number);
+        if ($id <= 0 || !IPS_VariableExists($id)) return null;
+        $reading = ['variableId'=>$id, 'value'=>GetValue($id), 'formatted'=>GetValueFormatted($id),
+            'unit'=>$this->GetVariableUnit($id), 'binary'=>false];
+        // A measured power value is independent of all heater switch states.
+        // Preserve signed readings too; do not reject a meter's small negative standby value.
+        $value = $reading['value'];
+        $unit = $this->VisualizationPowerUnit($reading['unit'] !== '' ? $reading['unit'] : 'W');
+        if ((is_int($value) || is_float($value)) && is_finite((float)$value) && $unit !== null) {
+            $watts = (float)$value * ($unit === 'kW' ? 1000 : 1);
+            if (is_finite($watts)) return array_replace($reading, ['watts'=>$watts, 'unit'=>$unit]);
         }
-        return $zero ?? $this->VisualizationPowerReading($reading,$fallbackUnit);
+        return null;
     }
 
     private function VisualizationPowerUnit(string $unit): ?string
     {
         $unit=strtolower((string)preg_replace('/[\s\p{Z}]+/u','',$unit));
         return match ($unit) {'w','watt','watts'=>'W','kw','kilowatt','kilowatts'=>'kW',default=>null};
-    }
-
-    /** Explicit power captions, numeric captions in the profile unit, or a declared off state. */
-    private function VisualizationAssociationPower(string $caption,string $unit): ?float
-    {
-        $caption=trim(html_entity_decode(strip_tags($caption),ENT_QUOTES|ENT_HTML5,'UTF-8'));
-        if (preg_match('/^(?:aus|off|ausgeschaltet|inaktiv|deaktiviert)$/iu',$caption)) return 0.0;
-        if (str_contains($caption,'/') || preg_match('/[0-9]\s*[–—-]\s*[0-9]|\bbis\b/iu',$caption)) return null;
-        $number='[+\-\x{2212}]?[0-9]+(?:[\s\p{Z}][0-9]{3})*(?:[.,][0-9]+)*';
-        $matches=[];
-        $count=preg_match_all('/(?<![\p{L}0-9.,+\-])('.$number.')\s*(kilowatts?|watts?|kw|w)(?![\p{L}]|\s*\/)/iu',$caption,$matches,PREG_SET_ORDER);
-        if ($count===1) {
-            $unit=$matches[0][2];$text=$matches[0][1];
-        } elseif ($count===0 && preg_match('/^'.$number.'$/u',$caption)) {
-            $text=$caption;
-        } else return null;
-        $unit=$this->VisualizationPowerUnit($unit);
-        if ($unit===null) return null;
-        $text=str_replace("\u{2212}",'-',(string)preg_replace('/[\s\p{Z}]+/u','',$text));
-        // Both common decimal separators; mixed separators identify the last as decimal.
-        if (str_contains($text,',') && str_contains($text,'.')) {
-            $decimal=strrpos($text,',')>strrpos($text,'.')?',':'.';
-            $text=str_replace($decimal===','?'.':',','',$text);
-        }
-        $text=str_replace(',','.',$text);
-        if (!is_numeric($text) || !is_finite((float)$text) || (float)$text<0) return null;
-        $watts=(float)$text*($unit==='kW'?1000:1);
-        return is_finite($watts)?$watts:null;
     }
 
     private function VisualizationPowerReading(array $reading, string $fallbackUnit): ?array
