@@ -112,9 +112,6 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Warmwasser mit Ist/Soll und summierter Heizstableistung samt gelbem Blitz; Heizstäbe-Button mit Leistung und konfigurierbaren Schaltern.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
 
-Weitere Änderungen werden unter 5.0 ergänzt. Versions- und Buildnummer werden
-nicht für einzelne Änderungen erhöht, sondern erst für eine vereinbarte Veröffentlichung.
-
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.
 - Heizungs-Timer, zusätzliche IDs und Deaktivierung korrigiert.
