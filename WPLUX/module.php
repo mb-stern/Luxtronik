@@ -140,6 +140,8 @@ class Luxtronik extends IPSModuleStrict
             return;
         }
 
+        $this->DisableSHIActions();
+
         if (!$this->ReadPropertyBoolean('InstanceStatus')) {
             $this->SetTimerInterval('UpdateTimer', 0);
             $this->SetStatus(104); // Instanz inaktiv -> Ausrufezeichen im Objektbaum
@@ -176,9 +178,9 @@ class Luxtronik extends IPSModuleStrict
         $kuehlungVisible = $this->ReadPropertyBoolean('KuehlungVisible');
         $warmwasserVisible = $this->ReadPropertyBoolean('WarmwasserVisible');
         $schwimmbadVisible = $this->ReadPropertyBoolean('SchwimmbadVisible');
-        $tempsetVisible = $this->ReadPropertyBoolean('TempsetVisible');
-        $wwsetVisible = $this->ReadPropertyBoolean('WWsetVisible');
-        $rbesetVisible = $this->ReadPropertyBoolean('RBEsetVisible');
+        $tempsetVisible = $this->SharedNumericControlEnabled('Anpassung_Temp');
+        $wwsetVisible = $this->SharedNumericControlEnabled('Anpassung_WW');
+        $rbesetVisible = $this->SharedNumericControlEnabled('Anpassung_RBE');
         $copVarId = $this->ReadPropertyInteger('kwin');
         $jazVarId = $this->ReadPropertyInteger('kwhin');
         $hz_timerWeekVisible = $this->ReadPropertyInteger('HZ_TimerWeekVisible');
@@ -935,7 +937,8 @@ class Luxtronik extends IPSModuleStrict
             return;
         }
         if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
-            throw new RuntimeException('Modbus/SHI-Testbetrieb ist ausschließlich lesend. Steuerung und Timer sind deaktiviert.');
+            $this->HandleSHIAction($Ident, $Value);
+            return;
         }
 
             if (!$this->ReadPropertyBoolean('InstanceStatus')) {
@@ -1659,15 +1662,15 @@ class Luxtronik extends IPSModuleStrict
             $targets['Mode_Schwimmbad'] = ['index' => 119, 'conversion' => 'raw'];
         }
 
-        if ($this->ReadPropertyBoolean('TempsetVisible')) {
+        if ($this->SharedNumericControlEnabled('Anpassung_Temp')) {
             $targets['Anpassung_Temp'] = ['index' => 1, 'conversion' => 'minus_correction'];
         }
 
-        if ($this->ReadPropertyBoolean('WWsetVisible')) {
+        if ($this->SharedNumericControlEnabled('Anpassung_WW')) {
             $targets['Anpassung_WW'] = ['index' => 105, 'conversion' => 'tenth'];
         }
 
-        if ($this->ReadPropertyBoolean('RBEsetVisible')) {
+        if ($this->SharedNumericControlEnabled('Anpassung_RBE')) {
             $targets['Anpassung_RBE'] = ['index' => 1148, 'conversion' => 'tenth'];
         }
 

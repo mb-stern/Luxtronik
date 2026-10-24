@@ -60,8 +60,7 @@ trait LuxtronikVisualization
         'EEVHeatingOpening' => ['EEV_Heizen'], 'EEVCoolingOpening' => ['EEV_Kuehlen'],
         'BufferReturnTemperature' => ['Ruecklauftemperatur_im_Trennspeicher'],
         'SolarStorageTemperature' => ['Fuehler_Solarspeicher'],
-        'ThermalSolarPump' => ['Ausgang_Solarladepumpe'],
-        'DHWSetpoint' => ['Warmwasser_Soll_Temperatur']
+        'ThermalSolarPump' => ['Ausgang_Solarladepumpe']
     ];
 
     private function CreateVisualization(): void
@@ -684,7 +683,6 @@ HTML;
         $config['solarStorageTemperature'] = $this->DataKey('SolarStorageTemperature', 'solarStorageTemperature');
         $config['solarTarget'] = $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer'
             && $this->ReadPropertyBoolean('TankHP') ? 'buffer' : 'hotwater';
-        $config['dhwSetpoint'] = $this->DataKey('DHWSetpoint', 'dHWSetpoint');
         $config['computedCOP'] = $this->DataKey('ComputedCOP', 'computedCOP');
         $config['computedJAZ'] = $this->DataKey('ComputedJAZ', 'computedJAZ');
         $config['circuitWarning'] = '';
@@ -2943,9 +2941,9 @@ window.SymconHeatPump = {
                 svg.querySelector('#gHK' + n + ' > path.hot')?.setAttribute('d','M' + hotHeaderLocalX + ' ' + y + 'H1260');
                 svg.querySelector('#gHK' + n + ' > path.cold')?.setAttribute('d','M1260 ' + (y + 50) + 'H' + coldHeaderLocalX);
                 svg.querySelector('#gHKPumpIcon' + n)?.setAttribute('transform','translate(-25 0)');
-                svg.querySelector('#textHeatingPump' + n)?.setAttribute('x','1170');
                 const mixedBranch = mixers.some(item => (item.circuit || item.number) === n);
-                svg.querySelector('#textHeatingPump' + n)?.setAttribute('y',String(y - (crowdedMixerLabels && mixedBranch ? 79 : 31)));
+                svg.querySelector('#textHeatingPump' + n)?.setAttribute('x',crowdedMixerLabels && mixedBranch ? '1200' : '1170');
+                svg.querySelector('#textHeatingPump' + n)?.setAttribute('y',String(y - (mixedBranch ? 48 : 31)));
             });
             const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
             const bufferGeometry = ['M750 640V460H690V245H720','M720 380H705V440H720V835H675','M890 245H945','M965 380H890'];
@@ -3069,11 +3067,11 @@ window.SymconHeatPump = {
                 const scale = radius / 18;
                 const actuator = node(symbol, 'g', {transform:'scale(' + scale + ')'});
                 node(actuator, 'path', {d:'M18 0H23',fill:'none',stroke:'var(--wp-icon)','stroke-width':1.5});
-                node(actuator, 'rect', {x:23,y:-17,width:23,height:34,rx:3,fill:'var(--wp-button)',
+                node(actuator, 'rect', {x:23,y:-24,width:26,height:48,rx:3,fill:'var(--wp-button)',
                     stroke:state === 'conflict' ? '#f04444' : 'var(--wp-icon)','stroke-width':1.5});
-                node(actuator, 'text', {x:34.5,y:-3,'text-anchor':'middle',style:'font-size:10px;font-weight:bold'}, 'M');
-                node(actuator, 'text', {x:34.5,y:12,'text-anchor':'middle',class:recent ? 'wp-valve-recent' : '',
-                    style:'font-size:16px;font-weight:bold'},
+                node(actuator, 'text', {x:36,y:-4,'text-anchor':'middle',style:'font-size:18px;font-weight:bold'}, 'M');
+                node(actuator, 'text', {x:36,y:16,'text-anchor':'middle',class:recent ? 'wp-valve-recent' : '',
+                    style:'font-size:18px;font-weight:bold'},
                     {opening:'↑',closing:'↓',stopped:'•',unknown:'?',conflict:'!'}[state]);
                 return symbol;
             };
@@ -3092,10 +3090,10 @@ window.SymconHeatPump = {
                 node(hydraulic, 'path', {id:'pathHKMixingReturn' + n,class:'cold',d:'M1045 ' + (y + 50) + 'V' + (y + 18)});
                 node(hydraulic, 'circle', {cx:1045,cy:y + 50,r:4,fill:'#35a6ff'});
                 mixerSymbol(hydraulic, mixer, 1045, y, 18);
-                const readings = node(mixerReadings, 'g', {id:'gMixerReading' + n,transform:'translate(' + mixerReadingX + ' ' + (y - 54) + ')'});
-                node(readings, 'text', {class:'sm',x:0,y:0,style:'font-size:14px'},'Mischer ' + mixer.number);
-                fittedText(readings, {id:'textMixerActual' + n,class:'sm',x:0,y:16,style:'font-size:14px'},'Ist ' + (formatted(mixer.actual) || '—'),100);
-                fittedText(readings, {id:'textMixerTarget' + n,class:'sm',x:0,y:32,style:'font-size:14px'},'Soll ' + (formatted(mixer.target) || '—'),100);
+                const readings = node(mixerReadings, 'g', {id:'gMixerReading' + n,transform:'translate(' + mixerReadingX + ' ' + (y - 48) + ')'});
+                node(readings, 'text', {class:'sm',x:0,y:0,style:'font-size:18px'},'Mischer ' + mixer.number);
+                fittedText(readings, {id:'textMixerActual' + n,class:'sm',x:0,y:20,style:'font-size:18px'},'Ist ' + (formatted(mixer.actual) || '—'),100);
+                fittedText(readings, {id:'textMixerTarget' + n,class:'sm',x:110,y:20,style:'font-size:18px'},'Soll ' + (formatted(mixer.target) || '—'),100);
             });
 
             // The information panel keeps its size; operating data replaces VL/RL.
@@ -3141,12 +3139,10 @@ window.SymconHeatPump = {
                 });
             };
 
-            // DHW has one measured actual value and one setpoint, never three levels.
+            // Only the measured DHW temperature belongs in the tank; the setpoint is in the top button.
             const dhwReadings = group('gDHWTemperatures', svg.querySelector('#gDHW'));
-            [['Ist', cfg.tankTempWWMiddle, 685], ['Soll', cfg.dhwSetpoint, 745]].forEach(([label, key, y]) => {
-                node(dhwReadings, 'text', {class:'sm', x:925, y:y - 23}, label);
-                fittedText(dhwReadings, {id:'textDHW' + label, class:'md', x:1055, y, 'text-anchor':'end'}, formatted(key) || '—', 130);
-            });
+            node(dhwReadings, 'text', {class:'sm', x:925, y:687}, 'Ist');
+            fittedText(dhwReadings, {id:'textDHWIst', class:'md', x:1055, y:710, 'text-anchor':'end'}, formatted(cfg.tankTempWWMiddle) || '—', 130);
             const boilerPower = group('gBoilerHeaterPower', svg.querySelector('#gDHW'));
             const total = data.heaterRodTotalPower?.value;
             if (data.heaterRodTotalPower) {
@@ -3255,10 +3251,10 @@ window.SymconHeatPump = {
 
                 // HUP percentage belongs to mixer 1; no invented RPM or percentages for other pumps.
                 const pumpText = pumpValueItem ? formatted(pumpValueItem) : '';
-                setText('#textHeatingPump' + n, n === 1 && pumpText ? 'Ansteuerung ' + pumpText + (pumpText.includes('%') ? '' : ' %') : pumpText);
+                setText('#textHeatingPump' + n, n === 1 && pumpText ? pumpText + (pumpText.includes('%') ? '' : ' %') : pumpText);
                 const pumpLabel = svg.querySelector('#textHeatingPump' + n);
                 if (pumpLabel) {
-                    pumpLabel.style.fontSize = '14px';
+                    pumpLabel.style.fontSize = '18px';
                     pumpLabel.removeAttribute('textLength');
                     pumpLabel.removeAttribute('lengthAdjust');
                     if (pumpLabel.getComputedTextLength() > 150) {
@@ -3335,15 +3331,10 @@ window.SymconHeatPump = {
             const flow = formatted(cfg.heatingFlow);
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
-                const flowX = narrowHydraulics ? 675 : 710;
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                node(flowReadings, 'text', {class:'sm', x:flowX, y:610, 'text-anchor':'end', style:'font-size:14px'}, 'Durchfluss');
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:flowX, y:632,
-                    'text-anchor':'end', style:'font-size:16px'}, flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 75);
-            }
-            if (formatted(cfg.supplyTemperature)) {
-                node(flowReadings,'text',{class:'sm',x:780,y:610,style:'font-size:14px'},'Vorlauf');
-                fittedText(flowReadings,{id:'textWPSupplyTemperature',class:'sm',x:780,y:632,style:'font-size:16px'},formatted(cfg.supplyTemperature),110);
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:780, y:615,
+                    'text-anchor':'start', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
+                    flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 110);
             }
             [hk1, hk2, hk3].forEach((enabled, index) => {
                 if (!enabled || !formatted(cfg.returnTemperatureSetpoint)) return;
@@ -3513,7 +3504,7 @@ window.SymconHeatPump = {
             const elapsed = formatted(compressorActive ? cfg.heatPumpRuntime : cfg.compressorStandstill);
             const cycleReadings = group('gHeatPumpCycle', svg.querySelector('#heatPump'));
             const cycleText = compressorStateKnown ? (compressorActive ? 'Läuft seit ' : 'Steht seit ') + (elapsed || '—') : 'Lauf-/Standzeit —';
-            fittedText(cycleReadings, {id:'textHeatPumpCycle',class:'sm',x:55,y:867,style:'font-size:16px'},cycleText,175);
+            fittedText(cycleReadings, {id:'textHeatPumpCycle',class:'sm',x:55,y:867,style:'font-size:18px'},cycleText,175);
             node(cycleReadings,'title',{},compressorStateKnown
                 ? 'Reglerwert: ' + (compressorActive ? 'Waermepumpe_laeuft_seit (ID 67)' : 'Verdichter_Standzeit (ID 73)')
                 : 'Verdichterzustand nicht verfügbar');
@@ -3547,7 +3538,7 @@ window.SymconHeatPump = {
                 const footerWidth = contentRight - 68;
                 const columns = Math.min(5, Math.max(1,Math.floor(footerWidth / 220)), Math.max(1,footerValues.length));
                 const rows = Math.max(1, Math.ceil(footerValues.length / columns));
-                const height = Math.max(50, rows * 38 + 12);
+                const height = Math.max(50, rows * 48 + 12);
                 footer.querySelector('rect')?.setAttribute('height', String(height));
                 footer.querySelector('rect')?.setAttribute('width',String(contentRight - 28));
                 svg.setAttribute('viewBox','15 0 ' + (narrowHydraulics ? contentRight : 1570) + ' ' + Math.max(985,935 + height));
@@ -3556,7 +3547,7 @@ window.SymconHeatPump = {
                     text.id = 'textFooterAdditional' + String(index).padStart(3, '0');
                     text.setAttribute('class', 'sm');
                     text.setAttribute('x', String(50 + (index % columns) * (footerWidth / columns)));
-                    text.setAttribute('y', String(948 + Math.floor(index / columns) * 38));
+                    text.setAttribute('y', String(948 + Math.floor(index / columns) * 48));
                     const title = document.createElementNS(text.namespaceURI, 'title');
                     title.textContent = item.label;
                     text.appendChild(title);
@@ -3565,7 +3556,7 @@ window.SymconHeatPump = {
                     text.appendChild(label);
                     const value = document.createElementNS(text.namespaceURI, 'tspan');
                     value.setAttribute('x', text.getAttribute('x'));
-                    value.setAttribute('dy', '17');
+                    value.setAttribute('dy', '22');
                     value.textContent = item.value;
                     text.appendChild(value);
                     footer.appendChild(text);
@@ -3611,6 +3602,12 @@ window.SymconHeatPump = {
             // Bisher wurde diese Funktion nur im klassischen Renderer aufgerufen,
             // weil applyModernDashboard() vorher mit true zurückkehrt.
             // Heater power is aggregated in the backend and shown only inside DHW.
+
+            // Keep every schematic label at least as large as the refrigerant labels.
+            const minimumFont = parseFloat(getComputedStyle(svg.querySelector('#textEvaporatorPressure')).fontSize) || 18;
+            svg.querySelectorAll('text,tspan').forEach(el => {
+                if (parseFloat(getComputedStyle(el).fontSize) < minimumFont) el.style.setProperty('font-size',minimumFont + 'px','important');
+            });
 
             return true;
         };
@@ -3765,6 +3762,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function GetVisualizationIdents(string $property): array
     {
+        if ($this->ReadPropertyString('CommunicationMode') === 'modbus' && $property === 'MixerPump1') return ['SHI_Pumpe_Mischkreis_1'];
         if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return [];
         if ($property === 'HeatPumpReturnTemperature') return ['Ruecklauftemperatur_Heizkreis'];
@@ -3821,8 +3819,13 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function VisualizationControlAvailable(string $property, int $id): bool
     {
-        if (!$this->ReadPropertyBoolean('InstanceStatus') || $this->ReadPropertyString('CommunicationMode') === 'modbus') {
+        if (!$this->ReadPropertyBoolean('InstanceStatus') || ($this->ReadPropertyString('CommunicationMode') === 'modbus'
+            && !in_array($property, ['WarmWaterSetpointVariable', 'HeatingTemperatureCorrectionVariable'], true))) {
             return false;
+        }
+        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
+            $ident = $property === 'WarmWaterSetpointVariable' ? 'Anpassung_WW' : 'Anpassung_Temp';
+            if (!$this->SharedNumericControlEnabled($ident) || $this->GetSHIVisualizationPoint($ident) === null) return false;
         }
         $native = [
             'HeatingControlVariable' => 'Mode_Heizung', 'HotWaterControlVariable' => 'Mode_WW',
@@ -4050,7 +4053,9 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 continue;
             }
             $javaID = (int)($row['id'] ?? 0);
-            $ident = self::DATA_POINT_CONFIG[$javaID]['name'] ?? ('ID_' . $javaID);
+            $shi = $this->ReadPropertyString('CommunicationMode') === 'modbus' ? ($this->SHISelections()[$javaID] ?? null) : null;
+            if ($javaID >= 100000 && $shi === null) continue;
+            $ident = $shi['ident'] ?? self::DATA_POINT_CONFIG[$javaID]['name'] ?? ('ID_' . $javaID);
             $id = @$this->GetIDForIdent($ident);
             if ($id !== false && IPS_VariableExists($id)) {
                 $footer[$javaID] = ['key' => 'instanceFooter' . $javaID, 'variableId' => $id, 'label' => IPS_GetName($id)];
@@ -4249,6 +4254,17 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         }
         if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return null;
+        if ($this->ReadPropertyString('CommunicationMode') === 'modbus' && !in_array($property, ['ComputedCOP','ComputedJAZ'], true)) {
+            foreach ($this->GetVisualizationIdents($property) as $ident) {
+                $point = $this->GetSHIVisualizationPoint($ident);
+                if ($point !== null) return $point;
+            }
+            // Explicit external sensors remain usable; old own Java objects are not live SHI readings.
+            $id = $this->GetVisualizationVariableID($property);
+            if ($id <= 0 || IPS_GetParent($id) === $this->InstanceID) return null;
+            return ['variableId'=>$id,'ident'=>(string)(IPS_GetObject($id)['ObjectIdent'] ?? ''),'value'=>GetValue($id),
+                'formatted'=>GetValueFormatted($id),'unit'=>$this->GetVariableUnit($id),'binary'=>false];
+        }
         $points = $this->VisualizationCachedPoints();
         foreach ($this->GetVisualizationIdents($property) as $ident) {
             if (!isset($points[$ident])) continue;

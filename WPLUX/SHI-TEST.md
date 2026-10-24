@@ -1,114 +1,129 @@
 # Modbus TCP / SHI – Testfunktion in Version 5.0
 
-Diese erste Version ist **ausschließlich lesend** und noch nicht an einer echten
-SHI-Luxtronik erprobt. Java bleibt für neue und bestehende Instanzen Standard.
-Die bestehende Java-Kommunikation wurde nicht umgebaut; nur die ausdrücklich
-gewählte SHI-Einstellung aktiviert den separaten Modbus-Pfad. Es gibt keinen
-Rückfall auf Java bei einem Modbus-Fehler und keine Modbus-Schreibbefehle.
+Die Testversion unterstützt die im Herstellerhandbuch **83026900aDE** beschriebenen
+**76 Input-Datenpunkte, 12 Discrete Inputs und 41 Holding-Register**. Input und
+Holding mit derselben Adresse sind unterschiedliche Datenpunkte. Der vollständige
+[Katalog mit Idents, Einheiten und Grenzen](SHI-REGISTER.md) gehört zu dieser Version.
+Die Implementierung ist mit einem lokalen TCP-Simulator geprüft, noch nicht an einer
+echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalten.
 
-## Voraussetzungen und Einrichtung
+## Einrichtung und Auswahl
 
-Referenz: vom Anwender bereitgestelltes Herstellerhandbuch
-**83026900aDE – Smart Home Interface, Modbus TCP**, insbesondere Seiten 4–5 und 22–28.
+- Voraussetzung laut Handbuch: Luxtronik 2.1 ab V3.90.1 mit verfügbarer/aktiver
+  SHI-Schnittstelle. Neuere Funktionen können auf älteren Firmwareständen fehlen.
+  Ob die konkrete CTA-Firmware SHI bereitstellt, muss am Gerät geprüft werden.
+- `Kommunikation` auf `Modbus TCP / SHI (Testversion)` stellen und übernehmen.
+- Gleiche Geräte-IP wie Java; Modbus-Port **502**, Unit-ID **1**, Timeout **500 ms**
+  pro Anfrage. Port, Unit-ID und Timeout (100–5000 ms) sind separat konfigurierbar.
+- Literaladressen mit **Offset 0**, Byte- und Wortfolge Big-Endian.
+- Als anfänglichen Aktualisierungstakt beispielsweise **30 Sekunden** verwenden.
+- In der bestehenden Checkboxliste zeigt die Spalte **Schnittstelle**:
+  `Java`, `Modbus` oder `Java + Modbus`. Variablennamen bekommen keinen Zusatz.
+- Alle 129 dokumentierten Punkte werden intern abgefragt. Nur ausgewählte Zeilen
+  (`aktiv` oder `Fußzeile`) erzeugen zusätzliche Objekte. Die Grafik benötigt keine
+  ausgewählten Messvariablen. Hohe IDs der SHI-Zeilen sind Auswahlschlüssel,
+  keine Java-Indizes und keine Modbus-Adressen.
 
-- Luxtronik 2.1 ab Firmware V3.90.1 mit verfügbarer/aktivierter SHI-Schnittstelle.
-- Gleiche IP-Adresse wie für Java, eigener Modbus-Port: standardmäßig **502**.
-- Geräteadresse (Unit-ID): standardmäßig **1**, entsprechend der Gerätekonfiguration.
-- Timeout: standardmäßig **500 ms**, einstellbar von 100 bis 5000 ms pro Anfrage.
-- Registeradressen werden unverändert verwendet, **Offset 0**, Byte- und Wortfolge Big-Endian.
+Ident, numerische Variablen-ID, Name, Typ und Profil bestehender gemeinsamer Werte
+bleiben erhalten. Neue SHI-Werte erhalten eigene `SHI_…`-Idents. Keine neuen
+Java-Indizes werden erfunden. Beim Zurückschalten bleiben SHI-Objekte erhalten;
+ihre Aktionen werden deaktiviert. Java-Einstellungen bleiben gespeichert.
 
-Im Konfigurationsformular `Kommunikation` auf
-`Modbus TCP / SHI (Testversion, nur lesen)` stellen, die Verbindungswerte eintragen
-und die Einstellungen übernehmen. Danach das Formular neu öffnen; die
-SHI-Unterstützung ist dann direkt neben jeder bisherigen Java-ID sichtbar.
-Für den ersten Test nur IDs **10, 11, 15, 17, 257 und 268** aktivieren und ein
-Abfrageintervall von beispielsweise **30 Sekunden** verwenden.
+Nicht unterstützte Register, Geräteausnahmen 1/2/3 und Ersatzwerte werden
+übersprungen. Die Auswahl bleibt bestehen; vorhandene Objektwerte werden nicht
+durch Null ersetzt. Der letzte Objektwert ist dann kein aktueller SHI-Messwert.
+Die interne Grafik verwendet dafür keine alten Java-Werte. Ein Transportfehler
+verwirft den unvollständigen Lesezyklus und kennzeichnet den letzten Snapshot als
+veraltet. Der Instanzstatus unterscheidet Fehler und teilweise verfügbare Daten.
 
-## Erhalt der Variablen
+## Schreiben und Bedienung
 
-Für dieselbe physikalische Größe bleiben die **Java-ID, der Ident, die numerische
-Variablen-ID, der Variablentyp und vorhandene Namen/Profile** erhalten. Bestehende
-Variablen werden im SHI-Pfad nicht neu registriert oder gelöscht. Skripte und
-Visualisierungen können ihre bisherigen IDs weiterverwenden. Neue Variablen
-verwenden die vorhandene Java-Datenpunktdefinition.
+Nur die **41 dokumentierten Holding-Register** sind schreibbar. Ausgewählte
+Holding-Zeilen erzeugen Bedienvariablen mit passenden Wertebereichen und
+Assoziationen. Sie lassen sich über die übliche Symcon-Aktion bedienen. Auswahl,
+Konfigurationsspeichern und zyklische Abfrage schreiben keine Vorgabewerte.
 
-Nicht zugeordnete, abgewählte oder vom Gerät nicht gelieferte Werte bleiben im
-SHI-Modus unverändert. Das erhält Verknüpfungen, bedeutet aber ausdrücklich:
-**Der letzte Wert ist kein aktueller SHI-Messwert.** Nicht unterstützte Java-IDs
-sind im Formular markiert; nicht verfügbare Register und Ersatzwerte erscheinen
-im Debug-Protokoll. Insbesondere werden die SHI-Zustandsnummern nicht auf die
-anders definierten Java-Betriebsarten übertragen.
+Unterstützt sind Heizungs-/Warmwasser-Sollwerte und Offsets, Heiz-Level,
+Heiz- und Kühlvorgaben für MK1–3, globale Heizvorgaben, Soft-/Hard-Leistungsgrenze,
+Sperren, Raumtemperaturvorgabe, Zirkulationsstart und Extra-Warmwasser.
+Die Java-Betriebsarten `Automatik`, `Party` usw. sind nicht dasselbe wie die
+SHI-Modi `Kein Einfluss`, `Sollwert`, `Offset`, `Level` und werden nicht umgedeutet.
+Java-Zeitprogramme besitzen in diesem Handbuch kein schreibbares Gegenstück.
 
-Vorhandene Java-Steuer- und Timervariablen sowie ihre Konfiguration bleiben
-bestehen. Ihre Modulaktionen werden im SHI-Modus deaktiviert, und direkte
-`RequestAction`-Aufrufe werden abgewiesen. Diese Testversion liest nur
-Input-Register über **Funktionscode 04**.
+Die gemeinsamen numerischen Bedienpunkte `Anpassung_WW`, `Anpassung_Temp` und
+`Anpassung_RBE` bleiben nutzbar, wenn sie in der Konfiguration aktiviert sind.
+Warmwasser-Soll und Heizkorrektur werden auch aus der Grafik über diesen Weg
+bedient. Die übrigen SHI-Vorgaben sind über die ausgewählten Bedienvariablen oder
+die unten beschriebene PHP-Funktion erreichbar.
 
-COP und JAZ verwenden bei vorhandener Konfiguration weiterhin die bisherigen
-externen Messvariablen und dieselbe Berechnung. Die SHI-Eingangsleistung wird
-nicht automatisch als neuer COP-/JAZ-Zähler ausgewählt. Die zugehörigen
-Wärmedaten werden bei Bedarf auch ohne sichtbare Auswahl abgefragt.
+Vor dem Schreiben prüft das Modul Datentyp, Bereich, Auflösung und die aktuell
+aktivierte Gerätefunktion. Es liest benötigte Modusregister frisch ein und setzt
+nach dem Zielwert die dokumentierten Abhängigkeiten: z.B. Warmwasser-Modus 1 für
+Sollwert, Heizungs-Modus 2 für Offset und Gesamtmodus 0 für individuelle Heizvorgaben.
+Die Wahl einer individuellen Vorgabe kann damit eine globale Vorgabe ablösen;
+eine globale Vorgabe aktiviert umgekehrt den Gesamtmodus. Der PC-Limit-Wert
+aktiviert keine Leistungsbegrenzung selbst: Soft oder Hard Limit ist ausdrücklich
+vorher zu wählen. Bei Raumtemperaturvorgabe dürfen keine SHI-Heiz-/Mischkreisvorgaben
+aktiv sein; den erforderlichen RBE-Einflussfaktor prüft der Regler selbst.
 
-## Unterstützte Zuordnungen
+Schreiben erfolgt über **FC16**, Lesen über **FC02/03/04**. Jede Schreibantwort
+und der zurückgelesene Registerinhalt werden geprüft, bevor der Wert veröffentlicht
+wird. Mehrere abhängige Register bilden keine atomare Transaktion: Bei Abbruch
+kann ein Teil bereits übernommen sein. Das Modul meldet dies, aktiviert nach einer
+fehlenden Zielwertbestätigung keinen weiteren Modus und wiederholt Schreibbefehle
+nicht automatisch. Ein bestätigtes Register beweist die gespeicherte Vorgabe,
+nicht eine mechanische Ventilposition oder die tatsächlich erreichte Temperatur.
+Abfrage und Bedienung derselben Instanz werden gegenseitig gesperrt.
 
-Die Faktoren rechnen den SHI-Rohwert direkt in die bisherige Einheit um.
-Insbesondere bleibt `Leistungsaufnahme` in **Watt**, `Waermeleistung` in **kW**
-und bleiben die Wärmemengenzähler in **kWh**.
+Das Handbuch nennt eine **15-Minuten-Kommunikationsüberwachung**: Bleiben Anfragen
+aus, setzt der Regler empfangene Vorgaben auf Standard zurück. Die Abfrage hält die
+Kommunikation aufrecht; das Modul sendet alte Schreibwerte nach Neustart oder
+Verbindungsabbruch nicht erneut. Beim Umschalten auf Java werden SHI-Vorgaben nicht
+ungefragt zurückgeschrieben. Für eine sofortige Rücknahme vorher die betreffenden
+SHI-Modi auf `Kein Einfluss` bzw. Sperren/LPC-Modus auf Normalbetrieb stellen.
 
-| Java-ID | Bisheriger Ident | SHI-Input-Register | Datentyp | Faktor |
-| --- | --- | --- | --- | --- |
-| 10 | `Vorlauftemperatur_Heizkreis` | 10105 | uint16 | × 0.1 |
-| 11 | `Ruecklauftemperatur_Heizkreis` | 10100 | uint16 | × 0.1 |
-| 12 | `Ruecklauf_Soll_Heizkreis` | 10101 | uint16 | × 0.1 |
-| 13 | `Ruecklauftemperatur_im_Trennspeicher` | 10102 | uint16 | × 0.1 |
-| 15 | `Aussentemperatur` | 10108 | int16 | × 0.1 |
-| 16 | `Durchschnittstemperatur_Aussen_ueber_24_h` | 10109 | int16 | × 0.1 |
-| 17 | `Warmwasser_Ist_Temperatur` | 10120 | int16 | × 0.1 |
-| 18 | `Warmwasser_Soll_Temperatur` | 10121 | uint16 | × 0.1 |
-| 19 | `Waermequellen_Eintrittstemperatur` | 10110 | int16 | × 0.1 |
-| 20 | `Waermequellen_Austrittstemperatur` | 10111 | int16 | × 0.1 |
-| 21 | `Mischkreis_1_Vorlauftemperatur` | 10140 | int16 | × 0.1 |
-| 22 | `Mischkreis_1_Vorlauf_Soll_Temperatur` | 10141 | int16 | × 0.1 |
-| 24 | `Mischkreis_2_Vorlauftemperatur` | 10150 | int16 | × 0.1 |
-| 25 | `Mischkreis_2_Vorlauf_Soll_Temperatur` | 10151 | int16 | × 0.1 |
-| 151 | `Waermemengenzaehler_Heizung` | 10322 | int32 | × 0.1 |
-| 152 | `Waermemengenzaehler_Brauchwasser` | 10324 | int32 | × 0.1 |
-| 153 | `Waermemengenzaehler_Schwimmbad` | 10328 | int32 | × 0.1 |
-| 154 | `Waermemengenzaehler_Gesamt` | 10320 | int32 | × 0.1 |
-| 189 | `Temperatur_Vorlauf_Soll` | 10113 | int16 | × 0.1 |
-| 227 | `Raumtemperatur_Istwert` | 10106 | int16 | × 0.1 |
-| 257 | `Waermeleistung` | 10300 | int16 | × 0.1 |
-| 268 | `Leistungsaufnahme` | 10301 | uint16 | × 100.0 |
+## Daten und bekannte Grenzen
 
-## Ablauf für den Forumstest
+Temperaturen werden in °C, Offsets in K, Energien in kWh und Betriebsstunden in h
+verarbeitet. `Waermeleistung` bleibt kW, `Leistungsaufnahme` bleibt W. Die Solarzeit
+behält für den bestehenden Ident das Format `…h …m`. Die externen COP-/JAZ-Zähler
+und deren Berechnung bleiben unverändert; interne Stromzähler ersetzen sie nicht.
 
-1. Vor dem Umschalten Modulversion, Reglertyp/Firmware und die numerischen IDs
-   einiger bestehender Variablen notieren; aktuelle Java-Werte zum Vergleich sichern.
-2. SHI-Modus wie oben einstellen und `Jetzt aktualisieren` ausführen.
-3. Temperaturen und Leistungen mit dem Regler vergleichen, besonders negative
-   Außentemperaturen, Watt gegenüber kW sowie die Einheit der Energiezähler.
-4. Kontrollieren, dass dieselben Idents und numerischen Variablen-IDs bestehen.
-5. Optional weitere unterstützte IDs aktivieren und erneut prüfen.
-6. Zum Vergleich zurück auf `Java (Standard)` schalten, übernehmen und das
-   Formular neu öffnen. Die bisherigen Java-Einstellungen bleiben gespeichert.
+Status-/Pumpenwerte, MK3 und weitere dokumentierte Größen ergänzen die Grafik.
+FUP1 und HUP sind getrennte Pumpen. Die Wärmeerzeuger-Bitmaske liefert VD1/VD2 und
+Zusatzheizungszustände; eine Verdichterfrequenz wird daraus nicht berechnet.
+SHI-Systemstatus 6 heißt laut Handbuch `nicht belegt` und wird nicht als der
+abweichende Java-Status 6 verwendet.
 
-Für eine Rückmeldung genügen Firmware/Reglertyp, verwendete Unit-ID, ausgewählte
-Java-IDs, beobachtete Werte und das Modul-Debugprotokoll.
+Das vorliegende Handbuch enthält keine bestätigten Register für EEV-Öffnungen,
+Verdichterfrequenzen, Durchfluss, Mischer-Auf/Zu, laufende Zyklus-/Standzeit oder
+separate Primär-/Sekundär-Vorlauftemperaturen. Mindestlaufzeit und Schaltspielsperre
+sind keine aktuelle Zyklusdauer. Solche Werte werden nicht aus anderen Feldern
+abgeleitet. Dokumentierte Sensor-Ersatztemperaturen 5/75 °C sind ohne zusätzliche
+Fehlerrückmeldung nicht sicher von einem echten Messwert zu unterscheiden.
 
-Ein Abbruch oder eine fehlerhafte Modbus-Antwort verwirft den gesamten unvollständigen
-Lesezyklus. Ersatzwerte (32767 bzw. beim INT32 zusätzlich 2147483647) und vom Gerät
-als ungültig gemeldete optionale Register werden übersprungen. Der Instanzstatus
-unterscheidet Verbindungsfehler, ungültige Einstellungen, fehlende Messwerte und
-teilweise verfügbare Messwerte. Alte Werte werden nicht durch Null ersetzt.
+## PHP und Gerätetest
 
-## Lokale Prüfung
+```php
+// Letzten internen Snapshot anzeigen; keine zusätzliche Abfrage, keine Objekte.
+echo WPLUX_GetSHIData(12345);
 
-```sh
-php tests/modbus.php
+// Warmwasser-Sollwert 50 °C; aktiviert den zugehörigen SHI-Sollwertmodus.
+WPLUX_SetSHIValue(12345, 'Anpassung_WW', 50.0);
+
+// SHI-Einfluss auf Warmwasser zurücknehmen.
+WPLUX_SetSHIValue(12345, 'SHI_Modus_Warmwasser', 0);
 ```
 
-Benötigt PHP CLI mit `sockets` und `pcntl`. Die Suite enthält die bestehenden
-Java-Tests und einen lokalen Modbus-TCP-Simulator. Sie prüft unter anderem den
-Wechsel Java → SHI → Java mit unveränderten Variablen-IDs, ausschließlich lesende
-Telegramme, korrekte Einheiten, Teilantworten, Geräteausnahmen und Timeouts.
-Sie ersetzt den oben beschriebenen Test an einer echten Luxtronik nicht.
+`12345` durch die Instanz-ID ersetzen. Die Schreibfunktion akzeptiert Zahlen und
+für Bool-Register auch boolesche Werte; keine numerischen Strings oder Rohadressen.
+
+Nach Installation der Firmware zuerst nur lesen, Reglerwerte/Einheiten und
+bestehende Objekt-IDs vergleichen. Danach einzelne Vorgaben einschließlich
+Rücknahme prüfen. Für eine Rückmeldung genügen Reglertyp/Firmware, Unit-ID,
+Register/Ident, erwarteter und angezeigter Wert sowie das Debugprotokoll.
+
+Lokal: `php tests/modbus.php`, `php tests/visualization.php` und optional
+`python3 tests/browser.py`. Die Protokolltests verwenden einen separaten lokalen
+Modbus-Peer mit fragmentierten Antworten, Ausnahmen, Zeitüberschreitungen und
+fehlerhaften Schreibbestätigungen. Sie ersetzen keinen Gerätetest.

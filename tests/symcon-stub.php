@@ -18,6 +18,13 @@ $GLOBALS['testVariables'] = [];
 $GLOBALS['testNextID'] = 10000;
 $GLOBALS['testProfiles'] = [];
 
+function IPS_SemaphoreEnter(string $name, int $wait): bool {
+    if (!empty($GLOBALS['testSemaphores'][$name])) return false;
+    $GLOBALS['testSemaphores'][$name] = true;
+    return true;
+}
+function IPS_SemaphoreLeave(string $name): bool { unset($GLOBALS['testSemaphores'][$name]); return true; }
+
 function IPS_VariableProfileExists(string $name): bool { return isset($GLOBALS['testProfiles'][$name]); }
 function IPS_CreateVariableProfile(string $name, int $type): void { $GLOBALS['testProfiles'][$name] = ['Type' => $type, 'Associations' => []]; }
 function IPS_SetVariableProfileValues(string $name, float $min, float $max, float $step): void { $GLOBALS['testProfiles'][$name] += ['MinValue' => $min, 'MaxValue' => $max, 'StepSize' => $step]; }

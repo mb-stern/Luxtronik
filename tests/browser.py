@@ -299,10 +299,20 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert len(luxtronik.commands)==commands_before
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',payload)
                 assert not page.locator('#gSettings').is_visible()
-                # DHW uses only actual/setpoint; other stored sensor selections are retained but hidden.
+                # DHW shows the measured value; the setpoint remains in its top control only.
                 assert page.locator('#textDHWIst').text_content()=='25.5'
-                assert page.locator('#textDHWSoll').text_content().startswith('50')
+                assert page.locator('#textDHWSoll').count()==0
                 assert page.locator('#main #textHeatingFlow').text_content()=='607 l/h'
+                assert page.locator('#gHeatPumpFlow > text').count()==1
+                assert page.locator('#textWPSupplyTemperature').count()==0
+                assert page.locator('#textHeatingFlow').get_attribute('x')=='780'
+                assert 'Ansteuerung' not in page.locator('#textHeatingPump1').text_content()
+                small_labels=page.evaluate('''()=>{
+                    const svg=document.querySelector('#wp-card svg');
+                    const minimum=parseFloat(getComputedStyle(svg.querySelector('#textEvaporatorPressure')).fontSize);
+                    return [...svg.querySelectorAll('text,tspan')].filter(e=>getComputedStyle(e).display!=='none' && parseFloat(getComputedStyle(e).fontSize)<minimum).map(e=>e.id||e.textContent);
+                }''')
+                assert small_labels==[],small_labels
                 for suffix in ['Up','Middle','Down']:
                     assert page.locator('#textTankTempWW'+suffix).count()==0
                 assert page.locator('#symconBoilerSupplyTemperature,#symconBoilerRefluxTemperature').count()==0
@@ -327,10 +337,11 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 changed=json.loads(json.dumps(payload))
                 changed['data']['heaterRodTotalPower']['value']=0
                 changed['data'][changed['config']['inputPower']]['watts']=1800
-                changed['data'][changed['config']['dhwSetpoint']].update(value=52.5,formatted='52.5 °C')
+                changed['controls']['warmWaterSetpoint'].update(currentValue=52.5,formattedValue='52.5 °C')
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert page.locator('#textInputPower').text_content()=='1.80 kW'
-                assert page.locator('#textDHWSoll').text_content()=='52.5 °C'
+                assert page.locator('#textDHWSoll').count()==0
+                assert page.locator('#gSymconWarmWaterSetpointValue').text_content()=='52.5 °C'
                 assert page.locator('#pathBoilerHeatBolt').get_attribute('class')==''
                 assert page.locator('#textBoilerHeaterPower').text_content()=='0.00 kW'
                 assert page.locator('#textHeaterButtonState').text_content()=='0.00 kW'
@@ -510,7 +521,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert mixed.locator('#gMixerValveSymbol1 text').last.text_content()=='↑'
                 assert mixed.locator('.wp-valve-recent').count()==0
                 assert '30' in mixed.locator('#textSupplyTemperatureHeating').text_content()
-                assert '50' in mixed.locator('#textWPSupplyTemperature').text_content()
+                assert mixed.locator('#textWPSupplyTemperature').count()==0
                 assert '35' in mixed.locator('#textSupplyTemperatureHeating2').text_content()
                 assert '40' in mixed.locator('#textRefluxTemperatureHeating3').text_content()
                 assert mixed.locator('#gMixerReadings').count()==0
@@ -728,6 +739,27 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 frequency.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
                 assert frequency.locator('#textHeatPumpCycle').text_content()=='Lauf-/Standzeit —'
                 frequency.close()
+
+            # SHI has its own states, current measurements and shared numeric controls.
+            for width in [1200,390]:
+                shi=browser.new_page(viewport={'width':width,'height':850})
+                shi.goto(f'http://127.0.0.1:{server.server_port}/shi.html')
+                assert shi.locator('#wp-error').text_content()==''
+                assert shi.locator('#textHPStatus').text_content()=='Heizen'
+                assert '31.5' in shi.locator('#textMixerActual1').text_content()
+                assert shi.locator('#textInputPower').text_content()=='1.20 kW'
+                assert shi.locator('#gSymconWarmWaterSetpoint').is_visible()
+                assert shi.locator('#gSymconHeatingCorrection').is_visible()
+                assert not shi.locator('#gHPStatusWW').is_visible()
+                assert shi.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='symcon-modern-rotate'
+                assert shi.locator('#textHeatPumpCycle').text_content()=='Läuft seit —'
+                update=json.loads(Path(artifacts,'shi-update.json').read_text())
+                shi.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
+                assert shi.locator('#textHPStatus').text_content()=='Warmwasser'
+                assert shi.locator('#switchValveFlow').get_attribute('data-target')=='hotwater'
+                assert shi.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='none'
+                assert shi.locator('#textHeatPumpCycle').text_content()=='Steht seit —'
+                shi.close()
 
             # Native measurements render and update with no measurement objects at all.
             internal_update=json.loads(Path(artifacts,'internal-only-update.json').read_text())

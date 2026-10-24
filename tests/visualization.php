@@ -109,7 +109,7 @@ $tests['visualization settings expose only external additions and layout; footer
     check(count(array_filter($fields['IDListe']['columns'], fn($c) => $c['name'] === 'visualizationFooter')) === 1, 'Footer checkbox missing');
     $module->properties['CommunicationMode'] = 'modbus';
     $fields = fields(json_decode($module->GetConfigurationForm(), true));
-    check(isset(array_column($fields['IDListe']['columns'], null, 'name')['shi']), 'SHI support column lost');
+    check(isset(array_column($fields['IDListe']['columns'], null, 'name')['interface']), 'Protocol support column lost');
     check(isset(array_column($fields['IDListe']['columns'], null, 'name')['visualizationFooter']), 'Footer lost in SHI');
 };
 $tests['own instance wins, fallbacks survive and converted values are never rescaled'] = static function (): void {
@@ -410,7 +410,8 @@ $tests['empty ID list supplies the whole graphic internally without creating mea
         check($module->properties['IDListe']==='[]','Automatic readings changed saved selections');
         check($payload['data']['mixerActual1']['value']===24.9 && $payload['data']['mixerTarget1']['value']===20.0,'Native mixer temperatures missing or rescaled');
         check($payload['data']['mixerOpen1']['value']===true && $payload['data']['mixerClose1']['value']===false,'Native motor signals missing');
-        check($payload['data']['inputPower']['watts']==1500 && $payload['data']['dHWSetpoint']['value']===50.0,'Input power or DHW setpoint missing');
+        check($payload['data']['inputPower']['watts']==1500,'Input power missing');
+        check(!isset($payload['config']['dhwSetpoint']),'Unused tank setpoint binding retained');
         check($payload['data']['heatingFlow']['value']==607,'Heat-meter flow missing');
         check($payload['data']['operatingStatus']['formatted']==='Keine Anforderung','Status requires a variable');
         check($payload['data']['outdoorTemperature']['value']===-3.5 && $payload['data']['heatingPumpPower']['value']===6.5,'Cache rescaled converted values');
@@ -828,6 +829,41 @@ $tests['cycle durations use converted internal controller values without measure
     }
 };
 
+$tests['SHI graphic uses its current internal snapshot and shared numeric controls without Java mode aliases'] = static function (): void {
+    $module=new Luxtronik();
+    $module->properties['CommunicationMode']='modbus';
+    $module->properties['IPAddress']='127.0.0.1';
+    $module->properties['TankHP']=false;
+    $module->properties['ThermalSolarAvailable']=false;
+    $module->properties['WWsetVisible']=true;
+    $module->properties['TempsetVisible']=true;
+    $module->properties['IDListe']='[]';
+    invoke($module,'CreateVariableProfiles');
+    foreach (['Anpassung_WW'=>50.0,'Anpassung_Temp'=>-1.5] as $ident=>$value) {
+        visualizationVariable($module,$ident,$value,$ident==='Anpassung_WW'?'WPLUX.Wset':'WPLUX.Tset');
+        $module->EnableAction($ident);
+    }
+    $points=[];
+    foreach (['input:10002'=>0,'input:10000'=>1,'input:10105'=>34.5,'input:10100'=>30.0,'input:10101'=>32.0,
+        'input:10108'=>-2.5,'input:10120'=>48.0,'input:10121'=>50.0,'input:10140'=>31.5,'input:10141'=>32.5,
+        'input:10354'=>true,'input:10355'=>false,'input:10351'=>true,'input:10300'=>5.8,'input:10301'=>1200,
+        'holding:10006'=>50.0,'holding:10002'=>-1.5] as $key=>$value) $points[$key]=['value'=>$value,'changedAt'=>0];
+    $cache=['source'=>invoke($module,'VisualizationSourceKey'),'updatedAt'=>time(),'stale'=>false,'points'=>$points,'unavailable'=>[]];
+    invoke($module,'SetBuffer','SHICache',json_encode($cache));
+    $p=visualizationPayload($module);
+    check($p['controls']['warmWaterSetpoint']['configured'] && $p['controls']['heatingTemperatureCorrection']['configured'],'Shared SHI numeric controls unavailable');
+    check(!$p['controls']['heating']['configured'] && !$p['controls']['hotwater']['configured'],'SHI modes misrepresented as Java enums');
+    check($p['data']['mixerActual1']['value']===31.5 && $p['data']['compressorRunning']['value']===true,'SHI internal values lost');
+    check($module->GetIDForIdent('Mischkreis_1_Vorlauftemperatur')===false && $module->GetIDForIdent('Ausgang_Verdichter_1')===false,'SHI graphic creates measurements');
+    $GLOBALS['testSHIVisualizationHtml']=$module->GetVisualizationTile();
+    $cache['points']['input:10000']['value']=0;
+    $cache['points']['input:10002']['value']=1;
+    $cache['points']['input:10355']['value']=true;
+    $cache['points']['input:10120']['value']=49.0;
+    invoke($module,'SetBuffer','SHICache',json_encode($cache));
+    $GLOBALS['testSHIVisualizationUpdate']=visualizationPayload($module);
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
@@ -839,6 +875,8 @@ if ($failed) exit(1);
 $dir=getenv('WP_TEST_ARTIFACT_DIR');
 if ($dir!==false && $dir!=='') {
     if(!is_dir($dir)) mkdir($dir,0777,true);
+    file_put_contents($dir.'/shi.html','<meta charset="utf-8">'.$GLOBALS['testSHIVisualizationHtml']);
+    file_put_contents($dir.'/shi-update.json',json_encode($GLOBALS['testSHIVisualizationUpdate']));
     file_put_contents($dir.'/internal-only.html','<meta charset="utf-8">'.$GLOBALS['testInternalVisualizationHtml']);
     file_put_contents($dir.'/internal-only-update.json',json_encode($GLOBALS['testInternalVisualizationUpdate']));
     $frequency=new Luxtronik();
