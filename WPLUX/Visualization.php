@@ -5684,6 +5684,7 @@ window.SymconHeatPump = {
             const data = currentData || {};
             const controls = currentControls || {};
             const previewAll = cfg.fullConfigurationPreview === true;
+            const powerText = (watts) => typeof watts === 'number' && Number.isFinite(watts) ? (watts / 1000).toFixed(2) + ' kW' : '—';
             clearTimeout(valveActivityTimer);
             valveActivityTimer = null;
             const valveExpiries = [];
@@ -5831,8 +5832,7 @@ window.SymconHeatPump = {
             show('#gHeaterControlButton', heaterControls.length > 0);
             const heaterButton = svg.querySelector('#gHeaterControlButton');
             if (heaterButton) {
-                const onCount = heaterControls.filter((heater) => heater.enabled === true).length;
-                setText('#textHeaterButtonState', heaterControls.some((heater) => heater.enabled === null) ? 'Übersicht' : onCount > 0 ? onCount + ' Ein' : heaterControls.some((heater) => heater.enabled === false) ? 'Aus' : 'Übersicht');
+                setText('#textHeaterButtonState', powerText(data.heaterRodTotalPower?.value));
                 heaterButton.style.cursor = 'pointer';
                 if (!heaterButton.dataset.bound) {
                     bindTap(heaterButton, openHeaterMenu);
@@ -6146,7 +6146,6 @@ window.SymconHeatPump = {
             });
             const inputPower = group('gInputPower', info);
             const inputWatts = data[cfg.inputPower]?.watts;
-            const powerText = (watts) => typeof watts === 'number' && Number.isFinite(watts) ? (watts / 1000).toFixed(2) + ' kW' : '—';
             fittedText(inputPower, {id:'textInputPower', class:'md', x:650, y:385, 'text-anchor':'end'}, powerText(inputWatts), 100);
             node(inputPower, 'title', {}, data[cfg.inputPower]?.sourceLabel || 'Keine gültige Eingangsleistung verfügbar');
             const heatOutput = svg.querySelector('#textPowerValue');
@@ -7229,7 +7228,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     public function UpdateHeaterConfiguration(int $number, int $variableID): void
     {
         if ($number < 1 || $number > 3) throw new InvalidArgumentException('Unbekannter Heizstab.');
-        $options = $this->HeaterConfigurationOptions($variableID);
+        $options = json_encode($this->HeaterConfigurationOptions($variableID), JSON_THROW_ON_ERROR);
         foreach (['On','Off'] as $role) {
             $name = 'VisualizationHeater' . $role . 'Value' . $number;
             $this->UpdateFormField($name, 'options', $options);

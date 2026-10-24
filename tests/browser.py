@@ -262,6 +262,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#textHeaterRodStatus').evaluate('e=>getComputedStyle(e).display')=='none'
                 assert page.locator('#pathBoilerHeatBolt').get_attribute('class')=='wp-boiler-heater-active'
                 assert page.locator('#textBoilerHeaterPower').text_content()=='0.08 kW'
+                assert page.locator('#textHeaterButtonState').text_content()=='0.08 kW'
                 changed=json.loads(json.dumps(payload))
                 changed['data']['heaterRodTotalPower']['value']=0
                 changed['data'][changed['config']['inputPower']]['watts']=1800
@@ -271,6 +272,16 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#textDHWSoll').text_content()=='52.5 °C'
                 assert page.locator('#pathBoilerHeatBolt').get_attribute('class')==''
                 assert page.locator('#textBoilerHeaterPower').text_content()=='0.00 kW'
+                assert page.locator('#textHeaterButtonState').text_content()=='0.00 kW'
+                changed['data']['heaterRodTotalPower']['value']=3500
+                page.evaluate('(data)=>window.handleMessage({type:"update",data})',changed['data'])
+                assert page.locator('#textHeaterButtonState').text_content()=='3.50 kW'
+                changed['data']['heaterRodTotalPower']['value']=None
+                page.evaluate('(data)=>window.handleMessage({type:"update",data})',changed['data'])
+                assert page.locator('#textHeaterButtonState').text_content()=='—'
+                changed['data'].pop('heaterRodTotalPower')
+                page.evaluate('(data)=>window.handleMessage({type:"update",data})',changed['data'])
+                assert page.locator('#textHeaterButtonState').text_content()=='—'
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
                 # Drive real numeric popups and capture only simulated SDK actions.
                 page.evaluate('''() => {
@@ -323,7 +334,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 heater_controls['heaterSwitches'][0]['enabled']=True
                 heater_controls['heaterSwitches'][2]['configured']=False
                 page.evaluate('(controls)=>window.handleMessage({type:"update",controls})',heater_controls)
-                assert page.locator('#textHeaterButtonState').text_content()=='1 Ein'
+                assert page.locator('#textHeaterButtonState').text_content()=='0.08 kW'
                 page.locator('#gHeaterControlButton').focus()
                 page.keyboard.press('Enter')
                 assert page.locator('#wp-mode-menu [data-heater="1"][data-value="false"]').text_content()=='Aus'

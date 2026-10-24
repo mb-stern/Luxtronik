@@ -632,7 +632,12 @@ $tests['heater configuration selects exact Ein and Aus associations and refreshe
         }
         $before=$module->properties; $actions=$GLOBALS['testRequestedActions'];
         $module->UpdateHeaterConfiguration(1,$id);
-        check(count($module->formUpdates)===4 && $module->formUpdates[0][2]===$choices,'Unsaved picker options not refreshed');
+        check(count($module->formUpdates)===4,'Unsaved picker options not refreshed');
+        foreach ([0,2] as $index) {
+            check($module->formUpdates[$index][1]==='options' && is_string($module->formUpdates[$index][2]),'Complex form options were not JSON-encoded');
+            check(json_decode($module->formUpdates[$index][2],true,512,JSON_THROW_ON_ERROR)===$choices,'Serialized options lost labels or typed association tokens');
+            check($module->formUpdates[$index+1][1]==='value' && $module->formUpdates[$index+1][2]==='','Old association selection not cleared');
+        }
         check($module->properties===$before && $GLOBALS['testRequestedActions']===$actions,'Form selection actuated or persisted a device');
     }
 };

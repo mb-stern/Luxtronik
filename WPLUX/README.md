@@ -109,7 +109,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
 - Drei Heizkreisplätze; Mischerdaten am Ventil, dezentes Blinken nur eine Minute nach einer Ausgangsänderung.
 - Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss am WP-Ausgang und RL-Soll beim Heizkreis.
-- Warmwasser mit Ist/Soll und summierter Heizstableistung samt gelbem Blitz; Heizstäbe über konfigurierbare Schalter bedienbar.
+- Warmwasser mit Ist/Soll und summierter Heizstableistung samt gelbem Blitz; Heizstäbe-Button mit Leistung und konfigurierbaren Schaltern.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel beim Schalter und HUP-Ansteuerung in Prozent.
 
 Weitere Änderungen werden unter 5.0 ergänzt. Versions- und Buildnummer werden

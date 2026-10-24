@@ -104,6 +104,7 @@ Schaltzustände werden nicht in Watt umgedeutet, doppelt ausgewählte Variablen
 werden nur einmal summiert. Bei fehlender oder ungültiger Leistung erscheint „—“.
 
 Der Button **Heizstäbe** zwischen Heizkorrektur und LUX-Bedienfeld zeigt die
+summierte Ist-Leistung in kW, bei fehlenden Leistungswerten „—“. Er öffnet die
 konfigurierten Heizstäbe mit Ein-/Ausschaltung. Geschaltet wird ausschließlich
 über `RequestAction` der in der Konfiguration ausgewählten externen
 Variable mit aktiver Aktion. Die Bedienung übernimmt Beschriftungen und

@@ -89,9 +89,12 @@ class IPSModuleStrict
     public array $messages = [];
     public array $updates = [];
     public array $formUpdates = [];
-    protected function UpdateFormField(string $name, string $parameter, mixed $value): void
+    protected function UpdateFormField(string $name, string $parameter, mixed $value): bool
     {
+        // Symcon accepts scalar values; complex form values must arrive as JSON strings.
+        if (!is_scalar($value)) throw new InvalidArgumentException('Cannot auto-convert value for parameter Value (Type is not supported)');
         $this->formUpdates[] = [$name, $parameter, $value];
+        return true;
     }
     public int $visualizationType = 0;
 
