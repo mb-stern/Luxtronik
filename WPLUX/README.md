@@ -105,9 +105,9 @@ Beispiel:
 Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Optionaler Modbus-/SHI-Lesebetrieb; Java bleibt Standard.
 - Vorhandene Idents bleiben erhalten. [Hinweise für Tester](SHI-TEST.md).
-- HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration und Fußzeile per Checkbox.
+- Bereinigte HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration und Fußzeile per Checkbox.
 - Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
-- Drei Heizkreisplätze; Mischerdaten am Ventil, dezentes Blinken nur eine Minute nach einer Ausgangsänderung.
+- Puffer vor den konfigurierbaren Mischern 1–3 mit eigenen Heizkreisabgängen; Vorlauf-Fallback als WP VL, dezentes Blinken nach Ausgangsänderungen.
 - Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss am WP-Ausgang und RL-Soll beim Heizkreis.
 - Warmwasser mit Ist/Soll und summierter Heizstableistung samt gelbem Blitz; Heizstäbe-Button mit Leistung und konfigurierbaren Schaltern.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel beim Schalter und HUP-Ansteuerung in Prozent.

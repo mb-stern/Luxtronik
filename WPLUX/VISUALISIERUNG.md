@@ -55,11 +55,23 @@ der drei Heizkreisplätze. Vom Luxtronik-Regler gelieferte Mischkreiswerte
 sind interne Werte, auch wenn Mischer und Pumpen außerhalb des Wärmepumpengehäuses
 montiert sind. Fremdvariablen stammen beispielsweise von separaten Symcon-Zählern.
 
-Heizkreis 1 nutzt wie im Quellprojekt die Idents des Wärmepumpenkreises.
-Weitere Heizkreisplätze behalten ausdrücklich konfigurierte Quellen. Ohne
-bestätigte Zuordnung bleiben ihre Temperaturfelder leer; Mischkreiswerte werden
-ihnen nicht automatisch zugewiesen. Die Heizfläche steht stellvertretend für
-angeschlossene Verbraucher, etwa mehrere Fußbodenheizungs-Schleifen.
+Je Heizkreis wird unter **Anbindung** zwischen **Direkt** und **Mischkreis 1–3**
+gewählt. Standardmäßig gehört Mischer 1 zu Heizkreis 1, entsprechend 2 und 3.
+Nur aktivierte Heizkreisplätze zeigen ihre ausgewählten Mischer. Messwerte allein
+beweisen nicht, dass ein Mischkreis tatsächlich verbaut ist.
+
+Der optionale Parallelpuffer sitzt links beim Infobereich, vor dem Verteiler.
+Jeder gemischte Abgang erhält rechts davon sein eigenes Ventil mit
+Rücklaufbeimischung, Pumpe und Heizfläche. Ohne Puffer führen die Leitungen direkt
+von der Wärmepumpe zu den Abgängen; direkte Heizkreise zeigen kein Mischerventil.
+Die Heizfläche steht stellvertretend für die angeschlossenen Verbraucher.
+
+Der allgemeine Vorlauf nutzt `Vorlauftemperatur_Heizkreis` (ID 10). Ein separater
+allgemeiner Sekundärvorlauf ist in der verwendeten Schnittstelle nicht bestätigt.
+Mischkreise zeigen ihren eigenen Vorlauf (IDs 21, 24, 137). Fehlt dieser, verwendet
+die Heizkreisanzeige den normalen Vorlauf mit der Beschriftung **WP VL**. Es wird
+kein zusätzlicher Messwert errechnet. Ein eigener Rücklauf je Mischer ist ebenfalls
+nicht bestätigt und wird nicht aus dem gemeinsamen Wärmepumpen-Rücklauf abgeleitet.
 
 Die separaten Mischerdaten nutzen `Mischkreis_N_Vorlauftemperatur`,
 `Mischkreis_N_Vorlauf_Soll_Temperatur`, `Ausgang_Mischkreis_N_Auf` und
@@ -74,7 +86,11 @@ Umschaltventil. Eine tatsächliche Ventilstellung wird nicht errechnet.
 Ist/Soll stehen unmittelbar neben dem Ventil;
 der frühere Mischkreis-Kasten entfällt. Für Mischkreis 1 werden die IDs 21, 22, 40
 und 41 automatisch verarbeitet. Für weitere aktivierte Heizkreisplätze werden
-auch die entsprechenden Mischerdaten automatisch eingebunden.
+die zugeordneten Mischerdaten automatisch eingebunden, unabhängig von der ID-Liste.
+
+Die Pumpenausgänge sind HUP (ID 39) für Mischkreis 1, FP2 (51) für Mischkreis 2
+und FP3 (140) für Mischkreis 3. Nur HUP hat hier den bestätigten Prozentwert 183.
+Der BUP-Ausgang wird nicht als Pufferspeicher-Ladepumpe dargestellt.
 
 Der Puffer nutzt `Ruecklauftemperatur_im_Trennspeicher` (ID 13) als **RL extern**;
 daraus werden keine drei Speicherfühler abgeleitet. Solarthermie nutzt

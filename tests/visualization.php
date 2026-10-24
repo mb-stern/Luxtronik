@@ -281,7 +281,7 @@ $tests['three heating places and mixer readings remain independent and use exist
     check($payload['data']['mixerOpen2']['value'] === false && $payload['data']['mixerClose2']['value'] === false, 'Idle signals changed');
     $module->properties['VisualizationHeatingCircuit1'] = false;
     check(invoke($module, 'BuildCardConfig')['heatingCircuitType1'] === 'off', 'Disabled HK1 shown');
-    check(count(invoke($module, 'BuildCardConfig')['mixers']) === 3, 'HK toggle removes independent mixers');
+    check(count(invoke($module, 'BuildCardConfig')['mixers']) === 2, 'Disabled branch retains a mixer');
 };
 
 $tests['old circuit settings migrate once while preserving configuration and attributes'] = static function (): void {
@@ -388,6 +388,9 @@ function mixedCircuitVisualization(): Luxtronik
         visualizationVariable($module, 'Ausgang_Mischkreis_' . $i . '_Auf', $i === 1);
         visualizationVariable($module, 'Ausgang_Mischkreis_' . $i . '_Zu', $i === 3);
     }
+    visualizationVariable($module,'Ausgang_Heizungsumwaelzpumpe',true);
+    visualizationVariable($module,'Ausgang_Pumpe_Mischkreis_2',false);
+    visualizationVariable($module,'Pumpe_Mischkreis_3',true);
     visualizationVariable($module, 'Ruecklauftemperatur_Heizkreis', 40.0, '~Temperature');
     visualizationVariable($module, 'Vorlauftemperatur_Heizkreis', 50.0, '~Temperature');
     visualizationVariable($module, 'copfaktor', 4.25);
@@ -660,6 +663,25 @@ $tests['valve change times distinguish first observation stable commands and sou
     $module->properties['IPAddress']='192.0.2.19';
     invoke($module,'StoreVisualizationPoints',[40=>true,41=>true]);
     check(invoke($module,'BuildVisualizationData')['mixerOpen1']['changedAt']===0,'Change times leaked across devices');
+};
+
+$tests['configured mixers resolve their branch sensors outputs and pumps without object creation'] = static function (): void {
+    $module = new Luxtronik();
+    $module->properties['VisualizationHeatingCircuitMixer1']=3;
+    $required=invoke($module,'GetVisualizationRequiredPointIDs');
+    foreach ([136,137,138,139,140] as $id) check(isset($required[$id]),'Selected mixer 3 not read on heating place 1');
+    foreach ([21,22,40,41,24,25,51,54,55] as $id) check(!isset($required[$id]),'Unselected mixer requested');
+    invoke($module,'StoreVisualizationPoints',[136=>32.0,137=>30.0,138=>false,139=>true,140=>false]);
+    $payload=visualizationPayload($module);
+    $mixer=$payload['config']['mixers'][0];
+    check(count($payload['config']['mixers'])===1 && $mixer['circuit']===1 && $mixer['number']===3,'Mixer attached to wrong branch');
+    check($payload['data'][$mixer['actual']]['value']===30.0 && $payload['data'][$mixer['target']]['value']===32.0,'Cross-mapped temperatures incorrect');
+    check($payload['data'][$mixer['pump']]['value']===false,'Pump signal not associated with selected mixer');
+    check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Mixer creates measurement objects');
+    $form=fields(json_decode($module->GetConfigurationForm(),true));
+    foreach ([1,2,3] as $n) check(array_column($form['VisualizationHeatingCircuitMixer'.$n]['options'],'value')===[0,1,2,3],'Direct or mixer choice missing');
+    $module->properties['VisualizationHeatingCircuitMixer1']=0;
+    check(invoke($module,'BuildCardConfig')['mixers']===[],'Direct branch retains mixer');
 };
 
 $failed=0;

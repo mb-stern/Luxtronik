@@ -48,6 +48,8 @@ trait LuxtronikVisualization
         'MixerOpen2' => ['Ausgang_Mischkreis_2_Auf'], 'MixerClose2' => ['Ausgang_Mischkreis_2_Zu'],
         'MixerActual3' => ['Mischkreis_3_Vorlauftemperatur'], 'MixerTarget3' => ['Mischkreis_3_Vorlauf_Soll_Temperatur'],
         'MixerOpen3' => ['Ausgang_Mischkreis_3_Auf'], 'MixerClose3' => ['Ausgang_Mischkreis_3_Zu'],
+        'MixerPump1' => ['Ausgang_Heizungsumwaelzpumpe'],
+        'MixerPump2' => ['Ausgang_Pumpe_Mischkreis_2'], 'MixerPump3' => ['Pumpe_Mischkreis_3'],
         'ComputedCOP' => ['copfaktor'], 'ComputedJAZ' => ['jazfaktor'],
         'InputPower' => ['Leistungsaufnahme'],
         'HeatingFlow' => ['Waermemengenzaehler_Durchfluss'],
@@ -72,6 +74,7 @@ trait LuxtronikVisualization
         $this->RegisterPropertyInteger('VisualizationHeatingPumpSpeed', 0);
         for ($i = 1; $i <= 3; ++$i) {
             $this->RegisterPropertyBoolean('VisualizationHeatingCircuit' . $i, $i === 1);
+            $this->RegisterPropertyInteger('VisualizationHeatingCircuitMixer' . $i, $i);
             $this->RegisterPropertyInteger('VisualizationRoomVariable' . $i, 0);
             $this->RegisterPropertyString('VisualizationRoomLabel' . $i, '');
             $this->RegisterPropertyString('VisualizationRoomDisplay' . $i, 'both');
@@ -477,57 +480,6 @@ trait LuxtronikVisualization
         opacity: .8;
     }
 
-    /*
-     * Dezente Flussanimation für unsere erweiterte Temperaturdarstellung.
-     * Die Original-Card bleibt unangetastet, solange eigene Farben
-     * deaktiviert sind.
-     */
-    @keyframes symcon-flow-forward {
-        from { stroke-dashoffset: 0; }
-        to   { stroke-dashoffset: -24; }
-    }
-
-    @keyframes symcon-flow-reverse {
-        from { stroke-dashoffset: 0; }
-        to   { stroke-dashoffset: 24; }
-    }
-
-    .symcon-flow-overlay {
-        pointer-events: none;
-        fill: none !important;
-        stroke: rgba(255,255,255,.68) !important;
-        stroke-width: 2.2 !important;
-        stroke-dasharray: 4 8 !important;
-        stroke-linecap: round !important;
-        vector-effect: non-scaling-stroke;
-    }
-
-    .symcon-flow-forward {
-        animation: symcon-flow-forward 1.4s linear infinite;
-    }
-
-    .symcon-flow-reverse {
-        animation: symcon-flow-reverse 1.4s linear infinite;
-    }
-
-    /*
-     * Kältekreis: Flusspunkte bewusst dünner als bei den übrigen Leitungen,
-     * damit die Temperaturfarbe der 5-px-Leitung klar sichtbar bleibt.
-     */
-    .symcon-flow-overlay.symcon-flow-refrigerant {
-        stroke-width: 1.25 !important;
-        stroke: rgba(255,255,255,.62) !important;
-        stroke-dasharray: 3 9 !important;
-    }
-
-    /*
-     * Heizkörper/Fußbodenheizung: Flusspunkte klar erkennbar,
-     * aber weiterhin schmaler als die farbige Leitung.
-     */
-    .symcon-flow-overlay.symcon-flow-emitter {
-        stroke-width: 1.45 !important;
-        stroke-dasharray: 3 8 !important;
-    }
     #wp-luxtronik-dialog {
         width: 760px;
         max-width: calc(100vw - 24px);
@@ -718,17 +670,16 @@ HTML;
             $config['heatingCircuitMixed' . $i] = false;
         }
         $config['mixers'] = [];
-        for ($i = 1; $i <= 3; ++$i) {
-            // Mixer 1 is always shown. Further mixer telemetry appears when available.
-            if ($i > 1 && $this->GetVisualizationPointData('MixerActual' . $i) === null
-                && $this->GetVisualizationPointData('MixerTarget' . $i) === null
-                && $this->GetVisualizationPointData('MixerOpen' . $i) === null
-                && $this->GetVisualizationPointData('MixerClose' . $i) === null) continue;
-            $config['mixers'][] = ['number' => $i,
+        for ($circuit = 1; $circuit <= 3; ++$circuit) {
+            if (!$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $circuit)) continue;
+            $i = $this->ReadPropertyInteger('VisualizationHeatingCircuitMixer' . $circuit);
+            if ($i < 1 || $i > 3) continue;
+            $config['mixers'][] = ['number' => $i, 'circuit' => $circuit,
                 'actual' => $this->DataKey('MixerActual' . $i, 'mixerActual' . $i),
                 'target' => $this->DataKey('MixerTarget' . $i, 'mixerTarget' . $i),
                 'open' => $this->DataKey('MixerOpen' . $i, 'mixerOpen' . $i),
-                'close' => $this->DataKey('MixerClose' . $i, 'mixerClose' . $i)];
+                'close' => $this->DataKey('MixerClose' . $i, 'mixerClose' . $i),
+                'pump' => $this->DataKey('MixerPump' . $i, 'mixerPump' . $i)];
         }
         $config['roomTemperatures'] = $this->GetVisualizationRoomSources();
         $config['inputPower'] = $this->DataKey('InputPower', 'inputPower');
@@ -855,7 +806,7 @@ HTML;
 
         foreach (self::VISUALIZATION_EXTRA_IDENT_MAP as $property => $idents) {
             $key = lcfirst($property);
-            $this->AddVariableData($data, $key, $property, str_starts_with($property, 'MixerOpen') || str_starts_with($property, 'MixerClose') || $property === 'ThermalSolarPump');
+            $this->AddVariableData($data, $key, $property, str_starts_with($property, 'MixerOpen') || str_starts_with($property, 'MixerClose') || str_starts_with($property, 'MixerPump') || $property === 'ThermalSolarPump');
         }
         $input = $this->GetVisualizationPointData('InputPower');
         if ($input !== null) {
@@ -1684,33 +1635,6 @@ window.SymconHeatPump = {
          * in der Symcon-App ihren eigenen gespeicherten Ansichtsstatus.
          */
 
-        const getHeatPumpInstanceID = () => {
-            try {
-                const match =
-                    window.location.pathname.match(
-                        /\/visu\/(\d+)\/?/
-                    );
-
-                return currentConfig.instanceId ? String(currentConfig.instanceId) : (match ? match[1] : null);
-            } catch (_) {
-                return null;
-            }
-        };
-
-        const getInstanceStorageScope = () => {
-            const instanceID =
-                getHeatPumpInstanceID();
-
-            if (!instanceID) {
-                return null;
-            }
-
-            return `instance-${instanceID}`;
-        };
-
-        const instanceStorageScope =
-            getInstanceStorageScope();
-
         const errorBox = document.getElementById('wp-error');
 
         const showError = (message) => {
@@ -1863,21 +1787,6 @@ window.SymconHeatPump = {
             return null;
         };
 
-        const readStateNumber = (entity) => {
-            if (!entity || !currentData || !currentData[entity]) {
-                return null;
-            }
-
-            const raw = currentData[entity].value;
-            const normalized = String(raw ?? '')
-                .trim()
-                .replace(',', '.')
-                .replace(/[^0-9+\-.]/g, '');
-
-            const value = Number(normalized);
-            return Number.isFinite(value) ? value : null;
-        };
-
         /*
          * Die Speicher der Original-Card verwenden tempColor().
          * Dadurch gilt automatisch dieselbe Skala für Puffer und Warmwasser.
@@ -1892,303 +1801,6 @@ window.SymconHeatPump = {
             }
 
             return temperatureColor(temp) || '#ffffff00';
-        };
-
-
-
-        const setStroke = (svg, selector, value) => {
-            const element = svg.querySelector(selector);
-            if (element) {
-                element.style.stroke = value;
-            }
-        };
-
-        const applyRefrigerantCircuitMode = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-            const cooling = stateIsOn(currentConfig.heatingPumpCoolingMode);
-
-            const getText = (selector) => {
-                const el = svg.querySelector(selector);
-                return el ? el.textContent : '';
-            };
-
-            const setText = (selector, value) => {
-                const el = svg.querySelector(selector);
-                if (el) {
-                    el.textContent = value;
-                }
-            };
-
-            /*
-             * Reversibler Kältekreis:
-             *
-             * Heizbetrieb:
-             *   Außenseite links  = Verdampfer / Niederdruck
-             *   Wasserseite rechts = Verflüssiger / Hochdruck
-             *
-             * Kühlbetrieb:
-             *   Außenseite links  = Verflüssiger / Hochdruck
-             *   Wasserseite rechts = Verdampfer / Niederdruck
-             *
-             * Verdichter und Expansionsventil bleiben an ihrer Position.
-             * Wir spiegeln NICHT die komplette SVG, damit Texte und Symbole
-             * nicht seitenverkehrt werden. Stattdessen werden die Funktionen
-             * der beiden Wärmetauscher samt Messwerten sauber vertauscht.
-             */
-
-            if (!cooling) {
-                return;
-            }
-
-            const evaporatorLabel = getText('#textEvaporator');
-            const evaporatorPressure = getText('#textEvaporatorPressure');
-            const evaporatorTemperature = getText('#textEvaporatorTemperature');
-
-            const condenserLabel = getText('#textCondenser');
-            const condenserPressure = getText('#textCondenserPressure');
-            const condenserTemperature = getText('#textCondenserTemperature');
-
-            setText('#textEvaporator', condenserLabel || 'Kondensator');
-            setText('#textEvaporatorPressure', condenserPressure);
-            setText('#textEvaporatorTemperature', condenserTemperature);
-
-            setText('#textCondenser', evaporatorLabel || 'Verdampfer');
-            setText('#textCondenserPressure', evaporatorPressure);
-            setText('#textCondenserTemperature', evaporatorTemperature);
-
-            /*
-             * Die Original-SVG hat eindeutige IDs für genau die beiden
-             * Wärmetauscher-Symbole:
-             *
-             * Verdampfer:
-             *   #pathHPModelEvaporatorSymbol001
-             *   #pathHPModelEvaporatorSymbol002
-             *
-             * Verflüssiger:
-             *   #pathHPModelCondenserSymbol
-             *
-             * Im Kühlbetrieb werden ausschließlich diese drei Pfade verschoben.
-             * Verdichter, Expansionsventil, Pumpen, Leitungen und Texte bleiben
-             * unangetastet.
-             */
-            const evaporatorSymbols = [
-                svg.querySelector('#pathHPModelEvaporatorSymbol001'),
-                svg.querySelector('#pathHPModelEvaporatorSymbol002')
-            ].filter(Boolean);
-
-            const condenserSymbol = svg.querySelector('#pathHPModelCondenserSymbol');
-
-            if (
-                evaporatorSymbols.length === 2
-                && condenserSymbol
-                && svg.dataset.symconHeatExchangerSymbolsSwapped !== '1'
-            ) {
-                const unionBox = (elements) => {
-                    const boxes = elements.map((element) => element.getBBox());
-
-                    const minX = Math.min(...boxes.map((box) => box.x));
-                    const minY = Math.min(...boxes.map((box) => box.y));
-                    const maxX = Math.max(...boxes.map((box) => box.x + box.width));
-                    const maxY = Math.max(...boxes.map((box) => box.y + box.height));
-
-                    return {
-                        cx: (minX + maxX) / 2,
-                        cy: (minY + maxY) / 2
-                    };
-                };
-
-                const evaporatorCenter = unionBox(evaporatorSymbols);
-                const condenserCenter = unionBox([condenserSymbol]);
-
-                const evaporatorDx = condenserCenter.cx - evaporatorCenter.cx;
-                const evaporatorDy = condenserCenter.cy - evaporatorCenter.cy;
-
-                const condenserDx = evaporatorCenter.cx - condenserCenter.cx;
-                const condenserDy = evaporatorCenter.cy - condenserCenter.cy;
-
-                const movePath = (element, dx, dy) => {
-                    const originalTransform = element.getAttribute('transform') || '';
-
-                    element.setAttribute(
-                        'transform',
-                        'translate(' + dx + ' ' + dy + ')'
-                        + (originalTransform ? ' ' + originalTransform : '')
-                    );
-                };
-
-                evaporatorSymbols.forEach((element) => {
-                    movePath(element, evaporatorDx, evaporatorDy);
-                });
-
-                movePath(condenserSymbol, condenserDx, condenserDy);
-
-                svg.dataset.symconHeatExchangerSymbolsSwapped = '1';
-            }
-
-            svg.dataset.refrigerantCircuitDirection = 'reversed';
-        };
-
-        const applyCoolingVisualization = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-            const cooling = stateIsOn(currentConfig.heatingPumpCoolingMode);
-
-            /*
-             * WICHTIG:
-             * Verdampfer/Kondensator und ihre Messwerte bleiben unverändert.
-             * Die Original-Card kennt keine hydraulische Umschaltung im Kühlbetrieb.
-             *
-             * Wir ändern deshalb ausschließlich die Gebäudeseite:
-             *
-             * Heizen:
-             *   Vorlauf  = warm / rot
-             *   Rücklauf = kalt / blau
-             *
-             * Kühlen:
-             *   Vorlauf  = kalt / blau
-             *   Rücklauf = wärmer / rot
-             */
-            const supplyColor = cooling ? '#0a84ff' : '#ff3b30';
-            const returnColor = cooling ? '#ff3b30' : '#0a84ff';
-
-            const setStrokeColor = (selector, color) => {
-                const element = svg.querySelector(selector);
-                if (element) {
-                    element.style.setProperty('stroke', color, 'important');
-                }
-            };
-
-
-            // Heizwasserseite / Puffer / Heizkreise.
-            // Selektoren, die in einer bestimmten Topologie nicht existieren,
-            // werden einfach übersprungen.
-            [
-                '#pathPipeToBuffer',
-                '#pathPipeToHeatingCircuitPump',
-                '#pathPipeToHeatingCircuitPump2',
-                '#pathPipeToHeatingCircuitPump3',
-                '#pathPipeBufferToHeating',
-                '#pathPipeTankHPToHeating',
-                '#pathPipeHeatingSupply',
-                '#pathPipeHeatingSupply2',
-                '#pathPipeHeatingSupply3'
-            ].forEach((selector) => setStrokeColor(selector, supplyColor));
-
-            [
-                '#pathPipeFromBuffer',
-                '#pathPipeToHP',
-                '#pathPipeToHP2',
-                '#pathPipeHeatingToBuffer',
-                '#pathPipeHeatingReturn',
-                '#pathPipeHeatingReturn2',
-                '#pathPipeHeatingReturn3'
-            ].forEach((selector) => setStrokeColor(selector, returnColor));
-
-            // Falls die Heizkreise ihre Farben über SVG-Verläufe beziehen,
-            // diese im Kühlbetrieb ebenfalls umkehren.
-            const gradientPairs = [
-                ['#stopCircuit1', '#stopCircuit2'],
-                ['#stopCircuit3', '#stopCircuit4'],
-                ['#stopCircuit5', '#stopCircuit6']
-            ];
-
-            gradientPairs.forEach(([supplyStopSelector, returnStopSelector]) => {
-                const supplyStop = svg.querySelector(supplyStopSelector);
-                const returnStop = svg.querySelector(returnStopSelector);
-
-                if (supplyStop) {
-                    supplyStop.style.setProperty('stop-color', supplyColor, 'important');
-                }
-
-                if (returnStop) {
-                    returnStop.style.setProperty('stop-color', returnColor, 'important');
-                }
-            });
-
-            // Heizkreis-Symbole optional leicht an den Modus anpassen, ohne
-            // die originale Geometrie/Topologie zu verändern.
-            if (cooling) {
-                [
-                    '#gHeaterCircuit1',
-                    '#gHeaterCircuit2',
-                    '#gHeaterCircuit3'
-                ].forEach((selector) => {
-                    const group = svg.querySelector(selector);
-                    if (group) {
-                        group.dataset.symconCooling = '1';
-                    }
-                });
-            } else {
-                [
-                    '#gHeaterCircuit1',
-                    '#gHeaterCircuit2',
-                    '#gHeaterCircuit3'
-                ].forEach((selector) => {
-                    const group = svg.querySelector(selector);
-                    if (group) {
-                        delete group.dataset.symconCooling;
-                    }
-                });
-            }
-
-            // Nur als interner Marker für spätere Erweiterungen.
-            svg.dataset.operatingMode = cooling ? 'cooling' : 'heating';
-        };
-
-        const formatStateForSvg = (entityName) => {
-            if (!entityName || !currentData || !currentData[entityName]) {
-                return '';
-            }
-
-            const item = currentData[entityName];
-            const raw = item.value;
-
-            if (raw === null || raw === undefined || raw === '') {
-                return '';
-            }
-
-            const numeric = Number(raw);
-            const unit = item.unit ? String(item.unit).trim() : '';
-
-            if (!Number.isNaN(numeric)) {
-                const value = new Intl.NumberFormat('de-CH', {
-                    minimumFractionDigits: 1,
-                    maximumFractionDigits: 1
-                }).format(numeric);
-
-                return unit ? value + ' ' + unit : value;
-            }
-
-            return unit ? String(raw) + ' ' + unit : String(raw);
-        };
-
-        const updateRefrigerantValues = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const values = [
-                ['#textEvaporatorPressure', currentConfig.evaporatorPressure],
-                ['#textEvaporatorTemperature', currentConfig.evaporatorTemperature],
-                ['#textCondenserPressure', currentConfig.condenserPressure],
-                ['#textCondenserTemperature', currentConfig.condenserTemperature],
-                ['#textExpansionValveOpening', currentConfig.expansionValveOpening],
-                ['#textCompressorValue', currentConfig.compressorValue]
-            ];
-
-            values.forEach(([selector, entityName]) => {
-                const element = card.content.querySelector(selector);
-                if (element) {
-                    element.textContent = formatStateForSvg(entityName);
-                }
-            });
         };
 
         const resolveLayoutTextColor = () => {
@@ -2417,7 +2029,7 @@ window.SymconHeatPump = {
              */
             svg.querySelectorAll('*').forEach((element) => {
                 if (
-                    (element.classList && element.classList.contains('symcon-flow-overlay'))
+                    (element.classList && element.classList.contains('wp-live-flow'))
                     || (element.classList && element.classList.contains('pn'))
                     || (element.classList && element.classList.contains('bt'))
                     || (element.classList && element.classList.contains('theme-surface'))
@@ -2497,54 +2109,6 @@ window.SymconHeatPump = {
                 queueMicrotask(() => applyCardData());
             });
         };
-
-        const stateIsOn = (entityName) => {
-            if (!entityName || !currentData || !currentData[entityName]) {
-                return false;
-            }
-
-            const item = currentData[entityName];
-            if (item.binary) {
-                return !!item.value;
-            }
-
-            return ['1', 'true', 'on', 'yes', 'ja', 'ein', 'active', 'aktiv']
-                .includes(String(item.value ?? '').trim().toLowerCase());
-        };
-
-        const disableOriginalSettingsLink = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-            const link = svg.querySelector('#linkSettings');
-
-            if (!link || !link.parentNode) {
-                return;
-            }
-
-            /*
-             * Die Original-SVG legt die komplette Statusleiste in
-             * <a id="linkSettings" href="#"> ... </a>.
-             *
-             * Auf dem Handy erzeugt Symcon/WebView daraus eine zusätzliche
-             * Link-/Pfeilfläche. Ein preventDefault auf touchend ist aber
-             * ebenfalls falsch, weil dadurch der nachfolgende click auf
-             * unseren Icons unterdrückt werden kann.
-             *
-             * Lösung: den <a>-Wrapper komplett entfernen, die Kinder aber
-             * unverändert an derselben Stelle im SVG belassen.
-             */
-            const parent = link.parentNode;
-
-            while (link.firstChild) {
-                parent.insertBefore(link.firstChild, link);
-            }
-
-            parent.removeChild(link);
-        };
-
 
         const closeModeMenu = () => {
             const menu = document.getElementById('wp-mode-menu');
@@ -2800,2558 +2364,6 @@ window.SymconHeatPump = {
                 input.focus();
                 input.select();
             }
-        };
-
-
-        const setIconColor = (group, color) => {
-            if (!group) {
-                return;
-            }
-
-            const tag = String(group.tagName || '').toLowerCase();
-
-            group.setAttribute('color', color);
-            group.setAttribute('fill', color);
-            group.setAttribute('stroke', color);
-            group.style.setProperty('color', color, 'important');
-            group.style.setProperty('fill', color, 'important');
-
-            /*
-             * Warmwasser ist in der Original-SVG kein <g>, sondern ein
-             * einzelnes <use xlink:href="#gWaterTap">. Genau dieses Element
-             * muss direkt eingefärbt werden.
-             */
-            if (tag === 'use') {
-                group.style.setProperty('fill', color, 'important');
-                group.style.setProperty('stroke', color, 'important');
-                return;
-            }
-
-            group.querySelectorAll(
-                'path, rect, circle, ellipse, line, polyline, polygon, use'
-            ).forEach((element) => {
-                const computed = getComputedStyle(element);
-                const fill = String(computed.fill || '').toLowerCase();
-                const stroke = String(computed.stroke || '').toLowerCase();
-
-                if (
-                    fill !== 'none'
-                    && fill !== 'rgba(0, 0, 0, 0)'
-                    && fill !== 'transparent'
-                ) {
-                    element.setAttribute('fill', color);
-                    element.style.setProperty('fill', color, 'important');
-                }
-
-                if (
-                    stroke !== 'none'
-                    && stroke !== 'rgba(0, 0, 0, 0)'
-                    && stroke !== 'transparent'
-                ) {
-                    element.setAttribute('stroke', color);
-                    element.style.setProperty('stroke', color, 'important');
-                }
-            });
-        };
-
-        const applyWWValvePipeGeometry = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-
-            const pipeToBuffer = svg.querySelector('#pathPipeToBuffer');
-            const pipeFromBuffer = svg.querySelector('#pathPipeFromBuffer');
-            const pipeHotCold = svg.querySelector('#pathPipeHotColdHeatpump');
-            const pipeHotWater = svg.querySelector('#pathPipeHotWaterToTank');
-
-            /*
-             * Das Umschaltventil sitzt bei (620 / 450), Radius 30.
-             * Es gibt drei Leitungsstücke, die in den Ventilbereich hineinlaufen:
-             *
-             * 1. pathPipeToBuffer          -> nach oben
-             * 2. pathPipeHotColdHeatpump  -> von links
-             * 3. pathPipeHotWaterToTank   -> vom Warmwasserspeicher
-             *
-             * Nur diese drei Endstücke werden am Ventilrand gekürzt.
-             */
-
-            if (pipeToBuffer) {
-                const original =
-                    'm 598,450 c 22,0 22,-15 22,-30 V 158 c 0,-12 5,-18 18,-18 H 750';
-
-                const withValve =
-                    'M 620,420 V 158 c 0,-12 5,-18 18,-18 H 750';
-
-                pipeToBuffer.setAttribute(
-                    'd',
-                    currentConfig.wwHeatingValve ? withValve : original
-                );
-            }
-
-            if (pipeFromBuffer) {
-                const original =
-                    'm 997,265 c 0,15 0,30 -22,30 H 650 c -15,0 -22,13 -22,30 v 170 c 0,18 -18,30 -30,30';
-
-                /*
-                 * Blaue Rücklaufleitung:
-                 * Der senkrechte Abschnitt liegt bei x=628 und läuft damit
-                 * durch den Ventilkreis (Mittelpunkt 620/450, r=30).
-                 * Nur der Bereich innerhalb des Kreises wird ausgespart.
-                 */
-                const withValve =
-                    'm 997,265 c 0,15 0,30 -22,30 H 650 c -15,0 -22,13 -22,30 V 420 '
-                    + 'M 628,480 V 495 c 0,18 -18,30 -30,30';
-
-                pipeFromBuffer.setAttribute(
-                    'd',
-                    currentConfig.wwHeatingValve ? withValve : original
-                );
-            }
-
-            if (pipeHotCold) {
-                const original =
-                    'm 598,525 h -85 c -15,0 -30,0 -35,-15 0,-15 15,-15 30,-15 15,0 30,0 30,10 0,5 -15,5 -30,5 -15,0 -30,0 -30,-15 0,-15 15,-15 30,-15 15,0 30,0 30,10 0,5 -15,5 -30,5 -15,0 -30,0 -30,-15 0,-15 15,-15 30,-15 15,0 30,0 30,10 0,5 -15,5 -30,5 -15,0 -30,0 -30,-15 0,-15 15,-15 30,-15 h 90';
-
-                /*
-                 * Original endet bei x=598 / y=450 und läuft damit in den
-                 * Ventilkreis hinein. Mit Ventil endet der letzte horizontale
-                 * Abschnitt bereits bei x=590, also exakt am linken Kreisrand.
-                 */
-                const withValve =
-                    'm 598,525 h -85 c -15,0 -30,0 -35,-15 0,-15 15,-15 30,-15 15,0 30,0 30,10 0,5 -15,5 -30,5 -15,0 -30,0 -30,-15 0,-15 15,-15 30,-15 15,0 30,0 30,10 0,5 -15,5 -30,5 -15,0 -30,0 -30,-15 0,-15 15,-15 30,-15 15,0 30,0 30,10 0,5 -15,5 -30,5 -15,0 -30,0 -30,-15 0,-15 15,-15 30,-15 h 82';
-
-                pipeHotCold.setAttribute(
-                    'd',
-                    currentConfig.wwHeatingValve ? withValve : original
-                );
-            }
-
-            if (pipeHotWater) {
-                const original =
-                    'm 598,525 h 95 c 15,0 30,0 35,-15 0,-15 -15,-15 -30,-15 -15,0 -30,0 -30,10 0,5 15,5 30,5 15,0 30,0 30,-15 0,-15 -15,-15 -30,-15 -15,0 -30,0 -30,10 0,5 15,5 30,5 15,0 30,0 30,-15 0,-15 -15,-15 -30,-15 -15,0 -30,0 -30,10 0,5 15,5 30,5 15,0 30,0 30,-15 0,-15 -15,-15 -30,-15 H 598';
-
-                /*
-                 * Dieser Pfad kommt von rechts aus Richtung Warmwasserspeicher.
-                 * Mit Ventil endet er deshalb am rechten Kreisrand bei x=650.
-                 */
-                const withValve =
-                    'm 598,525 h 95 c 15,0 30,0 35,-15 0,-15 -15,-15 -30,-15 -15,0 -30,0 -30,10 0,5 15,5 30,5 15,0 30,0 30,-15 0,-15 -15,-15 -30,-15 -15,0 -30,0 -30,10 0,5 15,5 30,5 15,0 30,0 30,-15 0,-15 -15,-15 -30,-15 -15,0 -30,0 -30,10 0,5 15,5 30,5 15,0 30,0 30,-15 0,-15 -15,-15 -30,-15 H 650';
-
-                pipeHotWater.setAttribute(
-                    'd',
-                    currentConfig.wwHeatingValve ? withValve : original
-                );
-            }
-        };
-
-        const storedCircuitColorKey = 'symconHeatPumpStoredCircuitColors';
-
-        const loadStoredCircuitColors = () => {
-            try {
-                const raw = window.sessionStorage
-                    ? window.sessionStorage.getItem(storedCircuitColorKey)
-                    : null;
-
-                return raw ? JSON.parse(raw) : {};
-            } catch (error) {
-                return {};
-            }
-        };
-
-
-        let storedCircuitColors = loadStoredCircuitColors();
-
-        const applyAdditionalValues = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-
-            for (let index = 0; index < 10; index++) {
-                const suffix = String(index).padStart(3, '0');
-                const labelKey = 'additionalLabel' + suffix;
-                const valueKey = 'additionalValue' + suffix;
-
-                const labelElement =
-                    svg.querySelector('#textLabel' + suffix);
-                const valueElement =
-                    svg.querySelector('#textValue' + suffix);
-
-                const label = String(
-                    currentConfig[labelKey] || ''
-                ).trim();
-
-                const entity = currentConfig[valueKey] || '';
-                const value = entity
-                    ? formatStateForSvg(entity)
-                    : '';
-
-                if (labelElement) {
-                    labelElement.textContent = label;
-                    labelElement.style.setProperty(
-                        'display',
-                        label ? 'inline' : 'none',
-                        'important'
-                    );
-                }
-
-                if (valueElement) {
-                    valueElement.textContent = value;
-                    valueElement.style.setProperty(
-                        'display',
-                        value ? 'inline' : 'none',
-                        'important'
-                    );
-                }
-            }
-        };
-
-        const normalizeTemperatureUnits = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-
-            /*
-             * Einheitliche Darstellung sämtlicher numerischer Temperaturen:
-             * immer "°C".
-             *
-             * Die Original-Card mischt je nach Element Werte mit "℃", "°C"
-             * oder ganz ohne Einheit. Wir normalisieren deshalb ausschließlich
-             * Text-Elemente mit Temp/Temperature im ID-Namen UND einem Zahlenwert.
-             * Beschriftungen wie "Vorlauftemperatur" bleiben unangetastet.
-             */
-            svg.querySelectorAll(
-                'text[id*="Temp"], text[id*="Temperature"]'
-            ).forEach((element) => {
-                const raw = String(element.textContent || '').trim();
-
-                if (!/[+-]?\d+(?:[.,]\d+)?/.test(raw)) {
-                    return;
-                }
-
-                const match = raw.match(/[+-]?\d+(?:[.,]\d+)?/);
-                if (!match) {
-                    return;
-                }
-
-                element.textContent = match[0] + ' °C';
-            });
-        };
-
-        const applyThermalSolarVisualization = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-            const solarGroup = svg.querySelector('#gThermalSolar');
-
-            if (!solarGroup) {
-                return;
-            }
-
-            /*
-             * Die Solarthermie-Gruppe wurde beim Einbetten der Original-SVG
-             * zunächst auf display:none gesetzt. Wenn Solarthermie in Symcon
-             * aktiviert ist, halten wir die gesamte Gruppe inklusive der
-             * Solar-Wendel ausdrücklich sichtbar.
-             */
-            if (!currentConfig.thermalSolarAvailable) {
-                solarGroup.style.setProperty('display', 'none', 'important');
-                solarGroup.style.setProperty('visibility', 'hidden', 'important');
-
-                const existingCoil =
-                    svg.querySelector('#symconThermalSolarTankCoil');
-
-                if (existingCoil) {
-                    existingCoil.style.setProperty(
-                        'display',
-                        'none',
-                        'important'
-                    );
-                    existingCoil.style.setProperty(
-                        'visibility',
-                        'hidden',
-                        'important'
-                    );
-                }
-
-                const existingHotConnector =
-                    svg.querySelector('#symconThermalSolarHotConnector');
-
-                if (existingHotConnector) {
-                    existingHotConnector.style.setProperty(
-                        'display',
-                        'none',
-                        'important'
-                    );
-                    existingHotConnector.style.setProperty(
-                        'visibility',
-                        'hidden',
-                        'important'
-                    );
-                }
-
-                const existingReturnText =
-                    svg.querySelector('#symconThermalSolarReturnTemp');
-
-                if (existingReturnText) {
-                    existingReturnText.style.setProperty(
-                        'display',
-                        'none',
-                        'important'
-                    );
-                    existingReturnText.style.setProperty(
-                        'visibility',
-                        'hidden',
-                        'important'
-                    );
-                }
-
-                return;
-            }
-
-            solarGroup.style.setProperty('display', 'inline', 'important');
-            solarGroup.style.setProperty('visibility', 'visible', 'important');
-
-            /*
-             * Solarpumpe nur anzeigen, wenn dafür tatsächlich eine Variable
-             * konfiguriert wurde. Die Solarthermie selbst kann also sichtbar sein,
-             * ohne dass automatisch eine Pumpe dargestellt wird.
-             */
-            const solarPumpGroup = svg.querySelector('#gThermalSolarPump');
-            if (solarPumpGroup) {
-                const pumpConfigured = !!currentConfig.thermalSolarPump;
-
-                solarPumpGroup.style.setProperty(
-                    'display',
-                    pumpConfigured ? 'inline' : 'none',
-                    'important'
-                );
-                solarPumpGroup.style.setProperty(
-                    'visibility',
-                    pumpConfigured ? 'visible' : 'hidden',
-                    'important'
-                );
-            }
-
-            /*
-             * Kühle Solar-Rücklauftemperatur nur anzeigen, wenn Solar Rücklauf
-             * tatsächlich konfiguriert ist.
-             */
-            let solarReturnText =
-                svg.querySelector('#symconThermalSolarReturnTemp');
-
-            if (currentConfig.thermalSolarReturnTemp) {
-                if (!solarReturnText) {
-                    solarReturnText = document.createElementNS(
-                        'http://www.w3.org/2000/svg',
-                        'text'
-                    );
-                    solarReturnText.setAttribute(
-                        'id',
-                        'symconThermalSolarReturnTemp'
-                    );
-                    /*
-                     * Gleiche X-Position wie textThermalSolarFluxTemp (x=850),
-                     * direkt darunter.
-                     */
-                    /*
-                     * Rücklauftemperatur auf derselben horizontalen Linie/
-                     * X-Ausrichtung wie die vorhandene Solar-Temperatur,
-                     * aber direkt unterhalb der kühlen Rücklaufleitung.
-                     */
-                    solarReturnText.setAttribute('x', '850');
-                    solarReturnText.setAttribute('y', '634');
-                    solarReturnText.setAttribute('text-anchor', 'end');
-                    solarReturnText.setAttribute('xml:space', 'preserve');
-                    solarReturnText.style.setProperty(
-                        'font-size',
-                        '16px',
-                        'important'
-                    );
-                    solarReturnText.style.setProperty(
-                        'fill',
-                        'var(--primary-text-color)',
-                        'important'
-                    );
-
-                    solarGroup.appendChild(solarReturnText);
-                }
-
-                const returnValue =
-                    readStateNumber(currentConfig.thermalSolarReturnTemp);
-
-                if (returnValue !== null) {
-                    solarReturnText.textContent =
-                        new Intl.NumberFormat('de-CH', {
-                            minimumFractionDigits: 1,
-                            maximumFractionDigits: 1
-                        }).format(returnValue) + ' °C';
-                } else {
-                    solarReturnText.textContent = '';
-                }
-
-                solarReturnText.style.setProperty(
-                    'display',
-                    'inline',
-                    'important'
-                );
-                solarReturnText.style.setProperty(
-                    'visibility',
-                    'visible',
-                    'important'
-                );
-            } else if (solarReturnText) {
-                solarReturnText.textContent = '';
-                solarReturnText.style.setProperty(
-                    'display',
-                    'none',
-                    'important'
-                );
-                solarReturnText.style.setProperty(
-                    'visibility',
-                    'hidden',
-                    'important'
-                );
-            }
-
-            /*
-             * Die Original-SVG verwendet für die Solar-Wendel lediglich ein <use>
-             * in gThermalSolar. Dieses liegt in der SVG-Reihenfolge HINTER der
-             * später gezeichneten, gefüllten Boilerfläche und kann deshalb
-             * vollständig verdeckt werden.
-             *
-             * Wir erzeugen daher einen eigenständigen Pfad direkt in gTankWW,
-             * unmittelbar NACH dem Boiler-Chassis. So liegt die Solar-Wendel
-             * sichtbar über der Speicherfüllung, aber weiterhin sauber innerhalb
-             * des Boilers.
-             */
-            const tankGroup = svg.querySelector('#gTankWW');
-            const tankChassis = svg.querySelector('#pathTankWWChassis');
-            const sourceCoil = svg.querySelector('#pathPipeHotColdHeatpump');
-            const originalSolarUse = svg.querySelector('#usePathPipeThermalSolarTank');
-
-            let solarCoil = svg.querySelector('#symconThermalSolarTankCoil');
-
-            if (!solarCoil && tankGroup && tankChassis && sourceCoil) {
-                solarCoil = sourceCoil.cloneNode(false);
-                solarCoil.setAttribute('id', 'symconThermalSolarTankCoil');
-                solarCoil.setAttribute('transform', 'translate(193,90)');
-                solarCoil.removeAttribute('style');
-
-                if (tankChassis.nextSibling) {
-                    tankGroup.insertBefore(solarCoil, tankChassis.nextSibling);
-                } else {
-                    tankGroup.appendChild(solarCoil);
-                }
-            }
-
-            /*
-             * Die ursprüngliche <use>-Kopie aus gThermalSolar unterdrücken,
-             * damit bei halbtransparentem Original-Speicher keine doppelte
-             * Wendel sichtbar wird.
-             */
-            if (originalSolarUse) {
-                originalSolarUse.style.setProperty('display', 'none', 'important');
-                originalSolarUse.style.setProperty('visibility', 'hidden', 'important');
-            }
-
-            if (solarCoil) {
-                solarCoil.style.setProperty('display', 'inline', 'important');
-                solarCoil.style.setProperty('visibility', 'visible', 'important');
-                solarCoil.style.setProperty('fill', 'none', 'important');
-                solarCoil.style.setProperty('stroke-width', '5', 'important');
-                solarCoil.style.setProperty('stroke-opacity', '1', 'important');
-            }
-
-            /*
-             * Kurzes heißes Verbindungsstück zwischen Solar-Vorlauf und
-             * Solar-Wendel. In der Original-SVG kann dieser Bereich durch die
-             * später gezeichnete Boilerfläche optisch unterbrochen werden.
-             *
-             * Deshalb als eigener Pfad direkt in gTankWW und damit oberhalb der
-             * Speicherfüllung zeichnen.
-             */
-            let solarHotConnector =
-                svg.querySelector('#symconThermalSolarHotConnector');
-
-            if (!solarHotConnector && tankGroup) {
-                solarHotConnector = document.createElementNS(
-                    'http://www.w3.org/2000/svg',
-                    'path'
-                );
-                solarHotConnector.setAttribute(
-                    'id',
-                    'symconThermalSolarHotConnector'
-                );
-
-                /*
-                 * Eintritt der Solar-Wendel liegt bei y=540.
-                 * Das kurze Stück verbindet Boilerwand (x=745) mit dem
-                 * vorhandenen Solar-Vorlauf/Wendelanschluss (x=791).
-                 */
-                solarHotConnector.setAttribute(
-                    'd',
-                    'M 745 540 H 791'
-                );
-                solarHotConnector.setAttribute('fill', 'none');
-
-                tankGroup.appendChild(solarHotConnector);
-            }
-
-            if (solarHotConnector) {
-                solarHotConnector.style.setProperty(
-                    'display',
-                    'inline',
-                    'important'
-                );
-                solarHotConnector.style.setProperty(
-                    'visibility',
-                    'visible',
-                    'important'
-                );
-                solarHotConnector.style.setProperty(
-                    'stroke-width',
-                    '5',
-                    'important'
-                );
-                solarHotConnector.style.setProperty(
-                    'stroke-opacity',
-                    '1',
-                    'important'
-                );
-                solarHotConnector.style.setProperty(
-                    'fill',
-                    'none',
-                    'important'
-                );
-            }
-
-            /*
-             * Bei abgeschalteten eigenen Temperaturfarben bleibt die originale
-             * Farbgebung der Heat-Pump-Card bestehen.
-             */
-            if (!false) {
-                [
-                    '#pathPipeThermalSolarHotWater',
-                    '#pathPipeThermalSolarColdWater',
-                    '#rectThermalSolarPanel',
-                    '#symconThermalSolarTankCoil'
-                ].forEach((selector) => {
-                    const element = svg.querySelector(selector);
-                    if (!element) {
-                        return;
-                    }
-
-                    element.style.removeProperty('stroke');
-                    element.style.removeProperty('stroke-opacity');
-                    element.style.removeProperty('fill');
-                    element.style.removeProperty('fill-opacity');
-                });
-
-                if (solarCoil) {
-                    solarCoil.style.setProperty(
-                        'stroke',
-                        'url(#linearGradientPipe1)',
-                        'important'
-                    );
-                    solarCoil.style.setProperty(
-                        'stroke-opacity',
-                        '1',
-                        'important'
-                    );
-                }
-
-                if (solarHotConnector) {
-                    solarHotConnector.style.setProperty(
-                        'stroke',
-                        '#ff0000',
-                        'important'
-                    );
-                }
-
-                return;
-            }
-
-            // Kollektortemperatur bleibt weiterhin als Messwert der Card erhalten.
-            // Für die Farbrichtung des Panels sind aber Solar-Vorlauf und
-            // Solar-Rücklauf maßgebend.
-            const panelTemperature =
-                readStateNumber(currentConfig.thermalSolarPanelTemp);
-
-            const supplyTemperature =
-                readStateNumber(currentConfig.thermalSolarFluxTemp);
-
-            /*
-             * Solar-Rücklauf ist neu optional konfigurierbar.
-             * Fehlt er, verwenden wir die untere Boilertemperatur als sinnvolle
-             * Näherung für das Fluid, das die Solar-Wendel wieder verlässt.
-             */
-            const returnTemperature =
-                readStateNumber(currentConfig.thermalSolarReturnTemp)
-                ?? readStateNumber(currentConfig.tankTempWWDown)
-                ?? readStateNumber(currentConfig.tankTempWWMiddle)
-                ?? readStateNumber(currentConfig.tankTempWWUp);
-
-            void panelTemperature;
-
-            const supplyColor = temperatureColor(supplyTemperature);
-            const returnColor = temperatureColor(returnTemperature);
-
-            const setStroke = (selector, color) => {
-                const element = svg.querySelector(selector);
-                if (!element || !color) {
-                    return;
-                }
-
-                element.style.setProperty('stroke', color, 'important');
-                element.style.setProperty('stroke-opacity', '1', 'important');
-            };
-
-
-            /*
-             * Solarleitungen:
-             * - pathPipeThermalSolarHotWater ist der heiße Vorlauf vom Panel
-             *   zum Boiler.
-             * - pathPipeThermalSolarColdWater ist der kühlere Rücklauf vom
-             *   Boiler zurück zum Panel.
-             */
-            setStroke('#pathPipeThermalSolarHotWater', supplyColor);
-            setStroke('#pathPipeThermalSolarColdWater', returnColor);
-            setStroke('#symconThermalSolarHotConnector', supplyColor);
-
-            /*
-             * Solarpanel:
-             * Die Originalgeometrie läuft von links (heißer Ausgang/Vorlauf)
-             * nach rechts (kühler Eingang/Rücklauf).
-             *
-             * Daher muss der Panelverlauf zwingend sein:
-             *   links  = Solar-Vorlauffarbe
-             *   rechts = Solar-Rücklauffarbe
-             *
-             * Die Kollektortemperatur bleibt ein eigener Messwert und wird NICHT
-             * mehr als Endfarbe des Panels verwendet.
-             */
-            let panelGradient = svg.querySelector(
-                '#symconLinearGradientThermalSolarPanel'
-            );
-
-            if (!panelGradient) {
-                const originalPanelGradient =
-                    svg.querySelector('#linearGradient3');
-
-                if (originalPanelGradient) {
-                    panelGradient = originalPanelGradient.cloneNode(true);
-                    panelGradient.setAttribute(
-                        'id',
-                        'symconLinearGradientThermalSolarPanel'
-                    );
-
-                    panelGradient.querySelectorAll('stop').forEach(
-                        (stop, index) => {
-                            stop.setAttribute(
-                                'id',
-                                'symconThermalSolarPanelStop' + (index + 1)
-                            );
-                        }
-                    );
-
-                    originalPanelGradient.parentNode.appendChild(panelGradient);
-                }
-            }
-
-            if (panelGradient && supplyColor && returnColor) {
-                const panelStops = panelGradient.querySelectorAll('stop');
-
-                if (panelStops.length >= 2) {
-                    panelStops[0].style.setProperty(
-                        'stop-color',
-                        supplyColor,
-                        'important'
-                    );
-                    panelStops[0].setAttribute(
-                        'stop-color',
-                        supplyColor
-                    );
-
-                    panelStops[panelStops.length - 1].style.setProperty(
-                        'stop-color',
-                        returnColor,
-                        'important'
-                    );
-                    panelStops[panelStops.length - 1].setAttribute(
-                        'stop-color',
-                        returnColor
-                    );
-                }
-
-                const panel = svg.querySelector('#rectThermalSolarPanel');
-
-                if (panel) {
-                    panel.style.setProperty(
-                        'fill',
-                        'url(#symconLinearGradientThermalSolarPanel)',
-                        'important'
-                    );
-                    panel.style.setProperty(
-                        'fill-opacity',
-                        '1',
-                        'important'
-                    );
-                }
-            }
-
-            /*
-             * Eigener Gradient nur für den eigenständigen Solar-Wendel-Pfad.
-             * Damit beeinflusst Solar weder die Wärmepumpen- noch die normale
-             * Boiler-Wendel.
-             */
-            let gradient = svg.querySelector('#symconLinearGradientThermalSolar');
-
-            if (!gradient) {
-                const sourceGradient = svg.querySelector('#linearGradientPipe1');
-
-                if (sourceGradient) {
-                    gradient = sourceGradient.cloneNode(true);
-                    gradient.setAttribute(
-                        'id',
-                        'symconLinearGradientThermalSolar'
-                    );
-
-                    gradient.querySelectorAll('stop').forEach((stop, index) => {
-                        stop.setAttribute(
-                            'id',
-                            'symconThermalSolarStop' + (index + 1)
-                        );
-                    });
-
-                    sourceGradient.parentNode.appendChild(gradient);
-                }
-            }
-
-            if (gradient && supplyColor && returnColor) {
-                const stops = gradient.querySelectorAll('stop');
-
-                if (stops.length >= 2) {
-                    stops[0].style.setProperty(
-                        'stop-color',
-                        supplyColor,
-                        'important'
-                    );
-                    stops[0].setAttribute('stop-color', supplyColor);
-
-                    stops[stops.length - 1].style.setProperty(
-                        'stop-color',
-                        returnColor,
-                        'important'
-                    );
-                    stops[stops.length - 1].setAttribute(
-                        'stop-color',
-                        returnColor
-                    );
-                }
-
-                if (solarCoil) {
-                    solarCoil.style.setProperty(
-                        'stroke',
-                        'url(#symconLinearGradientThermalSolar)',
-                        'important'
-                    );
-                    solarCoil.style.setProperty(
-                        'stroke-opacity',
-                        '1',
-                        'important'
-                    );
-                }
-            }
-        };
-
-        const positionHeatingCircuitTemperatures = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            /*
-             * Durch die einheitliche Anzeige inklusive "°C" benötigt der
-             * Vorlaufwert am Heizkörper / an der Fußbodenheizung etwas mehr
-             * Platz. Deshalb nur die Vorlauftexte leicht nach links schieben.
-             */
-            [
-                '#textSupplyTemperatureHeating',
-                '#textSupplyTemperatureHeating2',
-                '#textSupplyTemperatureHeating3'
-            ].forEach((selector) => {
-                const element = card.content.querySelector(selector);
-                if (!element) {
-                    return;
-                }
-
-                if (!element.hasAttribute('data-symcon-original-x')) {
-                    element.setAttribute(
-                        'data-symcon-original-x',
-                        element.getAttribute('x') || ''
-                    );
-                }
-
-                const originalX = Number(
-                    element.getAttribute('data-symcon-original-x')
-                );
-
-                if (Number.isFinite(originalX)) {
-                    element.setAttribute('x', String(originalX - 10));
-                } else {
-                    element.setAttribute('transform', 'translate(-10 0)');
-                }
-            });
-        };
-
-        const ensureFlowOverlay = (
-            svg,
-            selector,
-            overlayId,
-            direction = 'forward',
-            active = true
-        ) => {
-            const source = svg.querySelector(selector);
-
-            if (!source) {
-                return;
-            }
-
-            let overlay = svg.querySelector('#' + overlayId);
-
-            if (!overlay) {
-                overlay = source.cloneNode(false);
-                overlay.setAttribute('id', overlayId);
-                overlay.removeAttribute('style');
-
-                if (source.parentNode) {
-                    source.parentNode.insertBefore(
-                        overlay,
-                        source.nextSibling
-                    );
-                }
-            }
-
-            overlay.setAttribute(
-                'class',
-                'symcon-flow-overlay '
-                + (direction === 'reverse'
-                    ? 'symcon-flow-reverse'
-                    : 'symcon-flow-forward')
-            );
-
-            overlay.style.setProperty(
-                'display',
-                active ? 'inline' : 'none',
-                'important'
-            );
-            overlay.style.setProperty(
-                'visibility',
-                active ? 'visible' : 'hidden',
-                'important'
-            );
-        };
-
-        const removeFlowOverlays = (svg) => {
-            svg.querySelectorAll('.symcon-flow-overlay').forEach(
-                (element) => {
-                    if (element && element.parentNode) {
-                        element.parentNode.removeChild(element);
-                    }
-                }
-            );
-        };
-        /*
-         * ROBUSTER HEIZKREIS-FLUSS FÜR HEIZKÖRPER / FUSSBODENHEIZUNG
-         *
-         * Die Original-SVG entscheidet selbst, ob Heizkörper oder
-         * Fußbodenheizung sichtbar ist.
-         *
-         * WICHTIG:
-         * Auch diese zusätzliche Animation folgt jetzt dem Status der
-         * jeweiligen Heizkreispumpe. Steht die Pumpe, steht damit auch
-         * die Animation im Heizkörper bzw. in der Fußbodenheizung.
-         */
-
-        const applyFlowAnimations = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-
-            /*
-             * Flussanimation nur zusammen mit den eigenen Temperaturfarben.
-             */
-            if (!false) {
-                removeFlowOverlays(svg);
-                return;
-            }
-
-            const compressorRunning =
-                stateIsOn(currentConfig.compressorRunning);
-
-            const circuit1Configured =
-                String(currentConfig.heatingCircuitType1 || 'off') !== 'off';
-            const circuit2Configured =
-                String(currentConfig.heatingCircuitType2 || 'off') !== 'off';
-            const circuit3Configured =
-                String(currentConfig.heatingCircuitType3 || 'off') !== 'off';
-
-            const heatingPump1 =
-                circuit1Configured
-                && stateIsOn(currentConfig.heatingCircuitPumpRunning);
-            const heatingPump2 =
-                circuit2Configured
-                && stateIsOn(currentConfig.heatingCircuitPumpRunning2);
-            const heatingPump3 =
-                circuit3Configured
-                && stateIsOn(currentConfig.heatingCircuitPumpRunning3);
-
-
-            const storagePump =
-                stateIsOn(currentConfig.storageChargingPumpRunning);
-
-            /*
-             * Hydraulische Freigabe der Heizkreise:
-             *
-             * 1) Ist KEINE Heizkreispumpe als Variable konfiguriert,
-             *    übernimmt die Speicherladepumpe die Zirkulation durch die
-             *    vorhandenen Heizkreise.
-             *
-             * 2) Sobald mindestens EINE Heizkreispumpe konfiguriert ist,
-             *    wird jeder Heizkreis ausschließlich durch SEINE zugehörige
-             *    Heizkreispumpe freigegeben.
-             *
-             * Der Betriebsmodus allein darf keinen sichtbaren Wasserfluss
-             * erzeugen.
-             */
-            const heatingCircuitPump1Configured =
-                !!currentConfig.heatingCircuitPumpRunning;
-            const heatingCircuitPump2Configured =
-                !!currentConfig.heatingCircuitPumpRunning2;
-            const heatingCircuitPump3Configured =
-                !!currentConfig.heatingCircuitPumpRunning3;
-
-            const anyHeatingCircuitPumpConfigured =
-                heatingCircuitPump1Configured
-                || heatingCircuitPump2Configured
-                || heatingCircuitPump3Configured;
-
-            const circuit1Active =
-                circuit1Configured
-                && (
-                    anyHeatingCircuitPumpConfigured
-                        ? (
-                            heatingCircuitPump1Configured
-                            && heatingPump1
-                        )
-                        : storagePump
-                );
-
-            const circuit2Active =
-                circuit2Configured
-                && (
-                    anyHeatingCircuitPumpConfigured
-                        ? (
-                            heatingCircuitPump2Configured
-                            && heatingPump2
-                        )
-                        : storagePump
-                );
-
-            const circuit3Active =
-                circuit3Configured
-                && (
-                    anyHeatingCircuitPumpConfigured
-                        ? (
-                            heatingCircuitPump3Configured
-                            && heatingPump3
-                        )
-                        : storagePump
-                );
-
-            const anyHeatingActive =
-                circuit1Active
-                || circuit2Active
-                || circuit3Active;
-
-            const solarPump =
-                stateIsOn(currentConfig.thermalSolarPump);
-
-            /*
-             * Für die hydraulische Richtung ist – wie bei unserer
-             * Temperatur-/Einfrierlogik – ausschließlich das konfigurierte
-             * Umschaltventil maßgebend.
-             */
-            const valveConfigured = !!currentConfig.wwHeatingValve;
-            const valveToBoiler =
-                valveConfigured
-                && stateIsOn(currentConfig.wwHeatingValve);
-
-            /*
-             * ------------------------------------------------------------
-             * KÄLTEKREIS
-             * ------------------------------------------------------------
-             * Nur EINE farbige Leitung und EIN Fluss-Overlay.
-             *
-             * Im Kühlbetrieb wurde der reversible Kältekreis bereits durch
-             * applyRefrigerantCircuitMode() auf "reversed" gesetzt.
-             * Dann muss auch die komplette gestrichelte Flussrichtung drehen.
-             */
-            /*
-             * Animierter Kältemittel-Fluss:
-             *
-             * Kühlbetrieb ist aktuell korrekt und bleibt deshalb unverändert.
-             * Im Heizbetrieb wird ausschließlich die gestrichelte
-             * Animationsrichtung gegenüber dem Kühlbetrieb umgekehrt.
-             *
-             * Nicht auf das persistierende SVG-dataset verlassen, sondern den
-             * aktuellen Kühlzustand direkt aus den vorhandenen Statusquellen
-             * bestimmen.
-             */
-            const refrigerantCooling =
-                stateIsOn(currentConfig.heatingPumpCoolingMode)
-                || !!(
-                    currentControls
-                    && currentControls.coolingActive === true
-                );
-
-            const refrigerantDirection = (coolingDirection) => {
-                if (refrigerantCooling) {
-                    return coolingDirection;
-                }
-
-                return coolingDirection === 'reverse'
-                    ? 'forward'
-                    : 'reverse';
-            };
-
-            svg.querySelectorAll(
-                '[id^="symconFlowRefrigerant"]'
-            ).forEach((oldOverlay) => {
-                if (
-                    oldOverlay.id !==
-                    'symconFlowRefrigerantMain'
-                    && oldOverlay.parentNode
-                ) {
-                    oldOverlay.parentNode.removeChild(
-                        oldOverlay
-                    );
-                }
-            });
-
-            ensureFlowOverlay(
-                svg,
-                '#symconRefrigerantCircuitPipe',
-                'symconFlowRefrigerantMain',
-                refrigerantDirection('forward'),
-                compressorRunning
-            );
-
-            [
-                {name: 'CompressorOuter', direction: 'reverse'},
-                {name: 'CompressorInner', direction: 'reverse'},
-                {name: 'EvaporatorOuter', direction: 'forward'},
-                {name: 'EvaporatorInner', direction: 'forward'},
-                {name: 'CondenserOuter', direction: 'forward'},
-                {name: 'CondenserInner', direction: 'forward'},
-                {name: 'ExpansionOuter', direction: 'forward'},
-                {name: 'ExpansionInner', direction: 'forward'}
-            ].forEach((definition) => {
-                const name = definition.name;
-
-                ensureFlowOverlay(
-                    svg,
-                    '#symconRefrigerantBridge' + name,
-                    'symconFlowRefrigerantBridge' + name,
-                    refrigerantDirection(definition.direction),
-                    compressorRunning
-                );
-
-                const bridgeOverlay =
-                    svg.querySelector(
-                        '#symconFlowRefrigerantBridge' + name
-                    );
-
-                if (bridgeOverlay) {
-                    bridgeOverlay.classList.add(
-                        'symcon-flow-refrigerant'
-                    );
-                }
-            });
-
-            const refrigerantOverlay =
-                svg.querySelector(
-                    '#symconFlowRefrigerantMain'
-                );
-
-            if (refrigerantOverlay) {
-                refrigerantOverlay.classList.add(
-                    'symcon-flow-refrigerant'
-                );
-            }
-
-            /*
-             * Die beiden Wärmetauscher-Wendel in der Wärmepumpe explizit
-             * mitnehmen. Sie werden absichtlich NICHT über die generische
-             * Leitungs-Erkennung animiert.
-             */
-            ensureFlowOverlay(
-                svg,
-                '#pathHPModelEvaporatorSymbol001',
-                'symconFlowEvaporatorCoil1',
-                refrigerantDirection('forward'),
-                compressorRunning
-            );
-            ensureFlowOverlay(
-                svg,
-                '#pathHPModelEvaporatorSymbol002',
-                'symconFlowEvaporatorCoil2',
-                refrigerantDirection('forward'),
-                compressorRunning
-            );
-            ensureFlowOverlay(
-                svg,
-                '#pathHPModelCondenserSymbol',
-                'symconFlowCondenserCoil',
-                refrigerantDirection('forward'),
-                compressorRunning
-            );
-
-            /*
-             * ------------------------------------------------------------
-             * GEMEINSAME HYDRAULIK DIREKT AN DER WÄRMEPUMPE
-             * ------------------------------------------------------------
-             * Diese Stücke gehören sowohl zum Heizbetrieb als auch zur
-             * Boilerladung und dürfen deshalb nicht fehlen.
-             */
-            const hydraulicActive =
-                valveToBoiler || anyHeatingActive || storagePump;
-
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeHotColdHeatpump',
-                'symconFlowHydraulicSupply',
-                'forward',
-                hydraulicActive
-            );
-
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeRefluxWW',
-                'symconFlowHydraulicReturn',
-                'reverse',
-                hydraulicActive
-            );
-
-            /*
-             * ------------------------------------------------------------
-             * HEIZKREISE
-             * ------------------------------------------------------------
-             * Bei Boilerstellung werden ALLE Heizkreis-Flüsse hart gestoppt,
-             * auch wenn eine Heizkreispumpe noch "aktiv" meldet.
-             */
-            const heatingAllowed = !valveToBoiler;
-            const heatingFlowActive =
-                heatingAllowed && anyHeatingActive;
-
-            /*
-             * GEMEINSAME HEIZLEITUNG:
-             *
-             * pathPipeToBuffer ist trotz des historischen Namens die
-             * durchgehende Vorlaufleitung vom Umschaltventil bis zum
-             * Heizkreisverteiler.
-             *
-             * pathPipeFromBuffer ist die durchgehende Rücklaufleitung vom
-             * Heizkreisverteiler zurück zur Wärmepumpe.
-             *
-             * Diese beiden Stücke müssen deshalb auch im reinen Heizbetrieb
-             * animiert werden – nicht nur bei einer Speicherpumpe.
-             */
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeToBuffer',
-                'symconFlowHeatingCommonSupply',
-                'forward',
-                heatingFlowActive
-            );
-
-            /*
-             * Die SVG-Pfadrichtung von pathPipeFromBuffer geht bereits
-             * vom Heizkreis zurück zur Wärmepumpe. Deshalb FORWARD.
-             * Das korrigiert die bisher umgekehrte Rücklaufrichtung.
-             */
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeFromBuffer',
-                'symconFlowHeatingCommonReturn',
-                'forward',
-                heatingFlowActive
-            );
-
-            /*
-             * Gemeinsamer vertikaler Rücklauf zwischen Heizkreis 1/2 und
-             * dem unteren Sammelpunkt. Bei Heizkreis 1 oder 2 gehört dieses
-             * Stück zwingend zur vollständigen Rücklaufkette.
-             */
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeToHP2',
-                'symconFlowHeatingSharedReturn',
-                'forward',
-                heatingAllowed
-                    && (circuit1Active || circuit2Active)
-            );
-
-            const animateEmitter = (
-                number,
-                enabled
-            ) => {
-                /*
-                 * Fußbodenheizung:
-                 * Die Original-Schlange ist bereits ein echter,
-                 * durchgehender Wasserweg.
-                 */
-                const floor =
-                    svg.querySelector(
-                        '#pathUnderfloorHeating' + number
-                    );
-
-                if (floor) {
-                    const floorParent = floor.parentElement;
-                    const floorVisible =
-                        !floorParent
-                        || getComputedStyle(floorParent).display !== 'none';
-
-                    ensureFlowOverlay(
-                        svg,
-                        '#pathUnderfloorHeating' + number,
-                        'symconFlowEmitterFloor' + number,
-                        'forward',
-                        !!enabled && floorVisible
-                    );
-
-                    const floorOverlay =
-                        svg.querySelector(
-                            '#symconFlowEmitterFloor' + number
-                        );
-
-                    if (floorOverlay) {
-                        floorOverlay.classList.add(
-                            'symcon-flow-emitter'
-                        );
-
-                        if (floorOverlay.parentNode) {
-                            floorOverlay.parentNode.appendChild(
-                                floorOverlay
-                            );
-                        }
-                    }
-                }
-
-                /*
-                 * Heizkörper:
-                 *
-                 * #rectRadiatorN besteht aus einem Außenrahmen plus vielen
-                 * einzelnen geschlossenen Rippen. Eine Dash-Animation darauf
-                 * kann deshalb nicht als ein durchgehender Wasserfluss
-                 * erscheinen.
-                 *
-                 * Wir legen im gleichen <g> einen einzigen zusammenhängenden
-                 * Serpentinenpfad über alle Rippen. Bei Heizkreis 2 und 3
-                 * übernimmt er automatisch den transform des Eltern-<g>.
-                 */
-                const radiator =
-                    svg.querySelector(
-                        '#rectRadiator' + number
-                    );
-
-                if (!radiator || !radiator.parentNode) {
-                    return;
-                }
-
-                const radiatorParent = radiator.parentElement;
-                const radiatorVisible =
-                    getComputedStyle(radiatorParent).display !== 'none';
-
-                let flowPath =
-                    svg.querySelector(
-                        '#symconRadiatorWaterPath' + number
-                    );
-
-                if (!flowPath) {
-                    flowPath = document.createElementNS(
-                        'http://www.w3.org/2000/svg',
-                        'path'
-                    );
-
-                    flowPath.setAttribute(
-                        'id',
-                        'symconRadiatorWaterPath' + number
-                    );
-
-                    /*
-                     * Eintritt links oben -> durch alle Rippen ->
-                     * Austritt rechts unten.
-                     */
-                    flowPath.setAttribute(
-                        'd',
-                        'M 837 82 '
-                        + 'L 847 82 L 847 118 '
-                        + 'L 857 118 L 857 82 '
-                        + 'L 867 82 L 867 118 '
-                        + 'L 877 118 L 877 82 '
-                        + 'L 887 82 L 887 118 '
-                        + 'L 897 118 L 897 82 '
-                        + 'L 907 82 L 907 118 '
-                        + 'L 917 118 L 917 82 '
-                        + 'L 927 82 L 927 115 '
-                        + 'L 937 115'
-                    );
-
-                    flowPath.setAttribute(
-                        'fill',
-                        'none'
-                    );
-
-                    /*
-                     * Der Basis-Pfad selbst bleibt unsichtbar.
-                     * Sichtbar ist nur sein animiertes Overlay.
-                     */
-                    flowPath.style.setProperty(
-                        'stroke',
-                        'transparent',
-                        'important'
-                    );
-                    flowPath.style.setProperty(
-                        'fill',
-                        'none',
-                        'important'
-                    );
-
-                    radiatorParent.appendChild(flowPath);
-                }
-
-                /*
-                 * Pfad ganz nach vorne holen, damit er nicht durch
-                 * Heizkörperfüllung oder andere SVG-Elemente verdeckt wird.
-                 */
-                if (flowPath.parentNode) {
-                    flowPath.parentNode.appendChild(flowPath);
-                }
-
-                ensureFlowOverlay(
-                    svg,
-                    '#symconRadiatorWaterPath' + number,
-                    'symconFlowEmitterRadiator' + number,
-                    'forward',
-                    !!enabled && radiatorVisible
-                );
-
-                const radiatorOverlay =
-                    svg.querySelector(
-                        '#symconFlowEmitterRadiator' + number
-                    );
-
-                if (radiatorOverlay) {
-                    radiatorOverlay.classList.add(
-                        'symcon-flow-emitter'
-                    );
-
-                    /*
-                     * Nicht auf geerbte SVG-/CSS-Werte verlassen:
-                     * der Heizkörper-Fluss bekommt seine sichtbaren
-                     * Eigenschaften direkt auf dem Overlay.
-                     */
-                    radiatorOverlay.style.setProperty(
-                        'fill',
-                        'none',
-                        'important'
-                    );
-                    radiatorOverlay.style.setProperty(
-                        'stroke',
-                        'rgba(255,255,255,.82)',
-                        'important'
-                    );
-                    radiatorOverlay.style.setProperty(
-                        'stroke-width',
-                        '2',
-                        'important'
-                    );
-                    radiatorOverlay.style.setProperty(
-                        'stroke-dasharray',
-                        '4 7',
-                        'important'
-                    );
-                    radiatorOverlay.style.setProperty(
-                        'stroke-linecap',
-                        'round',
-                        'important'
-                    );
-                    radiatorOverlay.style.setProperty(
-                        'opacity',
-                        '1',
-                        'important'
-                    );
-
-                    if (radiatorOverlay.parentNode) {
-                        radiatorOverlay.parentNode.appendChild(
-                            radiatorOverlay
-                        );
-                    }
-                }
-            };
-
-            const animateCircuit = (
-                number,
-                active,
-                supplySelectors,
-                returnSelectors
-            ) => {
-                const enabled = !!active && heatingAllowed;
-
-                supplySelectors.forEach((selector, index) => {
-                    const overlayId =
-                        'symconFlowHeatingSupply'
-                        + number + '_' + index;
-
-                    ensureFlowOverlay(
-                        svg,
-                        selector,
-                        overlayId,
-                        'forward',
-                        enabled
-                    );
-
-                    if (
-                        selector.includes('Radiator')
-                        || selector.includes('Underfloor')
-                    ) {
-                        const overlay =
-                            svg.querySelector('#' + overlayId);
-
-                        if (overlay) {
-                            overlay.classList.add(
-                                'symcon-flow-emitter'
-                            );
-                        }
-                    }
-                });
-
-                returnSelectors.forEach((selector, index) => {
-                    const overlayId =
-                        'symconFlowHeatingReturn'
-                        + number + '_' + index;
-
-                    ensureFlowOverlay(
-                        svg,
-                        selector,
-                        overlayId,
-                        'forward',
-                        enabled
-                    );
-
-                    if (selector.includes('Radiator')) {
-                        const overlay =
-                            svg.querySelector('#' + overlayId);
-
-                        if (overlay) {
-                            overlay.classList.add(
-                                'symcon-flow-emitter'
-                            );
-                        }
-                    }
-                });
-            };
-
-            animateCircuit(
-                1,
-                circuit1Active,
-                [
-                    '#pathPipeToHeatingCircuitPump',
-                    '#pathRadiatorPipeIn1'
-                ],
-                [
-                    '#pathPipeToHP',
-                    '#pathRadiatorPipeOut1'
-                ]
-            );
-            animateEmitter(
-                1,
-                circuit1Active && heatingAllowed
-            );
-
-            animateCircuit(
-                2,
-                circuit2Active,
-                [
-                    '#pathPipeToHeatingCircuitPump2',
-                    '#pathRadiatorPipeIn2'
-                ],
-                [
-                    '#pathRadiatorPipeOut2'
-                ]
-            );
-            animateEmitter(
-                2,
-                circuit2Active && heatingAllowed
-            );
-
-            animateCircuit(
-                3,
-                circuit3Active,
-                [
-                    '#pathPipeToHeatingCircuitPump3',
-                    '#pathRadiatorPipeIn3'
-                ],
-                [
-                    '#pathRadiatorPipeOut3'
-                ]
-            );
-            animateEmitter(
-                3,
-                circuit3Active && heatingAllowed
-            );
-
-            /*
-             * ------------------------------------------------------------
-             * BOILER / WARMWASSER
-             * ------------------------------------------------------------
-             * Bei Boilerstellung läuft der Fluss ausschließlich über diesen
-             * Zweig. Der Boiler-Wendel selbst wird ebenfalls animiert.
-             */
-            /*
-             * Boiler-Wendel:
-             * Die SVG-Pfadrichtung läuft entgegengesetzt zur gewünschten
-             * hydraulischen Flussrichtung, deshalb hier bewusst "reverse".
-             */
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeHotWaterToTank',
-                'symconFlowBoilerCoil',
-                'reverse',
-                valveToBoiler
-            );
-
-            /*
-             * Keine Flussanimation auf der Warmwasserleitung vom Boiler
-             * zum Wasserhahn / zur Zapfstelle.
-             * Ein eventuell noch vorhandenes Overlay aus einer früheren
-             * Aktualisierung wird explizit ausgeblendet.
-             */
-            const faucetFlow = svg.querySelector('#symconFlowBoilerReturn');
-            if (faucetFlow) {
-                faucetFlow.style.setProperty(
-                    'display',
-                    'none',
-                    'important'
-                );
-                faucetFlow.style.setProperty(
-                    'visibility',
-                    'hidden',
-                    'important'
-                );
-            }
-
-            /*
-             * ------------------------------------------------------------
-             * PUFFERSPEICHER
-             * ------------------------------------------------------------
-             */
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeToBuffer',
-                'symconFlowBufferSupply',
-                'forward',
-                storagePump && !valveToBoiler && !anyHeatingActive
-            );
-
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeFromBuffer',
-                'symconFlowBufferReturn',
-                'forward',
-                storagePump && !valveToBoiler && !anyHeatingActive
-            );
-
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeBufferToHeating',
-                'symconFlowBufferToHeating',
-                'forward',
-                storagePump && anyHeatingActive && !valveToBoiler
-            );
-
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeHeatingToBuffer',
-                'symconFlowHeatingToBuffer',
-                'reverse',
-                storagePump && anyHeatingActive && !valveToBoiler
-            );
-
-            /*
-             * ------------------------------------------------------------
-             * SOLARTHERMIE
-             * ------------------------------------------------------------
-             */
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeThermalSolarHotWater',
-                'symconFlowSolarSupply',
-                'forward',
-                solarPump
-            );
-
-            ensureFlowOverlay(
-                svg,
-                '#pathPipeThermalSolarColdWater',
-                'symconFlowSolarReturn',
-                'reverse',
-                solarPump
-            );
-
-            ensureFlowOverlay(
-                svg,
-                '#symconThermalSolarTankCoil',
-                'symconFlowSolarCoil',
-                'forward',
-                solarPump
-            );
-
-            ensureFlowOverlay(
-                svg,
-                '#symconThermalSolarHotConnector',
-                'symconFlowSolarConnector',
-                'forward',
-                solarPump
-            );
-        };
-
-        const applySingleCircuitTemperatureDisplay = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-
-            /*
-             * Diese Sonderfunktion kann in Heizkreis 1 abgeschaltet werden.
-             * Aus = normale Card-Darstellung ohne Einfrieren und ohne die
-             * zusätzlichen Vor-/Rücklaufwerte am Warmwasserspeicher.
-             */
-            if (!currentConfig.singleCircuitHotWaterTemperatureSwitch) {
-                [
-                    '#symconBoilerSupplyTemperature',
-                    '#symconBoilerRefluxTemperature'
-                ].forEach((selector) => {
-                    const element = svg.querySelector(selector);
-                    if (element && element.parentNode) {
-                        element.parentNode.removeChild(element);
-                    }
-                });
-                return;
-            }
-
-            /*
-             * Diese Erweiterung gilt bewusst nur bei genau EINEM Heizkreis.
-             */
-            const circuits = [
-                {
-                    key: '1',
-                    type: String(currentConfig.heatingCircuitType1 || 'off'),
-                    supply: currentConfig.supplyTemperatureHeating,
-                    reflux: currentConfig.refluxTemperatureHeating,
-                    supplyText: '#textSupplyTemperatureHeating',
-                    refluxText: '#textRefluxTemperatureHeating'
-                },
-                {
-                    key: '2',
-                    type: String(currentConfig.heatingCircuitType2 || 'off'),
-                    supply: currentConfig.supplyTemperatureHeating2,
-                    reflux: currentConfig.refluxTemperatureHeating2,
-                    supplyText: '#textSupplyTemperatureHeating2',
-                    refluxText: '#textRefluxTemperatureHeating2'
-                },
-                {
-                    key: '3',
-                    type: String(currentConfig.heatingCircuitType3 || 'off'),
-                    supply: currentConfig.supplyTemperatureHeating3,
-                    reflux: currentConfig.refluxTemperatureHeating3,
-                    supplyText: '#textSupplyTemperatureHeating3',
-                    refluxText: '#textRefluxTemperatureHeating3'
-                }
-            ];
-
-            const activeCircuits = circuits.filter(
-                (circuit) => circuit.type !== 'off'
-            );
-
-            const tankGroup = svg.querySelector('#gTankWW');
-
-            /*
-             * Zusatztexte am Boiler entfernen, wenn mehr oder weniger als
-             * ein Heizkreis aktiv ist.
-             */
-            const removeBoilerTexts = () => {
-                [
-                    '#symconBoilerSupplyTemperature',
-                    '#symconBoilerRefluxTemperature'
-                ].forEach((selector) => {
-                    const element = svg.querySelector(selector);
-                    if (element && element.parentNode) {
-                        element.parentNode.removeChild(element);
-                    }
-                });
-            };
-
-            if (activeCircuits.length !== 1 || !tankGroup) {
-                removeBoilerTexts();
-                return;
-            }
-
-            const circuit = activeCircuits[0];
-
-            /*
-             * Allein die Stellung des konfigurierten Umschaltventils ist
-             * maßgebend:
-             *   aktiv   = Boiler
-             *   inaktiv = Heizung
-             *
-             * Ohne Ventil gibt es keine Einfrier-/Umschaltlogik.
-             */
-            const valveConfigured = !!currentConfig.wwHeatingValve;
-            const boilerActive =
-                valveConfigured && stateIsOn(currentConfig.wwHeatingValve);
-
-            const supplyTemperature = readStateNumber(circuit.supply);
-            const refluxTemperature = readStateNumber(circuit.reflux);
-
-            const formatTemperature = (value) => {
-                if (value === null || !Number.isFinite(Number(value))) {
-                    return '';
-                }
-
-                return new Intl.NumberFormat('de-CH', {
-                    minimumFractionDigits: 1,
-                    maximumFractionDigits: 1
-                }).format(Number(value)) + ' °C';
-            };
-
-            /*
-             * Im Heizbetrieb die letzten echten Heizkreiswerte speichern.
-             * Beim Boilerbetrieb werden diese Werte nicht mehr überschrieben.
-             */
-            if (
-                !boilerActive
-                && supplyTemperature !== null
-                && refluxTemperature !== null
-            ) {
-                storedHeatingTemperatures[circuit.key] = {
-                    supply: supplyTemperature,
-                    reflux: refluxTemperature
-                };
-
-                saveStoredHeatingTemperatures(storedHeatingTemperatures);
-            }
-
-            /*
-             * Beim Umschalten auf Boiler bleiben die Temperaturtexte am
-             * Heizkörper / an der Fußbodenheizung auf den letzten Heizwerten.
-             */
-            if (boilerActive) {
-                const stored = storedHeatingTemperatures[circuit.key];
-
-                if (stored) {
-                    const supplyText = svg.querySelector(circuit.supplyText);
-                    const refluxText = svg.querySelector(circuit.refluxText);
-
-                    if (supplyText) {
-                        supplyText.textContent =
-                            formatTemperature(stored.supply);
-                    }
-
-                    if (refluxText) {
-                        refluxText.textContent =
-                            formatTemperature(stored.reflux);
-                    }
-                }
-            }
-
-
-            // Only configured storage sensors belong on the boiler. Heating
-            // circuit supply/return readings are not boiler sensor readings.
-            removeBoilerTexts();
-
-        };
-
-        const applyTerminology = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            /*
-             * Vor JEDEM Datenupdate zuerst den normalen Grundzustand
-             * herstellen. applyRefrigerantCircuitMode() vertauscht diese
-             * beiden Texte anschließend im Kühlbetrieb.
-             *
-             * Wichtig: Beide Texte zurücksetzen. Würde nur der Kondensator
-             * zurückgesetzt, bleibt der beim vorherigen Kühl-Update bereits
-             * vertauschte Verdampfer-Text stehen und nach dem nächsten Tausch
-             * hätten beide Wärmetauscher dieselbe Bezeichnung.
-             */
-            const evaporatorText =
-                card.content.querySelector('#textEvaporator');
-            if (evaporatorText) {
-                evaporatorText.textContent = 'Verdampfer';
-            }
-
-            const condenserText =
-                card.content.querySelector('#textCondenser');
-            if (condenserText) {
-                condenserText.textContent = 'Kondensator';
-            }
-        };
-
-        const applyOptionalStatusVisibility = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const setConfiguredVisibility = (selector, configured) => {
-                const element = card.content.querySelector(selector);
-                if (!element) {
-                    return;
-                }
-
-                if (!configured) {
-                    element.style.setProperty('display', 'none', 'important');
-                    element.style.setProperty('visibility', 'hidden', 'important');
-                } else {
-                    element.style.removeProperty('visibility');
-                    element.style.removeProperty('display');
-                }
-            };
-
-            setConfiguredVisibility('#gWarning', false);
-
-            // Wärmepumpe Ein/Aus:
-            // Ohne Datenpunkt kein "Aus"-Symbol anzeigen.
-            setConfiguredVisibility(
-                '#gHPStatusOff',
-                !!currentConfig.heatingPumpStatusOnOff
-            );
-
-
-            // Warmwasser-/Heizungs-Umschaltventil:
-            // Die Original-Card zeichnet es in Grundstellung auch ohne Datenpunkt.
-            // Ohne Zuordnung soll das Ventilsymbol vollständig verschwinden.
-            if (!currentConfig.wwHeatingValve) {
-                setConfiguredVisibility('#gWWHeatingValve', false);
-            }
-        };
-
-
-
-        const applyHeaterRodInfoField = (card) => {
-            if (!card || !card.content) return;
-            const svg = card.content;
-            const count = Math.max(0, Math.min(3, Number(currentConfig.heaterRodCount || 0)));
-            const entities = [currentConfig.heaterRod1, currentConfig.heaterRod2, currentConfig.heaterRod3];
-            const thresholds = [
-                Number(currentConfig.heaterRod1Threshold || 1),
-                Number(currentConfig.heaterRod2Threshold || 1),
-                Number(currentConfig.heaterRod3Threshold || 1)
-            ];
-            let active = 0;
-            for (let i = 0; i < count; i++) {
-                const entity = entities[i];
-                if (!entity || !currentData || !currentData[entity]) continue;
-                const value = currentData[entity].value;
-                let on = false;
-                if (typeof value === 'boolean') {
-                    on = value;
-                } else {
-                    const text = String(value ?? '').trim().toLowerCase();
-                    if (['true','on','yes','ja','ein','active','aktiv'].includes(text)) on = true;
-                    else if (!['false','off','no','nein','aus','inactive','inaktiv',''].includes(text)) {
-                        const numeric = Number(value);
-                        on = Number.isFinite(numeric) && numeric >= thresholds[i];
-                    }
-                }
-                if (on) active++;
-            }
-            const text = svg.querySelector('#textHeaterRodStatus');
-            if (text) text.textContent = active > 0 ? String(active) : 'Aus';
-            const waves = svg.querySelector('#gHeaterRodWaves');
-            if (waves) waves.style.display = active > 0 ? 'inline' : 'none';
-            for (let i = 1; i <= 3; i++) {
-                const wave = svg.querySelector('#heaterWave' + i);
-                if (wave) wave.style.display = i <= active ? 'inline' : 'none';
-            }
-        };
-
-        const applyThreeHeaterRods = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-
-            /*
-             * Aktive elektrische Heizstäbe pulsieren dezent zwischen
-             * Orange und Rot. Nur die Darstellung wird animiert; die
-             * vorhandene Aktivierungs-/Schwellwertlogik bleibt unverändert.
-             */
-            let heaterRodStyle =
-                svg.querySelector('#symconHeaterRodPulseStyle');
-
-            if (!heaterRodStyle) {
-                heaterRodStyle = document.createElementNS(
-                    'http://www.w3.org/2000/svg',
-                    'style'
-                );
-                heaterRodStyle.setAttribute(
-                    'id',
-                    'symconHeaterRodPulseStyle'
-                );
-                heaterRodStyle.textContent = `
-                    @keyframes symconHeaterRodPulse {
-                        0%, 100% {
-                            stroke: #ff9800;
-                            filter:
-                                drop-shadow(0 0 1.5px rgba(0,0,0,.95))
-                                drop-shadow(0 0 1px rgba(255,152,0,.35));
-                        }
-                        50% {
-                            stroke: #f04444;
-                            filter:
-                                drop-shadow(0 0 1.5px rgba(0,0,0,.95))
-                                drop-shadow(0 0 3px rgba(240,68,68,.55));
-                        }
-                    }
-
-                    .symcon-heater-rod-active {
-                        animation:
-                            symconHeaterRodPulse 1.8s ease-in-out infinite;
-                    }
-                `;
-                svg.insertBefore(
-                    heaterRodStyle,
-                    svg.firstChild
-                );
-            }
-            const tankGroup = svg.querySelector('#gTankWW');
-            const original = svg.querySelector('#pathHeaterRodWW');
-
-            if (!tankGroup || !original) {
-                return;
-            }
-
-            const heaterRodCount = Math.max(
-                0,
-                Math.min(3, Number(currentConfig.heaterRodCount || 0))
-            );
-
-            /*
-             * Der einzelne Original-WW-Heizstab wird grundsätzlich unterdrückt.
-             * Sonst würde er bei Anzahl 0 durch heaterRodWW wieder erscheinen.
-             */
-            original.style.setProperty('display', 'none', 'important');
-            original.style.setProperty('visibility', 'hidden', 'important');
-
-            const ensureRod = (id, y) => {
-                let rod = svg.querySelector('#' + id);
-
-                if (!rod) {
-                    rod = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    rod.setAttribute('id', id);
-                    rod.setAttribute('fill', 'none');
-                    tankGroup.appendChild(rod);
-                }
-
-                /*
-                 * Position bei jeder Aktualisierung neu setzen. So rutschen die
-                 * Heizstäbe beim Ändern der Anzahl sofort von unten nach oben.
-                 */
-                /*
-                 * Heizstäbe an der LINKEN Boilerwand:
-                 * Eintritt/Austritt liegen bei x=655 und die Schleife ragt
-                 * nach rechts in den Speicher. Dadurch bleibt die rechte Seite
-                 * für Solar-/Boiler-Wendel und Temperaturtexte frei.
-                 */
-                rod.setAttribute(
-                    'd',
-                    'M 655 ' + y + ' H 695 C 701 ' + y + ' 701 ' + (y - 10)
-                    + ' 695 ' + (y - 10) + ' H 655'
-                );
-
-                rod.style.setProperty('fill', 'none', 'important');
-                rod.style.setProperty('stroke-width', '5', 'important');
-                rod.style.setProperty('stroke-linecap', 'round', 'important');
-                rod.style.setProperty('stroke-linejoin', 'round', 'important');
-
-                return rod;
-            };
-
-            /*
-             * Die drei Positionen liegen gut verteilt im WW-Speicher.
-             * Inaktiv bleibt der vorhandene Stab sichtbar, aber dezent.
-             * Aktiv erhält jede Stufe eine klar erkennbare warme Farbe.
-             */
-            /*
-             * Die vorhandenen Heizstäbe werden immer von unten nach oben angeordnet:
-             * 1 Heizstab  -> 625 (ganz unten)
-             * 2 Heizstäbe -> 595 / 625
-             * 3 Heizstäbe -> 565 / 595 / 625
-             */
-            const rodPositions = {
-                1: [610],
-                2: [580, 610],
-                3: [550, 580, 610]
-            };
-
-            const configuredPositions = rodPositions[heaterRodCount] || [];
-            const rodEntities = [
-                currentConfig.heaterRod1,
-                currentConfig.heaterRod2,
-                currentConfig.heaterRod3
-            ];
-            const rodThresholds = [
-                currentConfig.heaterRod1Threshold,
-                currentConfig.heaterRod2Threshold,
-                currentConfig.heaterRod3Threshold
-            ];
-            const activeRodColor =
-                temperatureColor(60) || '#f04444';
-            const rodColors = [activeRodColor, activeRodColor, activeRodColor];
-
-            const rods = [0, 1, 2].map((index) => ({
-                element: ensureRod(
-                    'pathHeaterRodWW' + (index + 1),
-                    configuredPositions[index] || 610
-                ),
-                entity: rodEntities[index],
-                threshold: rodThresholds[index],
-                activeColor: rodColors[index]
-            }));
-
-            const isActive = (entity, threshold) => {
-                if (!entity || !currentData || !currentData[entity]) {
-                    return false;
-                }
-
-                const raw = currentData[entity].value;
-                const value = String(raw ?? '').trim().toLowerCase();
-                const limit = Number.isFinite(Number(threshold)) ? Number(threshold) : 1;
-
-                if (typeof raw === 'boolean') {
-                    return raw;
-                }
-                if (['true', 'on', 'yes', 'ja', 'ein', 'active', 'aktiv'].includes(value)) return true;
-                if (['false', 'off', 'no', 'nein', 'aus', 'inactive', 'inaktiv', ''].includes(value)) return false;
-                const numeric = Number(raw);
-                return Number.isFinite(numeric) && numeric >= limit;
-            };
-
-            rods.forEach((rodInfo, index) => {
-                const exists = index < heaterRodCount;
-
-                if (!exists) {
-                    rodInfo.element.classList.remove(
-                        'symcon-heater-rod-active'
-                    );
-                    rodInfo.element.style.setProperty('display', 'none', 'important');
-                    rodInfo.element.style.setProperty('visibility', 'hidden', 'important');
-                    return;
-                }
-
-                const active = isActive(rodInfo.entity, rodInfo.threshold);
-
-                rodInfo.element.style.setProperty('display', 'block', 'important');
-                rodInfo.element.style.setProperty('visibility', 'visible', 'important');
-                if (active) {
-                    /*
-                     * Keine Inline-Stroke-Farbe mit !important setzen:
-                     * die Farbe kommt bei aktivem Stab aus der Pulsanimation.
-                     */
-                    rodInfo.element.style.removeProperty('stroke');
-                    rodInfo.element.style.removeProperty('filter');
-                    rodInfo.element.classList.add(
-                        'symcon-heater-rod-active'
-                    );
-                } else {
-                    rodInfo.element.classList.remove(
-                        'symcon-heater-rod-active'
-                    );
-                    rodInfo.element.style.setProperty(
-                        'stroke',
-                        'rgba(255,255,255,0.55)',
-                        'important'
-                    );
-                    rodInfo.element.style.setProperty(
-                        'filter',
-                        'drop-shadow(0 0 1.5px rgba(0,0,0,0.95))',
-                        'important'
-                    );
-                }
-            });
-        };
-
-
-
-        /*
-         * Die obere Statusleiste der Original-SVG besitzt neun fest
-         * vorgesehene Icon-Slots.
-         *
-         * Gemessen an der unveränderten Original-SVG (0.9.0):
-         *   1: 102.85
-         *   2: 174.49
-         *   3: 242.98
-         *   4: 301.14
-         *   5: 353.41
-         *   6: 412.06
-         *   7: 469.65
-         *   8: 527.56
-         *   9: 587.85
-         *
-         * Die tatsächliche Breite der Icon-Leiste wird zur Laufzeit direkt
-         * aus den Originalpositionen der Card ermittelt. Alle sichtbaren Icons
-         * werden innerhalb genau dieses Bereichs gleichmäßig verteilt.
-         * Tag/Nacht gehört NICHT zu dieser Reihe und wird daher bewusst
-         * nicht verschoben.
-         */
-        const TOP_ICON_SLOTS = [
-            102.85,
-            174.49,
-            242.98,
-            301.14,
-            353.41,
-            412.06,
-            469.65,
-            527.56,
-            587.85
-        ];
-
-
-        const applySetpointIcons = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-            const settings = svg.querySelector('#gSettings');
-
-            if (!settings) {
-                return;
-            }
-
-            const createIcon = (
-                id,
-                shortLabel,
-                functionName
-            ) => {
-                let group = svg.querySelector('#' + id);
-
-                if (!group) {
-                    group = document.createElementNS(
-                        'http://www.w3.org/2000/svg',
-                        'g'
-                    );
-                    group.setAttribute('id', id);
-
-                    const circle = document.createElementNS(
-                        'http://www.w3.org/2000/svg',
-                        'circle'
-                    );
-                    circle.setAttribute('cx', '0');
-                    circle.setAttribute('cy', '0');
-                    circle.setAttribute('r', '17');
-                    circle.setAttribute('fill', 'none');
-                    circle.setAttribute('stroke-width', '2.6');
-
-                    /*
-                     * Zusatz-Sollwerticon in derselben Größe wie die
-                     * Original-Icons. Im Kreis steht ausschließlich der
-                     * Zahlenwert – ohne WW, ±, Einheit oder Gradzeichen.
-                     */
-                    const value = document.createElementNS(
-                        'http://www.w3.org/2000/svg',
-                        'text'
-                    );
-                    value.setAttribute('id', id + 'Value');
-                    value.setAttribute('x', '0');
-                    value.setAttribute('y', '0');
-                    value.setAttribute('text-anchor', 'middle');
-                    value.setAttribute('dominant-baseline', 'central');
-                    value.setAttribute('alignment-baseline', 'central');
-                    value.setAttribute('font-size', '11');
-                    value.setAttribute('font-weight', '700');
-
-                    group.appendChild(circle);
-                    group.appendChild(value);
-                    settings.appendChild(group);
-
-                    group.style.setProperty(
-                        'cursor',
-                        'pointer',
-                        'important'
-                    );
-                    group.style.setProperty(
-                        'pointer-events',
-                        'all',
-                        'important'
-                    );
-
-                    bindTap(
-                        group,
-                        (event) =>
-                            openNumericMenu(
-                                functionName,
-                                event
-                            )
-                    );
-                }
-
-                return group;
-            };
-
-            const definitions = [
-                {
-                    id: 'gSymconWarmWaterSetpoint',
-                    label: 'WW',
-                    functionName: 'warmWaterSetpoint'
-                },
-                {
-                    id: 'gSymconHeatingCorrection',
-                    label: '±',
-                    functionName: 'heatingTemperatureCorrection'
-                }
-            ];
-
-            definitions.forEach((definition) => {
-                const control =
-                    currentControls
-                    && currentControls[definition.functionName];
-
-                const group = createIcon(
-                    definition.id,
-                    definition.label,
-                    definition.functionName
-                );
-
-                const visible = !!(
-                    control
-                    && control.configured
-                );
-
-                group.style.setProperty(
-                    'display',
-                    visible ? 'inline' : 'none',
-                    'important'
-                );
-
-                if (!visible) {
-                    return;
-                }
-
-                const color = resolveLayoutTextColor();
-                setIconColor(group, color);
-
-                const valueElement = svg.querySelector(
-                    '#' + definition.id + 'Value'
-                );
-
-                if (valueElement) {
-                    valueElement.textContent =
-                        control.formattedValue !== undefined && control.formattedValue !== null
-                            ? String(control.formattedValue)
-                            : String(control.currentValue ?? '');
-                }
-            });
-        };
-
-        const layoutTopIconBar = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const svg = card.content;
-            const settings = svg.querySelector('#gSettings');
-            const frame = svg.querySelector('#rectSettings');
-
-            if (!settings || !frame) {
-                return;
-            }
-
-            /*
-             * EINHEITLICHES LAYOUT FÜR DESKTOP UND HANDY
-             * ------------------------------------------------------------
-             * Keine getBBox-/getCTM-Messung mehr.
-             * Keine Mobile-Sonderbehandlung mehr.
-             * Keine Abhängigkeit von Fenster- oder Bildschirmbreite.
-             *
-             * Sämtliche Icons werden ausschließlich in den festen
-             * Koordinaten der Original-SVG angeordnet. Die SVG skaliert
-             * danach selbst auf Desktop oder Handy.
-             */
-
-            const definitions = [
-                {
-                    selector: '#gHPStatusOff',
-                    custom: false,
-                    originalX: 101.371
-                },
-                {
-                    selector: '#gHPStatusWW',
-                    custom: false,
-                    originalX: 158.047
-                },
-                {
-                    selector: '#gHPStatusHeating',
-                    custom: false,
-                    originalX: 212.235
-                },
-                {
-                    selector: '#gHPStatusCooling',
-                    custom: false,
-                    originalX: 258.245
-                },
-                {
-                    selector: '#gDefrost',
-                    custom: false,
-                    originalX: 299.602
-                },
-                {
-                    selector: '#gAdditionalHeating',
-                    custom: false,
-                    originalX: 346.000
-                },
-                {
-                    selector: '#gHPStatusParty',
-                    custom: false,
-                    originalX: 437.380
-                },
-                {
-                    selector: '#gHPStatusSave',
-                    custom: false,
-                    originalX: 485.077
-                },
-                {
-                    selector: '#gSymconWarmWaterSetpoint',
-                    custom: true
-                },
-                {
-                    selector: '#gSymconHeatingCorrection',
-                    custom: true
-                }
-            ];
-
-            const isVisible = (element) => {
-                if (!element) {
-                    return false;
-                }
-
-                const style = getComputedStyle(element);
-
-                return (
-                    style.display !== 'none'
-                    && style.visibility !== 'hidden'
-                    && Number(style.opacity || 1) > 0
-                );
-            };
-
-            /*
-             * Originaltransformationen genau einmal sichern.
-             */
-            definitions.forEach((definition) => {
-                if (definition.custom) {
-                    return;
-                }
-
-                const element =
-                    svg.querySelector(definition.selector);
-
-                if (
-                    element
-                    && !element.hasAttribute(
-                        'data-symcon-original-transform'
-                    )
-                ) {
-                    element.setAttribute(
-                        'data-symcon-original-transform',
-                        element.getAttribute('transform') || ''
-                    );
-                }
-            });
-
-            /*
-             * Alle aktuell sichtbaren Icons in der gewünschten Reihenfolge.
-             */
-            const visible = definitions.filter((definition) => {
-                return isVisible(
-                    svg.querySelector(definition.selector)
-                );
-            });
-
-            /*
-             * Die Original-Card besitzt neun Plätze.
-             * Originalsymbole haben Vorrang. Zusätzliche Sollwertsymbole
-             * werden nur verwendet, solange noch Platz vorhanden ist.
-             */
-            const visibleOriginals =
-                visible.filter(
-                    (definition) => !definition.custom
-                );
-
-            const visibleCustoms =
-                visible.filter(
-                    (definition) => definition.custom
-                );
-
-            const freeCustomSlots = Math.max(
-                0,
-                TOP_ICON_SLOTS.length
-                - visibleOriginals.length
-            );
-
-            visibleCustoms.forEach((definition, index) => {
-                const element =
-                    svg.querySelector(definition.selector);
-
-                if (!element) {
-                    return;
-                }
-
-                if (index >= freeCustomSlots) {
-                    element.style.setProperty(
-                        'display',
-                        'none',
-                        'important'
-                    );
-                }
-            });
-
-            const shownCustoms =
-                visibleCustoms.slice(0, freeCustomSlots);
-
-            const shown = [
-                ...visibleOriginals,
-                ...shownCustoms
-            ];
-
-            if (shown.length === 0) {
-                return;
-            }
-
-            /*
-             * Tatsächlicher Rahmen der Statusleiste.
-             */
-            const frameX =
-                Number(frame.getAttribute('x')) || 65.353;
-            const frameWidth =
-                Number(frame.getAttribute('width')) || 474.29;
-
-            /*
-             * Gleicher Innenabstand links und rechts.
-             * Damit kleben weder Wasserhahn noch letztes Symbol am Rahmen.
-             */
-            const horizontalPadding = 36;
-            const leftX =
-                frameX + horizontalPadding;
-            const rightX =
-                frameX + frameWidth - horizontalPadding;
-
-            /*
-             * Vertikale Mitte der ORIGINALEN Statuszeile.
-             *
-             * rectSettings beginnt bei y=50.
-             * Die Trennlinie liegt bei ungefähr y=100.
-             * Somit ist y=75 die gemeinsame Mitte aller Statusicons.
-             */
-            /*
-             * Reale gemeinsame Y-Mitte der Original-Statussymbole,
-             * aus der unveränderten Original-SVG ermittelt.
-             *
-             * Die Originalicons liegen im Mittel bei y ~= 84.
-             * Unsere beiden Sollwerticons werden deshalb exakt dort
-             * zentriert und nicht mehr auf der geometrisch nur vermuteten
-             * Rahmenmitte y=75.
-             */
-            const iconCenterY = 84;
-
-            const gap =
-                shown.length > 1
-                    ? (rightX - leftX) / (shown.length - 1)
-                    : 0;
-
-            shown.forEach((definition, index) => {
-                const element =
-                    svg.querySelector(definition.selector);
-
-                if (!element) {
-                    return;
-                }
-
-                const targetX =
-                    shown.length > 1
-                        ? leftX + gap * index
-                        : (leftX + rightX) / 2;
-
-                if (definition.custom) {
-                    /*
-                     * Unsere Sollwerticons sind um (0/0) aufgebaut.
-                     * Deshalb direkt auf die gemeinsame Mitte setzen.
-                     */
-                    element.setAttribute(
-                        'transform',
-                        'translate('
-                        + targetX
-                        + ' '
-                        + iconCenterY
-                        + ')'
-                    );
-                    return;
-                }
-
-                /*
-                 * Originalicons horizontal verschieben, ihre originale
-                 * vertikale Geometrie aber vollständig beibehalten.
-                 */
-                const original =
-                    element.getAttribute(
-                        'data-symcon-original-transform'
-                    )
-                    || '';
-
-                /*
-                 * originalX ist der tatsächlich gemessene Mittelpunkt des
-                 * jeweiligen Symbols in der unveränderten Original-SVG.
-                 * Dadurch werden alle Originalicons exakt auf targetX gesetzt.
-                 */
-                const deltaX =
-                    targetX - Number(definition.originalX);
-
-                element.setAttribute(
-                    'transform',
-                    'translate('
-                    + deltaX
-                    + ' 0)'
-                    + (
-                        original
-                            ? ' ' + original
-                            : ''
-                    )
-                );
-            });
         };
 
         const bindTap = (element, handler) => {
@@ -5876,140 +2888,6 @@ window.SymconHeatPump = {
                 nextButtonX += width + buttonGap;
             });
 
-            // Optional hydraulic components.
-            const hk1 = previewAll || (!!cfg.heatingCircuitType1 && cfg.heatingCircuitType1 !== 'off');
-            const hk2 = previewAll || (!!cfg.heatingCircuitType2 && cfg.heatingCircuitType2 !== 'off');
-            const hk3 = previewAll || (!!cfg.heatingCircuitType3 && cfg.heatingCircuitType3 !== 'off');
-            const heating = hk1 || hk2 || hk3;
-            show('#gHeating', heating);
-            show('#gHK1', hk1);
-            show('#gHK2', hk2);
-            show('#gHK3', hk3);
-
-            [
-                [1, previewAll && (!cfg.heatingCircuitType1 || cfg.heatingCircuitType1 === 'off') ? 'underfloor' : cfg.heatingCircuitType1],
-                [2, previewAll && (!cfg.heatingCircuitType2 || cfg.heatingCircuitType2 === 'off') ? 'radiator' : cfg.heatingCircuitType2],
-                [3, previewAll && (!cfg.heatingCircuitType3 || cfg.heatingCircuitType3 === 'off') ? 'underfloor' : cfg.heatingCircuitType3]
-            ].forEach(([n, type]) => {
-                show('#gHKFloor' + n, type === 'underfloor');
-                show('#gHKRadiator' + n, type === 'radiator');
-            });
-
-            const heatingCircuitCount = [hk1, hk2, hk3].filter(Boolean).length;
-
-            // 1 HK: kein Verteiler. Roter Vorlauf direkt zum HK1;
-            // blauer Rücklauf wie im freigegebenen V33-Beispiel bis zur Hauptrücklaufleitung.
-            // 2/3 HK: Verteiler sichtbar und nur so lang wie benötigt.
-            const useManifold = heating && (heatingCircuitCount > 1 || !hk1);
-            show('#gHeatingManifold', useManifold);
-
-            const hk1Supply = svg.querySelector('#pathHK1Supply');
-            const hk1Return = svg.querySelector('#pathHK1Return');
-
-            if (!useManifold) {
-                if (hk1Supply) {
-                    hk1Supply.setAttribute('d', 'M1070 245H1260');
-                }
-                if (hk1Return) {
-                    hk1Return.setAttribute('d', 'M1260 295H1105V440');
-                }
-            } else {
-                if (hk1Supply) {
-                    hk1Supply.setAttribute('d', 'M1129 245H1260');
-                }
-                if (hk1Return) {
-                    hk1Return.setAttribute('d', 'M1260 295H1129');
-                }
-            }
-
-            const hkPumpIcon1 = svg.querySelector('#gHKPumpIcon1');
-            if (hkPumpIcon1) {
-                hkPumpIcon1.setAttribute('transform', !useManifold ? 'translate(-30 0)' : '');
-            }
-            const hkPumpText1 = svg.querySelector('#textHeatingPump1');
-            if (hkPumpText1) {
-                hkPumpText1.setAttribute('x', !useManifold ? '1165' : '1195');
-            }
-
-            const lastCircuit = hk3 ? 3 : (hk2 ? 2 : 1);
-            const manifoldBody = svg.querySelector('#heatingManifoldBody');
-            if (manifoldBody) {
-                manifoldBody.setAttribute('y', '220');
-                manifoldBody.setAttribute('height', String(95 + (lastCircuit - 1) * 120));
-            }
-            const manifoldReturnY = useManifold ? 295 + (lastCircuit - 1) * 120 : 440;
-            [['#pathBufferManifoldReturn', true], ['#gNoBuffer > path.cold', false]].forEach(([selector, buffer]) => {
-                const path = svg.querySelector(selector);
-                if (path) path.setAttribute('d', buffer
-                    ? 'M1105 ' + manifoldReturnY + (manifoldReturnY === 440 ? 'H1070' : 'H1085V440H1070')
-                    : 'M1105 ' + manifoldReturnY + 'H720V835H675');
-            });
-
-            show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
-            show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
-            show('#gDHW', previewAll || !!cfg.tankWW);
-            const solarBuffer = cfg.solarTarget === 'buffer';
-            show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? !!cfg.tankHP && heating : !!cfg.tankWW)));
-            const solarPipe = svg.querySelector('#gSolar > path.sol');
-            if (solarPipe) solarPipe.setAttribute('d', solarBuffer
-                ? 'M1064 310H1240V680H1260M1260 820H1230V340H1064'
-                : 'M1064 790H1185V680H1260M1260 820H1185V835H1064');
-            const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
-            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(55 -155)' : '');
-
-            // Optionale Pumpen nur dort zeigen, wo sie hydraulisch hingehören.
-            show(
-                '#gStorageChargingPumpVisual',
-                previewAll || (!!cfg.tankHP && !!cfg.storageChargingPumpRunning)
-            );
-            show(
-                '#gCirculatingPumpVisual',
-                previewAll || (!!cfg.tankWW && !!cfg.circulation && !!cfg.circulatingPumpRunning)
-            );
-
-            // Vollansicht bedeutet bewusst: maximale Anlagenkonfiguration.
-            // Komponenten werden zur Layoutkontrolle gezeigt, auch wenn keine
-            // Symcon-Variable dafür konfiguriert ist. Unkonfigurierte Werte bleiben leer.
-            if (previewAll) {
-                [
-                    '#gBuffer',
-                    '#gDHW',
-                    '#gSolar',
-                    '#gStorageChargingPumpVisual',
-                    '#gCirculatingPumpVisual',
-                    '#gHeating',
-                    '#gHeatingManifold',
-                    '#gHK1',
-                    '#gHK2',
-                    '#gHK3'
-                ].forEach((selector) => show(selector, true));
-
-                // In der Maximalansicht drei unterschiedliche Heizflächen zeigen.
-                show('#gHKFloor1', true);
-                show('#gHKRadiator1', false);
-                show('#gHKFloor2', false);
-                show('#gHKRadiator2', true);
-                show('#gHKFloor3', true);
-                show('#gHKRadiator3', false);
-
-                const manifoldBodyPreview = svg.querySelector('#heatingManifoldBody');
-                if (manifoldBodyPreview) {
-                    manifoldBodyPreview.setAttribute('y', '220');
-                    manifoldBodyPreview.setAttribute('height', '335');
-                }
-            }
-
-            // Live values.
-            setText('#textOutdoorTemperatureValue', formatted(cfg.outdoorTemperature));
-            let indoorKey = cfg.ambientTemperatureNormal;
-            if (binary(cfg.heatingPumpPartyMode) && formatted(cfg.ambientTemperatureParty)) {
-                indoorKey = cfg.ambientTemperatureParty;
-            } else if (binary(cfg.heatingPumpNightMode) && formatted(cfg.ambientTemperatureReduced)) {
-                indoorKey = cfg.ambientTemperatureReduced;
-            }
-            setText('#textIndoorTemperatureValue', formatted(indoorKey));
-
-            // Room sources are explicit external additions; all other readings use own Idents.
             const ns = 'http://www.w3.org/2000/svg';
             const node = (parent, tag, attrs, text) => {
                 const el = document.createElementNS(ns, tag);
@@ -6032,6 +2910,111 @@ window.SymconHeatPump = {
                 }
                 return el;
             };
+
+            // Optional hydraulic components.
+            const hk1 = previewAll || (!!cfg.heatingCircuitType1 && cfg.heatingCircuitType1 !== 'off');
+            const hk2 = previewAll || (!!cfg.heatingCircuitType2 && cfg.heatingCircuitType2 !== 'off');
+            const hk3 = previewAll || (!!cfg.heatingCircuitType3 && cfg.heatingCircuitType3 !== 'off');
+            const heating = hk1 || hk2 || hk3;
+            show('#gHeating', heating);
+            show('#gHK1', hk1);
+            show('#gHK2', hk2);
+            show('#gHK3', hk3);
+
+            [
+                [1, previewAll && (!cfg.heatingCircuitType1 || cfg.heatingCircuitType1 === 'off') ? 'underfloor' : cfg.heatingCircuitType1],
+                [2, previewAll && (!cfg.heatingCircuitType2 || cfg.heatingCircuitType2 === 'off') ? 'radiator' : cfg.heatingCircuitType2],
+                [3, previewAll && (!cfg.heatingCircuitType3 || cfg.heatingCircuitType3 === 'off') ? 'underfloor' : cfg.heatingCircuitType3]
+            ].forEach(([n, type]) => {
+                show('#gHKFloor' + n, type === 'underfloor');
+                show('#gHKRadiator' + n, type === 'radiator');
+            });
+
+            const heatingCircuitCount = [hk1, hk2, hk3].filter(Boolean).length;
+
+            // Separate supply/return headers feed each independently mixed branch.
+            const useManifold = heating && (heatingCircuitCount > 1 || !hk1);
+            show('#gHeatingManifold', useManifold);
+            const manifoldLabel = svg.querySelector('#gHeatingManifold > text');
+            if (manifoldLabel) {
+                manifoldLabel.setAttribute('x', '940');
+                manifoldLabel.setAttribute('y', '180');
+                manifoldLabel.setAttribute('text-anchor', 'middle');
+            }
+            const lastCircuit = hk3 ? 3 : (hk2 ? 2 : 1);
+            const lastReturn = 295 + (lastCircuit - 1) * 120;
+            const headers = group('gHeatingHeaders', svg.querySelector('#gHeating'));
+            node(headers, 'path', {class:'hot',d:'M945 245V' + (245 + (lastCircuit - 1) * 120)});
+            node(headers, 'path', {class:'cold',d:'M965 ' + Math.min(295 + ([hk1,hk2,hk3].findIndex(Boolean)) * 120,380) + 'V' + Math.max(lastReturn,380)});
+            [1,2,3].forEach(n => {
+                const y = 245 + (n - 1) * 120;
+                svg.querySelector('#gHK' + n + ' > path.hot')?.setAttribute('d','M945 ' + y + 'H1260');
+                svg.querySelector('#gHK' + n + ' > path.cold')?.setAttribute('d','M1260 ' + (y + 50) + 'H965');
+                svg.querySelector('#gHKPumpIcon' + n)?.setAttribute('transform','translate(-25 0)');
+                svg.querySelector('#textHeatingPump' + n)?.setAttribute('x','1170');
+            });
+            const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
+            const bufferGeometry = ['M750 640V460H690V245H720','M720 380H705V440H720V835H675','M890 245H945','M965 380H890'];
+            bufferPaths.forEach((path,index) => path.setAttribute('d',bufferGeometry[index]));
+            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M750 640V245H945');
+            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M965 380H720V835H675');
+
+            show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
+            show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
+            show('#gDHW', previewAll || !!cfg.tankWW);
+            const solarBuffer = cfg.solarTarget === 'buffer';
+            show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? !!cfg.tankHP && heating : !!cfg.tankWW)));
+            const solarPipe = svg.querySelector('#gSolar > path.sol');
+            if (solarPipe) solarPipe.setAttribute('d', solarBuffer
+                ? 'M884 300H910V155H1230V680H1260M1260 820H1245V140H900V330H884'
+                : 'M1064 790H1185V680H1260M1260 820H1185V835H1064');
+            const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
+            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : '');
+
+            // Optional DHW circulation uses its confirmed native output.
+            show(
+                '#gCirculatingPumpVisual',
+                previewAll || (!!cfg.tankWW && !!cfg.circulation && !!cfg.circulatingPumpRunning)
+            );
+
+            // Vollansicht bedeutet bewusst: maximale Anlagenkonfiguration.
+            // Komponenten werden zur Layoutkontrolle gezeigt, auch wenn keine
+            // Symcon-Variable dafür konfiguriert ist. Unkonfigurierte Werte bleiben leer.
+            if (previewAll) {
+                [
+                    '#gBuffer',
+                    '#gDHW',
+                    '#gSolar',
+                    '#gCirculatingPumpVisual',
+                    '#gHeating',
+                    '#gHeatingManifold',
+                    '#gHK1',
+                    '#gHK2',
+                    '#gHK3'
+                ].forEach((selector) => show(selector, true));
+
+                // In der Maximalansicht drei unterschiedliche Heizflächen zeigen.
+                show('#gHKFloor1', true);
+                show('#gHKRadiator1', false);
+                show('#gHKFloor2', false);
+                show('#gHKRadiator2', true);
+                show('#gHKFloor3', true);
+                show('#gHKRadiator3', false);
+
+
+            }
+
+            // Live values.
+            setText('#textOutdoorTemperatureValue', formatted(cfg.outdoorTemperature));
+            let indoorKey = cfg.ambientTemperatureNormal;
+            if (binary(cfg.heatingPumpPartyMode) && formatted(cfg.ambientTemperatureParty)) {
+                indoorKey = cfg.ambientTemperatureParty;
+            } else if (binary(cfg.heatingPumpNightMode) && formatted(cfg.ambientTemperatureReduced)) {
+                indoorKey = cfg.ambientTemperatureReduced;
+            }
+            setText('#textIndoorTemperatureValue', formatted(indoorKey));
+
+            // Room sources are explicit external additions; all other readings use own Idents.
             const rooms = Array.isArray(cfg.roomTemperatures) ? cfg.roomTemperatures.slice(0, 3) : [];
             const roomGroup = group('gRoomTemperatures', svg.querySelector('#info'));
             show('#textIndoorTemperatureValue', rooms.length === 0);
@@ -6068,22 +3051,25 @@ window.SymconHeatPump = {
                     formatted(room.key), single ? (showIcon ? 175 : 250) : 94);
             });
 
-            // Mixer telemetry sits at the heat pump, before the heating distributor.
+            // Each mixer belongs to its selected branch, downstream of the optional buffer.
             // Auf/Zu are independent relay signals, not valve position measurements.
             const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0, 3) : [];
-            const mixerGroup = group('gMixerReadings', svg.querySelector('#heatPump'));
+            const circuitPump = n => {
+                const mixer = mixers.find(item => (item.circuit || item.number) === n);
+                return mixer ? mixer.pump : cfg[n === 1 ? 'heatingCircuitPumpRunning' : 'heatingCircuitPumpRunning' + n];
+            };
             const relay = (key) => raw(key) === null || raw(key) === undefined ? '—' : (binary(key) ? 'Ein' : 'Aus');
             const mixerSymbol = (parent, mixer, x, y, radius) => {
                 const known = raw(mixer.open) !== null && raw(mixer.open) !== undefined && raw(mixer.close) !== null && raw(mixer.close) !== undefined;
                 const state = !known ? 'unknown' : binary(mixer.open) && binary(mixer.close) ? 'conflict'
                     : binary(mixer.open) ? 'opening' : binary(mixer.close) ? 'closing' : 'stopped';
                 const labels = {unknown:'Status unbekannt',conflict:'Auf und Zu aktiv',opening:'Ansteuerung Auf',closing:'Ansteuerung Zu',stopped:'Keine Ansteuerung'};
-                const symbol = node(parent, 'g', {id:'gMixerValveSymbol' + mixer.number, role:'img',
+                const symbol = node(parent, 'g', {id:'gMixerValveSymbol' + (mixer.circuit || mixer.number), 'data-mixer':mixer.number, role:'img',
                     'aria-label':'Mischer ' + mixer.number + ': ' + labels[state], 'data-state':state,
                     transform:'translate(' + x + ' ' + y + ')'});
                 node(symbol, 'title', {}, 'Mischer ' + mixer.number + ': ' + labels[state] + '. Auf ' + relay(mixer.open) + ', Zu ' + relay(mixer.close) + '. Keine Positionsrückmeldung.');
                 node(symbol, 'circle', {r:radius, fill:'var(--wp-button)', stroke:state === 'conflict' ? '#f04444' : 'var(--wp-icon)', 'stroke-width':2});
-                node(symbol, 'path', {d:'M-6-14L0-5L6-14Z M-6 14L0 5L6 14Z M-14-6L-5 0L-14 6Z',
+                node(symbol, 'path', {d:'M-14-6L-5 0L-14 6Z M14-6L5 0L14 6Z M-6 14L0 5L6 14Z',
                     fill:'var(--wp-icon)', stroke:'var(--wp-icon)', 'stroke-width':1, transform:'scale(' + radius / 18 + ')'});
                 const recent = recentlyChanged(mixer.open, mixer.close);
                 node(symbol, 'circle', {r:2,fill:'var(--wp-icon)'});
@@ -6103,28 +3089,23 @@ window.SymconHeatPump = {
                 mixerStyle = node(svg, 'style', {id:'mixerMotionStyle'});
                 mixerStyle.textContent = '@keyframes valveRecentChange{0%,100%{opacity:1}50%{opacity:.45}}.wp-valve-recent{animation:valveRecentChange 1.5s ease-in-out infinite}@media(prefers-reduced-motion:reduce){.wp-valve-recent{animation:none}}';
             }
-            mixerGroup.remove();
-            const mixerValve = group('gPrimaryMixerValve', svg.querySelector('#main'));
-            const mixerReadings = group('gMixerValveReadings', svg.querySelector('#main'));
-            if (mixers.length && heating) {
-                node(mixerValve, 'path', {class:'cold', d:'M720 510H732'});
-                mixerSymbol(mixerValve, mixers[0], 750, 510, 18);
-                mixers.forEach((mixer, index) => {
-                    const readings = node(mixerReadings, 'g', {transform:'translate(' + (mixer.number === 1 ? 808 : 773) + ' ' + (493 + index * 55) + ')'});
-                    node(readings, 'text', {class:'sm', x:0, y:0, style:'font-size:13px'}, 'Mischer ' + mixer.number);
-                    fittedText(readings, {id:'textMixerActual' + mixer.number, class:'sm', x:0, y:15, style:'font-size:13px'},
-                        'Ist ' + (formatted(mixer.actual) || '—'), mixer.number === 1 ? 88 : 78);
-                    fittedText(readings, {id:'textMixerTarget' + mixer.number, class:'sm', x:0, y:30, style:'font-size:13px'},
-                        'Soll ' + (formatted(mixer.target) || '—'), mixer.number === 1 ? 88 : 78);
-                    if (mixer.number > 1) mixerSymbol(mixerReadings, mixer, 857, 510 + index * 55, 12);
-                });
-            }
+            const mixerReadings = group('gMixerValveReadings', svg.querySelector('#gHeating'));
+            [1,2,3].forEach(n => {
+                const branch = svg.querySelector('#gHK' + n);
+                const hydraulic = group('gHKMixer' + n, branch);
+                const mixer = mixers.find(item => (item.circuit || item.number) === n);
+                if (!mixer || ![hk1,hk2,hk3][n - 1]) return;
+                const y = 245 + (n - 1) * 120;
+                node(hydraulic, 'path', {id:'pathHKMixingReturn' + n,class:'cold',d:'M1045 ' + (y + 50) + 'V' + (y + 18)});
+                node(hydraulic, 'circle', {cx:1045,cy:y + 50,r:4,fill:'#35a6ff'});
+                mixerSymbol(hydraulic, mixer, 1045, y, 18);
+                const readings = node(mixerReadings, 'g', {id:'gMixerReading' + n,transform:'translate(990 ' + (y - 54) + ')'});
+                node(readings, 'text', {class:'sm',x:0,y:0,style:'font-size:14px'},'Mischer ' + mixer.number);
+                fittedText(readings, {id:'textMixerActual' + n,class:'sm',x:0,y:16,style:'font-size:14px'},'Ist ' + (formatted(mixer.actual) || '—'),100);
+                fittedText(readings, {id:'textMixerTarget' + n,class:'sm',x:0,y:32,style:'font-size:14px'},'Soll ' + (formatted(mixer.target) || '—'),100);
+            });
 
             // The information panel keeps its size; operating data replaces VL/RL.
-            show('#textSupplyTemperatureValue', false);
-            show('#textReturnTemperatureValue', false);
-            show('#textHeaterRodStatus', false);
-            show('#gHeaterRodWaves', false);
             const info = svg.querySelector('#info');
             const status = svg.querySelector('#textHPStatus');
             if (status) {
@@ -6168,10 +3149,6 @@ window.SymconHeatPump = {
             };
 
             // DHW has one measured actual value and one setpoint, never three levels.
-            ['#textTankTempWWUp', '#textTankTempWWMiddle', '#textTankTempWWDown'].forEach((selector) => {
-                setText(selector, '');
-                show(selector, false);
-            });
             const dhwReadings = group('gDHWTemperatures', svg.querySelector('#gDHW'));
             [['Ist', cfg.tankTempWWMiddle, 685], ['Soll', cfg.dhwSetpoint, 745]].forEach(([label, key, y]) => {
                 node(dhwReadings, 'text', {class:'sm', x:925, y:y - 23}, label);
@@ -6193,12 +3170,12 @@ window.SymconHeatPump = {
 
             placeTankValues([
                 ['#textTankTempHPUp', cfg.tankTempHPUp, 82],
-                ['#textTankTempHPMiddle', cfg.tankTempHPMiddle, 158],
-                ['#textTankTempHPDown', cfg.tankTempHPDown, 232]
+                ['#textTankTempHPMiddle', cfg.tankTempHPMiddle, 128],
+                ['#textTankTempHPDown', cfg.tankTempHPDown, 190]
             ]);
             const bufferReading = group('gBufferReturnReading', svg.querySelector('#gBuffer'));
             if (formatted(cfg.bufferReturnTemperature)) {
-                fittedText(bufferReading, {id:'textBufferReturnTemperature', class:'sm', x:985, y:500,
+                fittedText(bufferReading, {id:'textBufferReturnTemperature', class:'sm', x:805, y:435,
                     'text-anchor':'middle', style:'font-size:16px'}, 'RL extern ' + formatted(cfg.bufferReturnTemperature), 180);
             }
             const solarReading = group('gSolarStorageReading', svg.querySelector('#gSolar'));
@@ -6216,8 +3193,21 @@ window.SymconHeatPump = {
                 [2, cfg.supplyTemperatureHeating2, cfg.refluxTemperatureHeating2, cfg.heatingCircuitPumpValue2],
                 [3, cfg.supplyTemperatureHeating3, cfg.refluxTemperatureHeating3, cfg.heatingCircuitPumpValue3]
             ].forEach(([n, supply, reflux, pumpValueItem]) => {
+                const mixer = mixers.find(item => (item.circuit || item.number) === n);
+                if (mixer) {
+                    supply = formatted(mixer.actual) ? mixer.actual : cfg.supplyTemperature;
+                    // The controller does not provide a return sensor per mixer.
+                    reflux = '';
+                    pumpValueItem = mixer.number === 1 ? cfg.heatingCircuitPumpValue : '';
+                } else {
+                    if (!formatted(supply) || (cfg.tankHP && n === 1)) supply = cfg.supplyTemperature;
+                    if (cfg.tankHP && n === 1) reflux = '';
+                }
                 const supplySelector = n === 1 ? '#textSupplyTemperatureHeating' : '#textSupplyTemperatureHeating' + n;
                 const refluxSelector = n === 1 ? '#textRefluxTemperatureHeating' : '#textRefluxTemperatureHeating' + n;
+                const wpFallback = supply === cfg.supplyTemperature || (!mixer && n === 1 && supply === cfg.supplyTemperatureHeating);
+                const supplyLabel = svg.querySelector(supplySelector)?.previousElementSibling;
+                if (supplyLabel) supplyLabel.textContent = wpFallback ? 'WP VL' : 'VL';
                 setText(supplySelector, formatted(supply));
                 setText(refluxSelector, formatted(reflux));
                 {
@@ -6239,11 +3229,10 @@ window.SymconHeatPump = {
                     const visible = formatted(key) !== '';
                     element.style.display = visible ? 'inline' : 'none';
                     const label = element.previousElementSibling;
-                    if (label && ['VL', 'RL'].includes(label.textContent.trim())) label.style.display = visible ? 'inline' : 'none';
+                    if (label && ['VL', 'WP VL', 'RL'].includes(label.textContent.trim())) label.style.display = visible ? 'inline' : 'none';
                 });
 
-                // Unter der Pumpe nur die separat konfigurierte Drehzahl /
-                // den Durchfluss anzeigen. Nicht konfiguriert = leer.
+                // HUP percentage belongs to mixer 1; no invented RPM or percentages for other pumps.
                 const pumpText = pumpValueItem ? formatted(pumpValueItem) : '';
                 setText('#textHeatingPump' + n, n === 1 && pumpText ? 'Ansteuerung ' + pumpText + (pumpText.includes('%') ? '' : ' %') : pumpText);
                 const pumpLabel = svg.querySelector('#textHeatingPump' + n);
@@ -6312,6 +3301,10 @@ window.SymconHeatPump = {
                 node(flowReadings, 'text', {class:'sm', x:710, y:610, 'text-anchor':'end', style:'font-size:14px'}, 'Durchfluss');
                 fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:710, y:632,
                     'text-anchor':'end', style:'font-size:16px'}, flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 75);
+            }
+            if (formatted(cfg.supplyTemperature)) {
+                node(flowReadings,'text',{class:'sm',x:780,y:610,style:'font-size:14px'},'Vorlauf');
+                fittedText(flowReadings,{id:'textWPSupplyTemperature',class:'sm',x:780,y:632,style:'font-size:16px'},formatted(cfg.supplyTemperature),110);
             }
             [hk1, hk2, hk3].forEach((enabled, index) => {
                 if (!enabled || !formatted(cfg.returnTemperatureSetpoint)) return;
@@ -6419,9 +3412,9 @@ window.SymconHeatPump = {
             // Pumpenvariable einen positiven Wert liefert. Bei Prozent-/Drehzahlwerten
             // wird die Animationsgeschwindigkeit mit dem Messwert skaliert.
             [
-                [1, cfg.heatingCircuitPumpRunning],
-                [2, cfg.heatingCircuitPumpRunning2],
-                [3, cfg.heatingCircuitPumpRunning3]
+                [1, circuitPump(1)],
+                [2, circuitPump(2)],
+                [3, circuitPump(3)]
             ].forEach(([n, key]) => {
                 const rotor = svg.querySelector('#hkPumpRotor' + n);
                 if (!rotor) return;
@@ -6446,9 +3439,8 @@ window.SymconHeatPump = {
                 );
             });
 
-            // Speicherlade- und Warmwasser-Zirkulationspumpe.
+            // Warmwasser-Zirkulationspumpe.
             [
-                ['#storageChargingPumpRotor', cfg.storageChargingPumpRunning],
                 ['#circulatingPumpRotor', cfg.circulatingPumpRunning]
             ].forEach(([selector, key]) => {
                 const rotor = svg.querySelector(selector);
@@ -6541,8 +3533,7 @@ window.SymconHeatPump = {
             }
 
             // Live flow overlays use actual running variables; no idle animation.
-            const heatingActive = [cfg.heatingCircuitPumpRunning,
-                cfg.heatingCircuitPumpRunning2, cfg.heatingCircuitPumpRunning3].some(binary);
+            const heatingActive = [1,2,3].some(n => [hk1,hk2,hk3][n - 1] && binary(circuitPump(n)));
             const chargingActive = binary(cfg.storageChargingPumpRunning);
             const solarActive = Number(raw(cfg.thermalSolarPumpSpeed)) > 0 || binary(cfg.thermalSolarPump);
             const solarRotor = svg.querySelector('#solarPumpRotor');
@@ -6550,11 +3541,12 @@ window.SymconHeatPump = {
             const flows = [
                 ['#gRefrigerantCircuit path.hot, #gRefrigerantCircuit path.cold', compressorActive],
                 ['#main path.hot, #main path.cold', compressorActive],
-                ['#gBuffer > path.hot, #gBuffer > path.cold', chargingActive || heatingActive],
+                ['#gBuffer > path.hot, #gBuffer > path.cold', heatingActive],
                 ['#gNoBuffer path.hot, #gNoBuffer path.cold', heatingActive],
-                ['#gHK1 > path.hot, #gHK1 > path.cold', binary(cfg.heatingCircuitPumpRunning)],
-                ['#gHK2 > path.hot, #gHK2 > path.cold', binary(cfg.heatingCircuitPumpRunning2)],
-                ['#gHK3 > path.hot, #gHK3 > path.cold', binary(cfg.heatingCircuitPumpRunning3)],
+                ['#gHeatingHeaders path.hot, #gHeatingHeaders path.cold', heatingActive],
+                ['#gHK1 > path.hot, #gHK1 > path.cold, #pathHKMixingReturn1', binary(circuitPump(1))],
+                ['#gHK2 > path.hot, #gHK2 > path.cold, #pathHKMixingReturn2', binary(circuitPump(2))],
+                ['#gHK3 > path.hot, #gHK3 > path.cold, #pathHKMixingReturn3', binary(circuitPump(3))],
                 ['#gDHW > path.hot, #gDHW > path.cold', chargingActive && binary(cfg.wwHeatingValve)],
                 ['#gSolar path.sol', solarActive]
             ];
@@ -6581,324 +3573,6 @@ window.SymconHeatPump = {
             // Heater power is aggregated in the backend and shown only inside DHW.
 
             return true;
-        };
-
-        const applyControlIcons = (card) => {
-            if (!card || !card.content) {
-                return;
-            }
-
-            const enabledColor = resolveLayoutTextColor();
-
-            const definitions = [
-                {
-                    functionName: 'heating',
-                    selector: '#gHPStatusHeating',
-                    dataKey: 'heatingPumpHeatingMode',
-                    activeKey: 'heatingActive',
-                    runningColor: '#ff9500'
-                },
-                {
-                    functionName: 'hotwater',
-                    selector: '#gHPStatusWW',
-                    dataKey: 'heatingPumpHotWaterMode',
-                    activeKey: 'hotwaterActive',
-                    runningColor: '#ff9500'
-                },
-                {
-                    functionName: 'cooling',
-                    selector: '#gHPStatusCooling',
-                    dataKey: 'heatingPumpCoolingMode',
-                    activeKey: 'coolingActive',
-                    runningColor: '#0a84ff'
-                }
-            ];
-
-            definitions.forEach((definition) => {
-                const group =
-                    card.content.querySelector(definition.selector);
-
-                if (!group) {
-                    return;
-                }
-
-                const control =
-                    currentControls
-                    && currentControls[definition.functionName];
-
-                /*
-                 * Zwei Quellen absichtlich parallel:
-                 * 1. der echte Binärstatus aus currentData
-                 * 2. der von PHP aus dem zentralen Betriebsstatus berechnete
-                 *    Active-Wert.
-                 *
-                 * Sobald EINE Quelle aktiv meldet, wird das Statussymbol
-                 * eingefärbt.
-                 */
-                const running =
-                    stateIsOn(definition.dataKey)
-                    || !!(
-                        currentControls
-                        && currentControls[definition.activeKey] === true
-                    );
-
-                const hasControl = !!(
-                    control
-                    && control.configured
-                    && Array.isArray(control.options)
-                    && control.options.length > 0
-                );
-
-                const configuredMode =
-                    !!currentConfig[definition.dataKey];
-
-                const visible =
-                    configuredMode
-                    || hasControl
-                    || (
-                        currentControls
-                        && currentControls.hasOperatingStatus
-                    )
-                    || running;
-
-                group.style.setProperty(
-                    'display',
-                    visible ? 'inline' : 'none',
-                    'important'
-                );
-
-                if (!visible) {
-                    return;
-                }
-
-                group.style.setProperty(
-                    'visibility',
-                    'visible',
-                    'important'
-                );
-                group.style.setProperty(
-                    'opacity',
-                    '1',
-                    'important'
-                );
-                group.style.removeProperty('filter');
-
-                /*
-                 * Drei Zustände wie bisher gewünscht:
-                 *
-                 * 1. AUS / nicht eingeschaltet
-                 *    -> Originalfarbe, aber matt
-                 *
-                 * 2. EINGESCHALTET / freigegeben
-                 *    -> Originalfarbe, volle Helligkeit
-                 *
-                 * 3. AKTIV / läuft tatsächlich
-                 *    -> Heizen + Warmwasser orange,
-                 *       Kühlen blau
-                 */
-                let color = enabledColor;
-                let opacity = 1;
-
-                if (running) {
-                    color = definition.runningColor;
-                    opacity = 1;
-                } else if (hasControl && !control.enabled) {
-                    color = enabledColor;
-                    opacity = 0.42;
-                }
-
-                group.style.setProperty(
-                    'opacity',
-                    String(opacity),
-                    'important'
-                );
-
-                /*
-                 * Warmwasserhahn ist im Original ein reines Füllsymbol.
-                 * Ein zusätzlicher Stroke macht ihn sichtbar dicker und
-                 * verformt genau den Eindruck, der im Screenshot auffällt.
-                 */
-                /*
-                 * ALLE Symbole der oberen Statusleiste bleiben jetzt
-                 * vollständig im Originalzustand der SVG.
-                 *
-                 * Die Original-Card färbt diese Symbole über
-                 * var(--primary-text-color). Deshalb ändern wir bei
-                 * Heizen, Warmwasser und Kühlen nur diese CSS-Variable
-                 * am jeweiligen Originalelement.
-                 *
-                 * Keine Pfade klonen, keine Geometrie ändern,
-                 * kein zusätzlicher Stroke.
-                 */
-                group.style.setProperty(
-                    '--primary-text-color',
-                    color,
-                    'important'
-                );
-                group.style.setProperty(
-                    'color',
-                    color,
-                    'important'
-                );
-
-                /*
-                 * fill/currentColor zusätzlich am Container setzen, damit
-                 * sowohl <g>-Symbole als auch das <use>-Warmwassersymbol
-                 * zuverlässig reagieren.
-                 */
-                group.style.setProperty(
-                    'fill',
-                    'var(--primary-text-color)',
-                    'important'
-                );
-                group.style.removeProperty('stroke');
-
-                /*
-                 * Bereits von älteren Versionen gesetzte Inline-Farben an
-                 * den Originalpfaden entfernen. Danach greift wieder die
-                 * Original-SVG-Logik über --primary-text-color.
-                 */
-                if (String(group.tagName || '').toLowerCase() !== 'use') {
-                    group.querySelectorAll(
-                        'path, rect, circle, ellipse, line, polyline, polygon'
-                    ).forEach((element) => {
-                        element.style.removeProperty('fill');
-                        element.style.removeProperty('stroke');
-                        element.style.removeProperty('color');
-                        element.removeAttribute('fill');
-                        element.removeAttribute('stroke');
-                    });
-                }
-
-                if (running) {
-                    group.style.setProperty(
-                        'filter',
-                        'brightness(1.08) saturate(1.15)',
-                        'important'
-                    );
-                } else {
-                    group.style.removeProperty('filter');
-                }
-
-                if (hasControl) {
-                    group.style.setProperty(
-                        'cursor',
-                        'pointer',
-                        'important'
-                    );
-                    group.style.setProperty(
-                        'pointer-events',
-                        'all',
-                        'important'
-                    );
-
-                    if (!group.dataset.symconControlBound) {
-                        group.dataset.symconControlBound = '1';
-
-                        bindTap(
-                            group,
-                            (event) =>
-                                openModeMenu(
-                                    definition.functionName,
-                                    event
-                                )
-                        );
-                    }
-                } else {
-                    group.style.setProperty(
-                        'cursor',
-                        'default',
-                        'important'
-                    );
-                }
-            });
-        };
-
-        const applyFanAnimation = (card) => {
-            if (!card || !card.content || currentConfig.heatingPumpType !== 'A2W') {
-                return;
-            }
-
-            const fan = card.content.querySelector('#pathHPFan');
-            if (!fan) {
-                return;
-            }
-
-            const fanEntity = currentConfig.fanSpeed;
-
-            if (!fanEntity || !currentData[fanEntity]) {
-                fan.classList.remove('rotate');
-                fan.style.animationDuration = '';
-                return;
-            }
-
-            const rawState = currentData[fanEntity].value;
-            const normalized = String(rawState ?? '').trim().toLowerCase();
-
-            let rpm = 0;
-
-            /*
-             * Bool-Unterstützung:
-             * true/on/ein/aktiv = mittlere Lüfterleistung, entspricht ca. 250 U/min.
-             * false/off/aus     = Lüfter steht.
-             */
-            if (['true', 'on', 'yes', 'ja', 'ein', 'active', 'aktiv'].includes(normalized)) {
-                rpm = 250;
-            } else if (['false', 'off', 'no', 'nein', 'aus', 'inactive', 'inaktiv', ''].includes(normalized)) {
-                rpm = 0;
-            } else {
-                rpm = Number(rawState);
-
-                if (Number.isNaN(rpm)) {
-                    rpm = 0;
-                }
-            }
-
-            if (rpm <= 0) {
-                fan.classList.remove('rotate');
-                fan.style.animationDuration = '';
-                return;
-            }
-
-            /*
-             * Optische Kennlinie für reale 0–500 U/min.
-             *
-             * Ziel:
-             *   ca. 100 U/min -> 2.5 s/Umdrehung
-             *   ca. 200 U/min -> 1.8 s/Umdrehung
-             *   ca. 300 U/min -> 1.2 s/Umdrehung
-             *   ca. 400 U/min -> 0.8 s/Umdrehung
-             *   ca. 500 U/min -> 0.5 s/Umdrehung
-             *
-             * Zwischenwerte werden stufenlos interpoliert.
-             * Werte über 500 U/min werden auf die schnellste Darstellung begrenzt.
-             */
-            const clampedRpm = Math.max(0, Math.min(500, rpm));
-
-            const points = [
-                [0,   3.0],
-                [100, 2.5],
-                [200, 1.8],
-                [300, 1.2],
-                [400, 0.8],
-                [500, 0.5]
-            ];
-
-            let duration = 3.0;
-
-            for (let i = 0; i < points.length - 1; i++) {
-                const [rpm1, duration1] = points[i];
-                const [rpm2, duration2] = points[i + 1];
-
-                if (clampedRpm >= rpm1 && clampedRpm <= rpm2) {
-                    const factor = (clampedRpm - rpm1) / (rpm2 - rpm1);
-                    duration = duration1 + (duration2 - duration1) * factor;
-                    break;
-                }
-            }
-
-            fan.classList.add('rotate');
-            fan.style.animationDuration = duration.toFixed(2) + 's';
         };
 
         /*
@@ -6950,7 +3624,7 @@ window.SymconHeatPump = {
 
                 /*
                  * Alle Symcon-Erweiterungen direkt nach dem nativen
-                 * Daten-Rendering ausführen. Keine HA-Schicht, keine Timer.
+                 * Daten-Rendering ausführen. Das gebündelte SVG verwendet ausschließlich die integrierte Vollansicht.
                  */
                 if (!card.__symconSetDataHookInstalled && typeof card.setData === 'function') {
                     const originalSetData = card.setData;
@@ -6959,38 +3633,8 @@ window.SymconHeatPump = {
                         const result = originalSetData.call(this, data);
 
                         if (this.content) {
-                            if (applyModernDashboard(this)) {
-                                applyThemeColors(this);
-                                return result;
-                            }
-
-                            applyCoolingVisualization(this);
-                            updateRefrigerantValues(this);
-                            applyTerminology(this);
+                            applyModernDashboard(this);
                             applyThemeColors(this);
-                            applyRefrigerantCircuitMode(this);
-                            applyOptionalStatusVisibility(this);
-                            applyWWValvePipeGeometry(this);
-                            applyThreeHeaterRods(this);
-                            applyHeaterRodInfoField(this);
-                            disableOriginalSettingsLink(this);
-                            applyControlIcons(this);
-                            applySetpointIcons(this);
-                            layoutTopIconBar(this);
-                            applyFanAnimation(this);
-                            applySingleCircuitTemperatureDisplay(this);
-                            applyThermalSolarVisualization(this);
-                            applyAdditionalValues(this);
-                            normalizeTemperatureUnits(this);
-                            positionHeatingCircuitTemperatures(this);
-                            applyFlowAnimations(this);
-
-                            /*
-                             * Ganz zuletzt: Aktivfarben der oberen Statusleiste.
-                             * So kann keine nachfolgende SVG-/Layout-Funktion
-                             * die Farbe wieder überschreiben.
-                             */
-                            applyControlIcons(this);
                         }
 
                         return result;
@@ -7473,6 +4117,10 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 'visible' => $this->ReadPropertyBoolean('ThermalSolarAvailable') && $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer' && !$this->ReadPropertyBoolean('TankHP')],
             ['type' => 'RowLayout', 'items' => array_map(static fn(int $i): array =>
                 ['type' => 'CheckBox', 'name' => 'VisualizationHeatingCircuit' . $i, 'caption' => 'Heizkreis ' . $i], range(1, 3))],
+            ['type' => 'RowLayout', 'items' => array_map(static fn(int $i): array =>
+                ['type' => 'Select', 'name' => 'VisualizationHeatingCircuitMixer' . $i, 'caption' => 'Heizkreis ' . $i . ' – Anbindung',
+                    'options' => [['caption'=>'Direkt','value'=>0],['caption'=>'Mischkreis 1','value'=>1],
+                        ['caption'=>'Mischkreis 2','value'=>2],['caption'=>'Mischkreis 3','value'=>3]]], range(1, 3))],
             ['type' => 'ExpansionPanel', 'caption' => 'Heizstäbe', 'items' => [
                 ['type' => 'Label', 'caption' => 'Gemessene Leistungen in W oder kW laut Variablenprofil; ohne Einheit wird W verwendet. Schaltzustände liefern keine Leistung.'],
                 ...array_map(fn(int $i): array => $this->HeaterConfigurationFields($i), range(1, 3))
@@ -7577,9 +4225,15 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     private function GetVisualizationRequiredPointIDs(): array
     {
         $idents = [];
+        $mixers = [];
+        for ($i = 1; $i <= 3; ++$i) {
+            if ($this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $i)) {
+                $mixers[$this->ReadPropertyInteger('VisualizationHeatingCircuitMixer' . $i)] = true;
+            }
+        }
         foreach (self::LUXTRONIK_IDENT_MAP + self::VISUALIZATION_EXTRA_IDENT_MAP as $property => $candidates) {
-            if (preg_match('/^Mixer(?:Actual|Target|Open|Close)([23])$/D', $property, $match)
-                && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[1])) continue;
+            if (preg_match('/^Mixer(?:Actual|Target|Open|Close|Pump)([1-3])$/D', $property, $match)
+                && !isset($mixers[(int)$match[1]])) continue;
             if ($property === 'ThermalSolarPanelTemp' && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
             if (in_array($property, ['SolarStorageTemperature', 'ThermalSolarPump'], true) && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
             if ($property === 'BufferReturnTemperature' && !$this->ReadPropertyBoolean('TankHP')) continue;
