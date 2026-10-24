@@ -2896,6 +2896,8 @@ window.SymconHeatPump = {
 
             const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0,3) : [];
             const narrowHydraulics = !previewAll && !cfg.tankHP && !cfg.thermalSolarAvailable;
+            const dhwShift = previewAll || cfg.thermalSolarAvailable || cfg.circulation ? 24 : 80;
+            const circulationVisible = previewAll || (!!cfg.tankWW && !!cfg.circulation && !!cfg.circulatingPumpRunning);
             const activeMixers = mixers.some(item => [hk1,hk2,hk3][(item.circuit || item.number) - 1]);
             const contentRight = narrowHydraulics ? Math.max(activeMixers ? 1335 : 1235,nextButtonX - buttonGap) : 1568;
             const heatingShift = narrowHydraulics ? Math.min(0,contentRight - 1525) : 0;
@@ -2935,18 +2937,21 @@ window.SymconHeatPump = {
             const solarBuffer = cfg.solarTarget === 'buffer' && !!cfg.tankHP;
             const solarHotWater = !!cfg.thermalSolarAvailable && !solarBuffer;
             show('#gDHW', previewAll || !!cfg.tankWW || solarHotWater);
+            svg.querySelector('#gDHW')?.setAttribute('transform','translate(' + dhwShift + ' 0)');
+            svg.querySelector('#gDHW > path.hot')?.setAttribute('d','M' + (860 - dhwShift) + ' 665H900');
+            svg.querySelector('#gDHW > path.cold')?.setAttribute('d','M900 835H' + (800 - dhwShift));
             show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? heating : true)));
             const solarPipe = svg.querySelector('#gSolar > path.sol');
             if (solarPipe) solarPipe.setAttribute('d', solarBuffer
                 ? 'M884 300H910V155H1230V680H1260M1260 820H1245V140H900V330H884'
-                : 'M1064 790H1185V680H1260M1260 820H1185V835H1064');
+                : 'M' + (1064 + dhwShift) + ' 790H1185V680H1260M1260 820H1185V835H' + (1064 + dhwShift));
             const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
             if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : '');
 
             // Optional DHW circulation uses its confirmed native output.
             show(
                 '#gCirculatingPumpVisual',
-                previewAll || (!!cfg.tankWW && !!cfg.circulation && !!cfg.circulatingPumpRunning)
+                circulationVisible
             );
 
             // Vollansicht bedeutet bewusst: maximale Anlagenkonfiguration.
@@ -3488,12 +3493,15 @@ window.SymconHeatPump = {
             // Live flow overlays use actual running variables; no idle animation.
             const heatingActive = [1,2,3].some(n => [hk1,hk2,hk3][n - 1] && binary(circuitPump(n)));
             const chargingActive = binary(cfg.storageChargingPumpRunning);
+            const measuredFlow = raw(cfg.heatingFlow);
+            const hasMeasuredFlow = typeof measuredFlow === 'number' && Number.isFinite(measuredFlow) && measuredFlow >= 0;
+            const primaryWaterActive = hasMeasuredFlow ? measuredFlow > 0 : compressorActive;
             const solarActive = Number(raw(cfg.thermalSolarPumpSpeed)) > 0 || binary(cfg.thermalSolarPump);
             const solarRotor = svg.querySelector('#solarPumpRotor');
             if (solarRotor) solarRotor.style.setProperty('animation', solarActive ? 'symcon-modern-rotate 1.4s linear infinite' : 'none', 'important');
             const flows = [
                 ['#gRefrigerantCircuit path.hot, #gRefrigerantCircuit path.cold', compressorActive],
-                ['#main path.hot, #main path.cold', compressorActive],
+                ['#main path.hot, #main path.cold', primaryWaterActive],
                 ['#gBuffer > path.hot, #gBuffer > path.cold', heatingActive],
                 ['#gNoBuffer path.hot, #gNoBuffer path.cold', heatingActive],
                 ['#gHeatingHeaders path.hot, #gHeatingHeaders path.cold', heatingActive],

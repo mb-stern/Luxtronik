@@ -110,11 +110,11 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Bereinigte HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration vor der ID-Liste ohne Fußzeile.
 - Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
 - Puffer vor den konfigurierbaren Mischern 1–3; frei benennbare Heizkreisabgänge mit Mischkreis-Vorlauf; gemeinsamer VL/RL/RL-Soll direkt an den Geräteanschlüssen, mit geraden Steigleitungen und versetztem Boiler-Ventil.
-- Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss aus ID 254 am WP-Ausgang und Verdichter-Ist/-Soll.
+- Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss aus ID 254 am WP-Ausgang und Verdichter-Ist/-Soll; Wasserflussanimation gemäß Durchflusswert.
 - Timer-Aufrufe bei nicht mehr verfügbarer Instanzschnittstelle mit einer Meldung abbrechen.
 - Lauf- oder Standzeit unter dem Wärmepumpenbild aus den Reglerwerten ID 67/73.
 - Einheitliche Mindestschrift wie Verdampfer/Kondensator; Durchflusswert oben am roten Vorlauf, Pumpenwert ohne Zusatztext.
-- Warmwasserspeicher mit zentrierten, gleich großen Temperatur-/Leistungswerten ohne „Ist“-Beschriftung und summierter Heizstableistung direkt aus den konfigurierten W/kW-Messwerten, unabhängig von Schaltzuständen samt gelbem Blitz; Sollwert nur im oberen Button. Heizstäbe-Button mit Leistung und konfigurierbaren Schaltern.
+- Warmwasserspeicher mit mehr Abstand und kurzem Zirkulationsabgang ohne breitere Kachel; Temperatur/Leistung gleich groß und zentriert, Sollwert nur oben. Summierte Heizstableistung aus W/kW-Messwerten mit Blitz und Bedienbutton.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
 
 Version 4.7 (19.10.2026)

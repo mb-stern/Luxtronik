@@ -301,7 +301,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#switchValve').get_attribute('transform')=='translate(835 665)'
                 assert page.locator('#main > path.hot').get_attribute('d')=='M675 665H835'
                 assert page.locator('#main > path.cold').get_attribute('d')=='M800 835H675'
-                assert page.locator('#gDHW > path.hot').get_attribute('d')=='M860 665H900'
+                assert page.locator('#gDHW > path.hot').get_attribute('d')=='M836 665H900'
                 for value_id,port_y in [('textWPSupplyTemperature',665),('textWPReturnTemperature',835)]:
                     assert float(page.locator('#'+value_id).get_attribute('y'))<port_y
 
@@ -443,6 +443,21 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert compressor_reading(0,configure_speed=False,configure_running=False)['name']=='none'
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
 
+                # Primary heating water still flows through the condenser when the compressor stops.
+                hydraulic=json.loads(json.dumps(payload))
+                for key in ['compressorValue','compressorRunning']:
+                    entity=hydraulic['config'].get(key)
+                    if entity in hydraulic['data']: hydraulic['data'][entity]['value']=0
+                hydraulic['config']['heatingFlow']='testPrimaryFlow'
+                hydraulic['data']['testPrimaryFlow']={'value':612,'formatted':'612 l/h'}
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',hydraulic)
+                assert page.locator('#main > .wp-live-flow').count()==2
+                assert page.locator('#gRefrigerantCircuit .wp-live-flow').count()==0
+                hydraulic['data']['testPrimaryFlow']['value']=0
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',hydraulic)
+                assert page.locator('#main > .wp-live-flow').count()==0
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
+
                 # Actual running variables drive overlays; updates keep their identity.
                 assert page.locator('.wp-live-flow').count() > 0
                 page.evaluate("document.querySelector('.wp-live-flow').dataset.testIdentity='retained'")
@@ -468,7 +483,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('.wp-live-flow').first.evaluate("e=>getComputedStyle(e).animationName")=='none'
                 assert page.locator('#pathCompressor').evaluate("e=>getComputedStyle(e).animationName")=='none'
                 idle=json.loads(json.dumps(payload))
-                for key in ['compressorValue','compressorRunning','storageChargingPumpRunning',
+                for key in ['compressorValue','compressorRunning','storageChargingPumpRunning','heatingFlow',
                             'heatingCircuitPumpRunning','heatingCircuitPumpRunning2',
                             'heatingCircuitPumpRunning3','thermalSolarPumpSpeed','thermalSolarPump']:
                     entity=idle['config'].get(key)
@@ -858,7 +873,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')!='none'
                 assert comp.locator('#gDHW').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert comp.locator('#gSolar > path.sol').get_attribute('d').startswith('M1064 790')
+                assert comp.locator('#gSolar > path.sol').get_attribute('d').startswith('M1088 790')
                 changed['config']['thermalSolarAvailable']=False
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')=='none'
