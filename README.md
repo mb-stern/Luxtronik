@@ -8,7 +8,7 @@ Dazu muss sichergestellt werden, dass der Port 8888 (ältere Lux) oder 8889 (neu
 Dieses Modul funktioniert nur mit Java-Abfrage, ab einem gewissen FW-Stand findet die Abfrage über Websocket statt.
 Die Bedeutung den Typ der Variablen sind hier zu finden: https://loxwiki.atlassian.net/wiki/spaces/LOX/pages/1533935933/Java+Webinterface
 
-Ab Version 4.9 enthält die Instanz eine HTML-SDK-Wärmepumpengrafik als Vollansicht.
+Ab Version 5.0 enthält die Instanz eine HTML-SDK-Wärmepumpengrafik als Vollansicht.
 Sie nutzt direkt die vorhandenen Idents. Unter „HTML-SDK / Visualisierung“ werden
 nur die vorhandenen Komponenten und bis zu drei frei benannte Fremdvariablen konfiguriert. Interne Werte für die Fußzeile
 werden mit der zusätzlichen Checkbox „Fußzeile“ in der bestehenden ID-Liste gewählt.

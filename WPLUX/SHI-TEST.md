@@ -1,4 +1,4 @@
-# Modbus TCP / SHI – Testversion 4.8
+# Modbus TCP / SHI – Testfunktion in Version 5.0
 
 Diese erste Version ist **ausschließlich lesend** und noch nicht an einer echten
 SHI-Luxtronik erprobt. Java bleibt für neue und bestehende Instanzen Standard.

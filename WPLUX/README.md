@@ -102,20 +102,15 @@ Beispiel:
 
 ### 8. Versionen
 
-Version 4.10 (24.10.2026)
-- Drei Raumtemperaturen mit automatischer Größe; COP/JAZ direkt unter dem Gerät.
-- Drei Heizkreisplätze; Mischerdaten separat an der Wärmepumpe, Umschaltventil näher am Gerät.
-
-Version 4.9 Build 1 (24.10.2026)
-- Mischventil mit Rücklaufbeimischung vor Pumpe und Heizfläche ergänzt.
-
-Version 4.9 (24.10.2026)
-- Wärmepumpengrafik als HTML-SDK-Vollansicht integriert.
-- Schlanke Komponenten-Konfiguration mit automatischen Idents; Fußzeile per Checkbox in der ID-Liste.
-
-Version 4.8 (19.10.2026) – SHI-Testversion
+Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Optionaler Modbus-/SHI-Lesebetrieb; Java bleibt Standard.
 - Vorhandene Idents bleiben erhalten. [Hinweise für Tester](SHI-TEST.md).
+- HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration und Fußzeile per Checkbox.
+- Drei Raumtemperaturen mit automatischer Größe; COP/JAZ direkt unter dem Gerät.
+- Drei Heizkreisplätze; Mischerdaten automatisch, Mischer- und Warmwasserventil nahe der Wärmepumpe.
+
+Weitere Änderungen werden unter 5.0 ergänzt. Versions- und Buildnummer werden
+nicht für einzelne Änderungen erhöht, sondern erst für eine vereinbarte Veröffentlichung.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

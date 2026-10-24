@@ -1,6 +1,6 @@
 # Integrierte Wärmepumpengrafik
 
-Ab Version 4.9 stellt die Luxtronik-Instanz ihre Wärmepumpengrafik über das
+Ab Version 5.0 stellt die Luxtronik-Instanz ihre Wärmepumpengrafik über das
 Symcon HTML-SDK bereit. Sie verwendet die vorhandenen Instanzvariablen direkt
 anhand ihrer Idents. Eine zweite Modulinstanz, eine Quellinstanzauswahl oder ein
 Import von Variablenzuordnungen sind nicht erforderlich. Es gibt ausschließlich
@@ -58,7 +58,7 @@ Ohne ausdrücklich gewählte Raumquelle bleibt die bisherige interne
 Raumtemperaturanbindung bestehen. Symcon-Symbole werden über das dokumentierte
 HTML-SDK-Skript `/icons.js` eingebunden. Nicht zuordenbare ältere Symbole erhalten
 ein Haus als Ersatz; das besondere Symbol `Transparent` blendet das Symbol aus.
-Vorhandene Kreisauswahlen aus Version 4.9 behalten bei der Migration ihre Anzahl
+Vorhandene Kreisauswahlen aus früheren Entwicklungsständen behalten bei der Migration ihre Anzahl
 sichtbarer Heizkreisplätze. Frühere Mischkreisschalter werden nicht mehr benötigt.
 
 ## Interne Werte in der Fußzeile
