@@ -63,7 +63,8 @@ function configuredVisualization(): Luxtronik
     visualizationVariable($module, 'Ruecklauf_Soll_Heizkreis', 30.0, '~Temperature');
     $GLOBALS['testVariables'][$module->GetIDForIdent('Ruecklauftemperatur_Heizkreis')]['formatted'] = '28.9 °C';
     $GLOBALS['testVariables'][$module->GetIDForIdent('Ruecklauf_Soll_Heizkreis')]['formatted'] = '30.0 °C';
-    visualizationVariable($module, 'Waermemengenzaehler_Durchfluss', 607.0);
+    visualizationVariable($module, 'Flow_Rate', 607.0);
+    visualizationVariable($module, 'Warmwasser_Soll_Temperatur', 50.0, '~Temperature');
     $module->properties['kwin']=visualizationVariable($external,'InputPowerForCOP',0.0255);
     for ($i = 1; $i <= 3; ++$i) {
         $id = visualizationVariable($external, 'HeaterSwitch' . $i, false);
@@ -96,7 +97,7 @@ $tests['visualization settings expose only external additions and layout; footer
         check(!isset($sdkFields[$removed]), 'Obsolete mixer configuration retained');
     }
     $pickers = array_filter($sdkFields, fn($e) => ($e['type'] ?? '') === 'SelectVariable');
-    check(array_keys($pickers) === ['HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3', 'AdditionalValue000', 'AdditionalValue001', 'AdditionalValue002'], 'Removed power or pump pickers retained');
+    check(array_keys($pickers) === ['HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3'], 'Removed power or pump pickers retained');
     check(!str_contains(json_encode($sdkFields),'Mischerdaten stehen beim Ventil'),'Obsolete hint retained');
     $solarRow=array_values(array_filter($panel[0]['items'],fn($item)=>($item['type']??'')==='RowLayout' && isset(fields($item)['ThermalSolarAvailable'])));
     check(count($solarRow)===1 && isset(fields($solarRow[0])['VisualizationSolarTarget']),'Solar destination separated from its switch');
@@ -125,7 +126,7 @@ $tests['own instance wins, fallbacks survive and converted values are never resc
     $alias = visualizationVariable($module, 'Verdichterfrequenz', 50.0);
     check(invoke($module, 'BuildVisualizationData')['compressorValue']['variableId'] === $alias, 'Frequency alias missing');
     $primary = visualizationVariable($module, 'Verdichterdrehzahl', 3000.0);
-    check(invoke($module, 'BuildVisualizationData')['compressorValue']['variableId'] === $primary, 'Primary Ident lost');
+    check(invoke($module, 'BuildVisualizationData')['compressorValue']['variableId'] === $alias, 'Unrelated RPM point replaced the configured frequency Ident');
     unset($GLOBALS['testVariables'][$primary]);
     check(invoke($module, 'BuildVisualizationData')['compressorValue']['variableId'] === $alias, 'Alias not restored after removal');
 };
@@ -400,7 +401,7 @@ function mixedCircuitVisualization(): Luxtronik
 
 $tests['empty ID list supplies the whole graphic internally without creating measurement variables'] = static function (): void {
     $values = array_fill(0, 269, 0);
-    foreach ([10=>250, 11=>245, 12=>270, 15=>4294967261, 17=>485, 18=>500, 21=>249, 22=>200, 40=>1, 41=>0, 80=>5, 155=>607, 257=>6500, 268=>1500] as $id=>$value) $values[$id]=$value;
+    foreach ([10=>250, 11=>245, 12=>270, 15=>4294967261, 17=>485, 18=>500, 21=>249, 22=>200, 40=>1, 41=>0, 80=>5, 254=>607, 257=>6500, 268=>1500] as $id=>$value) $values[$id]=$value;
     $updated=$values; $updated[21]=251;
     withServer([[pack('N*',3004,0),frame(3004,$values)], [pack('N*',3004,0),frame(3004,$updated)]], static function (Luxtronik $module): void {
         invoke($module,'CreateVariableProfiles');
@@ -522,7 +523,7 @@ $tests['integer heater associations preserve arbitrary raw values in legacy and 
         $control=invoke($module,'BuildControlData')['heaterSwitches'][0];
         check($control['configured'] && $control['currentValue']===20 && $control['stateLabel']==='Automatik','Integer mode not recognized');
         check(array_column($control['options'],'value')===[10,20,30],'Association values changed or collapsed to Boolean');
-        check(invoke($module,'BuildVisualizationData')['additionalValue000']['formatted']==='Automatik','Read-only picker lost association label');
+        check(invoke($module,'BuildVisualizationData')['externalFooter0']['formatted']==='Automatik','Read-only picker lost association label');
         $GLOBALS['testRequestedActions']=[];
         $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>30]);
         check($GLOBALS['testRequestedActions']===[[$id,30]],'Integer action did not use the actual association value');
@@ -596,11 +597,11 @@ $tests['renderer changes request one HTML reload and solar destination stays bes
     $labels=[];
     $collect=static function($node) use (&$collect,&$labels):void {
         if(!is_array($node)) return;
-        if(($node['type']??'')==='Label' && str_contains($node['caption']??'','Solarziel Pufferspeicher')) $labels[]=$node;
+        if(($node['type']??'')==='Label' && str_contains($node['caption']??'','Ohne Pufferspeicher')) $labels[]=$node;
         foreach($node as $v) if(is_array($v)) $collect($v);
     };
     $collect($form);
-    check(count($labels)===1 && $labels[0]['visible']===true,'Inactive buffer does not explain an unavailable solar destination');
+    check(count($labels)===1 && $labels[0]['visible']===true,'Missing buffer does not explain the hot-water fallback');
 };
 
 $tests['heater configuration selects exact Ein and Aus associations and refreshes unsaved choices'] = static function (): void {
@@ -684,6 +685,135 @@ $tests['configured mixers resolve their branch sensors outputs and pumps without
     check(invoke($module,'BuildCardConfig')['mixers']===[],'Direct branch retains mixer');
 };
 
+$tests['configuration panels precede the native list and external footer entries have no slot limit'] = static function (): void {
+    $module=new Luxtronik();
+    foreach (['java','modbus'] as $mode) {
+        $module->properties['CommunicationMode']=$mode;
+        $form=json_decode($module->GetConfigurationForm(),true);
+        $positions=[];
+        foreach ($form['elements'] as $index=>$element) $positions[$element['name']??$element['caption']??'']=$index;
+        check($positions['Modbus TCP / SHI']<$positions['HTML-SDK / Visualisierung'] && $positions['HTML-SDK / Visualisierung']<$positions['IDListe'],'Panels remain below the ID selection');
+        $all=fields($form);
+        $list=$all['VisualizationExternalFooter'];
+        check($list['type']==='List' && $list['add'] && $list['delete'] && $list['changeOrder'],'Footer list cannot grow or be reordered');
+        check($list['columns'][1]['edit']['type']==='SelectVariable' && !isset($list['columns'][1]['edit']['validVariableTypes']),'Footer picker excludes supported types');
+        $captions=json_encode($form,JSON_UNESCAPED_UNICODE);
+        check(str_contains($captions,'Innentemperaturen') && str_contains($captions,'Externe Variablen für Fußzeile'),'Section captions wrong');
+        check(!str_contains($captions,'Bis zu drei Innentemperaturen') && !str_contains($captions,'Drei optionale Fremdvariablen'),'Old limited section captions retained');
+    }
+};
+
+$tests['external footer preserves arbitrary rows typed values labels live updates and removal'] = static function (): void {
+    $module=new Luxtronik(); $external=new Luxtronik(); $rows=[];
+    for ($i=0;$i<27;++$i) {
+        $id=visualizationVariable($external,'External'.$i,$i===0?0:$i+0.5);
+        $rows[]=['label'=>$i===0?'':'Messung '.$i,'variableID'=>$id];
+    }
+    $rows[]=['label'=>'Anderer Name','variableID'=>$rows[0]['variableID']];
+    $rows[]=['label'=>'Noch offen','variableID'=>0];
+    $module->properties['VisualizationExternalFooter']=json_encode($rows);
+    $data=invoke($module,'BuildVisualizationData');
+    $config=invoke($module,'BuildCardConfig');
+    check(count($config['externalFooter'])===28 && $data['externalFooter0']['value']===0,'External values limited or zero lost');
+    check($config['externalFooter'][0]['label']==='External0' && $config['externalFooter'][27]['label']==='Anderer Name','Default or duplicate-source labels lost');
+    check($data['externalFooter26']['value']===26.5,'Values after slot 10 lost or rescaled');
+    $list=fields(json_decode($module->GetConfigurationForm(),true))['VisualizationExternalFooter'];
+    check($list['values']===$rows,'Incomplete rows or list order lost on reopening');
+    $module->GetVisualizationTile();
+    $id=$rows[26]['variableID'];
+    check(isset($module->messages[$id][VM_UPDATE]),'New footer variable not subscribed');
+    $GLOBALS['testVariables'][$id]['value']=31.5;
+    $module->MessageSink(1,$id,VM_UPDATE,[]);
+    check(end($module->updates)['data']['externalFooter26']['value']===31.5,'External footer not live');
+    unset($GLOBALS['testVariables'][$id]);
+    $module->MessageSink(1,$id,VM_DELETE,[]);
+    check(!isset(end($module->updates)['data']['externalFooter26']),'Deleted external variable retained');
+    $module->properties['VisualizationExternalFooter']='[]';
+    invoke($module,'RefreshVisualization',true);
+    check(invoke($module,'BuildCardConfig')['externalFooter']===[] && !isset($module->messages[$rows[0]['variableID']][VM_UPDATE]),'Removed selections remain subscribed');
+};
+
+$tests['legacy external footer selections migrate once and a saved empty list never resurrects them'] = static function (): void {
+    $module=new Luxtronik();$external=new Luxtronik();
+    $first=visualizationVariable($external,'Legacy',12.5);
+    $last=visualizationVariable($external,'LegacyLast',20.0);
+    $module->properties['AdditionalValue000']=$first;
+    $module->properties['AdditionalLabel000']='Bisheriger Name';
+    $module->properties['AdditionalValue009']=$last;
+    $expected=[['label'=>'Bisheriger Name','variableID'=>$first],['label'=>'','variableID'=>$last]];
+    check(invoke($module,'VisualizationExternalFooterRows')===$expected,'Existing slots not shown before first save');
+    $old=['configuration'=>['AdditionalValue000'=>$first,'AdditionalLabel000'=>'Bisheriger Name','AdditionalValue009'=>$last],'attributes'=>['marker'=>42]];
+    $migrated=json_decode($module->Migrate(json_encode($old)),true);
+    check(json_decode($migrated['configuration']['VisualizationExternalFooter'],true)===$expected && $migrated['attributes']===$old['attributes'],'Migration changes assignments or attributes');
+    check($module->Migrate(json_encode($migrated))==='','Footer migration repeats');
+    $module->properties['VisualizationExternalFooter']='[]';
+    check(invoke($module,'GetVisualizationExternalFooter')===[],'Empty list revives old slots');
+    $old['configuration']['VisualizationExternalFooter']='[]';
+    check($module->Migrate(json_encode($old))==='','Migration revives cleared list');
+};
+
+$tests['solar falls back to hot water without a buffer while retaining the saved destination'] = static function (): void {
+    $module=new Luxtronik();
+    $module->properties['ThermalSolarAvailable']=true;
+    $module->properties['VisualizationSolarTarget']='buffer';
+    $module->properties['TankHP']=false;
+    check(invoke($module,'BuildCardConfig')['solarTarget']==='hotwater','No buffer hides solar instead of selecting hot water');
+    check($module->properties['VisualizationSolarTarget']==='buffer','Display fallback rewrites the saved preference');
+    $module->properties['TankHP']=true;
+    check(invoke($module,'BuildCardConfig')['solarTarget']==='buffer','Available buffer not selected');
+};
+
+
+
+
+
+$tests['EEV preparation reads only explicitly named engineering values and never uses index 247'] = static function (): void {
+    $module=new Luxtronik();
+    invoke($module,'StoreVisualizationPoints',[247=>50]);
+    $config=invoke($module,'BuildCardConfig');
+    check($config['eevHeatingOpening']==='' && $config['eevCoolingOpening']==='','Unconfirmed EEV index used');
+    visualizationVariable($module,'EEV_Heizen',37.5);
+    visualizationVariable($module,'EEV_Kuehlen',22.5);
+    $config=invoke($module,'BuildCardConfig');$data=invoke($module,'BuildVisualizationData');
+    check($data[$config['eevHeatingOpening']]['value']===37.5 && $data[$config['eevCoolingOpening']]['value']===22.5,'Prepared EEV sources rescaled or conflated');
+};
+$tests['EEV diagnostics are explicitly invoked read-only and preserve all raw indexes'] = static function (): void {
+    withServer([[pack('N*',3004,0),frame(3004,[123,456,789])]],static function (Luxtronik $module):void {
+        $result=json_decode($module->GetEEVDiagnosticData(),true,512,JSON_THROW_ON_ERROR);
+        check($result['command']===3004 && $result['count']===3,'Wrong diagnostic command or count');
+        check(array_column($result['values'],'id')===[0,1,2] && array_column($result['values'],'raw')===[123,456,789],'Diagnostic values changed');
+        check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Diagnostic creates variables');
+    });
+    $module=new Luxtronik();$module->properties['InstanceStatus']=false;
+    try {$module->GetEEVDiagnosticData();throw new LogicException('Inactive diagnostic connected');}catch(RuntimeException $expected){}
+    $module->properties['InstanceStatus']=true;$module->properties['CommunicationMode']='modbus';
+    try {$module->GetEEVDiagnosticData();throw new LogicException('SHI diagnostic connected with Java');}catch(RuntimeException $expected){}
+};
+
+
+
+$tests['each graphic field has exactly one fixed Ident and never chooses another nonzero value'] = static function (): void {
+    $module=new Luxtronik();$r=new ReflectionClass($module);
+    foreach (['LUXTRONIK_IDENT_MAP','VISUALIZATION_EXTRA_IDENT_MAP'] as $map) foreach ($r->getConstant($map) as $idents) check(count($idents)===1,'Alternative Ident list retained');
+    invoke($module,'StoreVisualizationPoints',[155=>900,254=>0,193=>3000,231=>0,236=>60,198=>42.5,233=>0.0]);
+    $data=invoke($module,'BuildVisualizationData');
+    check($data['heatingFlow']['ident']==='Flow_Rate' && $data['heatingFlow']['value']===0,'Flow selected a different nonzero point');
+    check($data['compressorValue']['ident']==='Verdichterfrequenz' && $data['compressorValue']['value']===0,'Compressor selected another Ident');
+    check($data['condenserTemperature']['ident']==='Liquefaction_Temperature' && $data['condenserTemperature']['value']===0.0,'Condenser selected another nonzero point');
+    check($data['compressorFrequencyTarget']['value']===60,'Frequency target missing');
+    $required=invoke($module,'GetVisualizationRequiredPointIDs');
+    check(isset($required[254],$required[231],$required[236],$required[233]) && !isset($required[155],$required[193],$required[198]),'Obsolete alternative points still requested for the graphic');
+};
+
+$tests['each circuit exposes its existing saved name beside activation and mixer selection'] = static function (): void {
+    $module=new Luxtronik();$form=fields(json_decode($module->GetConfigurationForm(),true));
+    foreach ([1,2,3] as $n) {
+        check($form['HeatingCircuitName'.$n]['type']==='ValidationTextBox','Circuit name field missing');
+        $module->properties['HeatingCircuitName'.$n]='Etage '.$n;
+        check(invoke($module,'BuildCardConfig')['heatingCircuitName'.$n]==='Etage '.$n,'Saved name not passed to the graphic');
+    }
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
@@ -697,6 +827,11 @@ if ($dir!==false && $dir!=='') {
     if(!is_dir($dir)) mkdir($dir,0777,true);
     file_put_contents($dir.'/internal-only.html','<meta charset="utf-8">'.$GLOBALS['testInternalVisualizationHtml']);
     file_put_contents($dir.'/internal-only-update.json',json_encode($GLOBALS['testInternalVisualizationUpdate']));
+    $frequency=new Luxtronik();
+    invoke($frequency,'StoreVisualizationPoints',[193=>0,231=>55,236=>60,44=>false]);
+    file_put_contents($dir.'/compressor-frequency.html','<meta charset="utf-8">'.$frequency->GetVisualizationTile());
+    invoke($frequency,'StoreVisualizationPoints',[193=>0,231=>0,236=>60,44=>true]);
+    file_put_contents($dir.'/compressor-frequency-update.json',json_encode(visualizationPayload($frequency)));
     $components = new Luxtronik();
     $components->properties['ThermalSolarAvailable']=true;
     $components->properties['TankHP']=true;
@@ -708,10 +843,10 @@ if ($dir!==false && $dir!=='') {
     file_put_contents($dir.'/visualization.html','<meta charset="utf-8">'.(new Luxtronik())->GetVisualizationTile());
     file_put_contents($dir.'/mixed-circuits.html','<meta charset="utf-8">'.mixedCircuitVisualization()->GetVisualizationTile());
     for ($count = 1; $count <= 3; ++$count) file_put_contents($dir.'/rooms-'.$count.'.html', '<meta charset="utf-8">'.roomVisualization($count)->GetVisualizationTile());
-    $id=$module->GetIDForIdent('Verdichterdrehzahl');
+    $id=$module->GetIDForIdent('Verdichterfrequenz');
     $GLOBALS['testVariables'][$id]['value']=3000;
     $GLOBALS['testVariables'][$id]['formatted']='3000 rpm';
-    $cond=$module->GetIDForIdent('Kondensationstemperatur');
+    $cond=$module->GetIDForIdent('Liquefaction_Temperature');
     $GLOBALS['testVariables'][$cond]['value']=42.5;
     $GLOBALS['testVariables'][$cond]['formatted']='42.5 °C';
     file_put_contents($dir.'/live-ident.html','<meta charset="utf-8">'.$module->GetVisualizationTile());

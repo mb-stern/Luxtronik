@@ -16,19 +16,19 @@ trait LuxtronikVisualization
         'WarmWaterSetpointVariable' => ['Anpassung_WW'],
         'HeatingTemperatureCorrectionVariable' => ['Anpassung_Temp'],
         'OutdoorTemperature' => ['Aussentemperatur'],
-        'AmbientTemperatureNormal' => ['Raumtemperatur_Sollwert', 'Desired_Room_Temperature'],
-        'AmbientTemperatureActual' => ['Raumtemperatur_Istwert', 'Raumtemperatur_Raumstation_1'],
+        'AmbientTemperatureNormal' => ['Desired_Room_Temperature'],
+        'AmbientTemperatureActual' => ['Raumtemperatur_Raumstation_1'],
         'SupplyTemperature' => ['Vorlauftemperatur_Heizkreis'],
         'ReturnTemperatureSetpointVariable' => ['Ruecklauf_Soll_Heizkreis'],
         'FanSpeed' => ['Ventilator_Drehzahl'],
         'HpRunning' => ['Ausgang_Solepumpe_Ventilator'],
         'CompressorRunning' => ['Ausgang_Verdichter_1'],
-        'CompressorValue' => ['Verdichterdrehzahl', 'Verdichterfrequenz'],
+        'CompressorValue' => ['Verdichterfrequenz'],
         'HeatingPumpPower' => ['Waermeleistung'],
         'EvaporatorPressure' => ['Niederdruck'],
         'EvaporatorTemperature' => ['Vapourisation_Temperature'],
         'CondenserPressure' => ['Hochdruck'],
-        'CondenserTemperature' => ['Kondensationstemperatur', 'Liquefaction_Temperature'],
+        'CondenserTemperature' => ['Liquefaction_Temperature'],
         'SupplyTemperatureHeating1' => ['Vorlauftemperatur_Heizkreis'],
         'RefluxTemperatureHeating1' => ['Ruecklauftemperatur_Heizkreis'],
         'HeatingCircuitPumpRunning1' => ['Ausgang_Heizungsumwaelzpumpe'],
@@ -52,11 +52,14 @@ trait LuxtronikVisualization
         'MixerPump2' => ['Ausgang_Pumpe_Mischkreis_2'], 'MixerPump3' => ['Pumpe_Mischkreis_3'],
         'ComputedCOP' => ['copfaktor'], 'ComputedJAZ' => ['jazfaktor'],
         'InputPower' => ['Leistungsaufnahme'],
-        'HeatingFlow' => ['Waermemengenzaehler_Durchfluss'],
+        'HeatingFlow' => ['Flow_Rate'],
+        'CompressorFrequencyTarget' => ['Verdichterfrequenz_Soll'],
+        // Prepared engineering-value Idents; no unconfirmed numeric Java index.
+        'EEVHeatingOpening' => ['EEV_Heizen'], 'EEVCoolingOpening' => ['EEV_Kuehlen'],
         'BufferReturnTemperature' => ['Ruecklauftemperatur_im_Trennspeicher'],
         'SolarStorageTemperature' => ['Fuehler_Solarspeicher'],
         'ThermalSolarPump' => ['Ausgang_Solarladepumpe'],
-        'DHWSetpoint' => ['Warmwasser_Soll_Temperatur', 'Anpassung_WW']
+        'DHWSetpoint' => ['Warmwasser_Soll_Temperatur']
     ];
 
     private function CreateVisualization(): void
@@ -196,6 +199,8 @@ trait LuxtronikVisualization
         $this->RegisterPropertyInteger('ThermalSolarReturnTemp', 0);
 
         // Frei belegbare Zusatzwerte der SVG (000 ... 009)
+        // Empty means not migrated yet; an explicitly saved [] stays empty.
+        $this->RegisterPropertyString('VisualizationExternalFooter', '');
         $this->RegisterPropertyString('AdditionalLabel000', '');
         $this->RegisterPropertyInteger('AdditionalValue000', 0);
         $this->RegisterPropertyString('AdditionalLabel001', '');
@@ -556,6 +561,7 @@ HTML;
         $config = [
             'instanceId'                 => $this->InstanceID,
             'instanceFooter'             => $this->GetVisualizationFooter(),
+            'externalFooter'             => $this->GetVisualizationExternalFooter(),
             'title'                      => '',
             'fullConfigurationPreview'   => $this->ReadPropertyBoolean('FullConfigurationPreview'),
             'luxtronikWebInterfaceURL'    => $this->GetLuxtronikWebInterfaceURL(),
@@ -618,7 +624,11 @@ HTML;
             'condenserPressure'          => $this->DataKey('CondenserPressure', 'condenserPressure'),
             'condenserTemperature'       => $this->DataKey('CondenserTemperature', 'condenserTemperature'),
             'expansionValveOpening'      => $this->DataKey('ExpansionValveOpening', 'expansionValveOpening'),
+            'eevHeatingOpening'          => $this->DataKey('EEVHeatingOpening', 'eEVHeatingOpening'),
+            'eevCoolingOpening'          => $this->DataKey('EEVCoolingOpening', 'eEVCoolingOpening'),
             'compressorValue'            => $this->DataKey('CompressorValue', 'compressorValue'),
+            'compressorFrequencyActual'  => $this->DataKey('CompressorValue', 'compressorValue'),
+            'compressorFrequencyTarget'  => $this->DataKey('CompressorFrequencyTarget', 'compressorFrequencyTarget'),
             'heatingPumpPower'           => $this->DataKey('HeatingPumpPower', 'heatingPumpPower'),
 
             'wwHeatingValve'             => $this->DataKey('WWHeatingValve', 'wwHeatingValve'),
@@ -641,26 +651,7 @@ HTML;
             'thermalSolarFluxTemp'       => $this->DataKey('ThermalSolarFluxTemp', 'thermalSolarFluxTemp'),
             'thermalSolarReturnTemp'     => $this->DataKey('ThermalSolarReturnTemp', 'thermalSolarReturnTemp'),
 
-            'additionalLabel000'          => $this->ReadPropertyString('AdditionalLabel000'),
-            'additionalValue000'          => $this->DataKey('AdditionalValue000', 'additionalValue000'),
-            'additionalLabel001'          => $this->ReadPropertyString('AdditionalLabel001'),
-            'additionalValue001'          => $this->DataKey('AdditionalValue001', 'additionalValue001'),
-            'additionalLabel002'          => $this->ReadPropertyString('AdditionalLabel002'),
-            'additionalValue002'          => $this->DataKey('AdditionalValue002', 'additionalValue002'),
-            'additionalLabel003'          => $this->ReadPropertyString('AdditionalLabel003'),
-            'additionalValue003'          => $this->DataKey('AdditionalValue003', 'additionalValue003'),
-            'additionalLabel004'          => $this->ReadPropertyString('AdditionalLabel004'),
-            'additionalValue004'          => $this->DataKey('AdditionalValue004', 'additionalValue004'),
-            'additionalLabel005'          => $this->ReadPropertyString('AdditionalLabel005'),
-            'additionalValue005'          => $this->DataKey('AdditionalValue005', 'additionalValue005'),
-            'additionalLabel006'          => $this->ReadPropertyString('AdditionalLabel006'),
-            'additionalValue006'          => $this->DataKey('AdditionalValue006', 'additionalValue006'),
-            'additionalLabel007'          => $this->ReadPropertyString('AdditionalLabel007'),
-            'additionalValue007'          => $this->DataKey('AdditionalValue007', 'additionalValue007'),
-            'additionalLabel008'          => $this->ReadPropertyString('AdditionalLabel008'),
-            'additionalValue008'          => $this->DataKey('AdditionalValue008', 'additionalValue008'),
-            'additionalLabel009'          => $this->ReadPropertyString('AdditionalLabel009'),
-            'additionalValue009'          => $this->DataKey('AdditionalValue009', 'additionalValue009'),
+
         ];
         for ($i = 1; $i <= 3; ++$i) {
             $present = $this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $i);
@@ -687,7 +678,8 @@ HTML;
         $config['heatingFlow'] = $this->DataKey('HeatingFlow', 'heatingFlow');
         $config['bufferReturnTemperature'] = $this->DataKey('BufferReturnTemperature', 'bufferReturnTemperature');
         $config['solarStorageTemperature'] = $this->DataKey('SolarStorageTemperature', 'solarStorageTemperature');
-        $config['solarTarget'] = $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer' ? 'buffer' : 'hotwater';
+        $config['solarTarget'] = $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer'
+            && $this->ReadPropertyBoolean('TankHP') ? 'buffer' : 'hotwater';
         $config['dhwSetpoint'] = $this->DataKey('DHWSetpoint', 'dHWSetpoint');
         $config['computedCOP'] = $this->DataKey('ComputedCOP', 'computedCOP');
         $config['computedJAZ'] = $this->DataKey('ComputedJAZ', 'computedJAZ');
@@ -755,16 +747,7 @@ HTML;
             'thermalSolarFluxTemp' => ['ThermalSolarFluxTemp', false],
             'thermalSolarReturnTemp' => ['ThermalSolarReturnTemp', false],
 
-            'additionalValue000' => ['AdditionalValue000', false],
-            'additionalValue001' => ['AdditionalValue001', false],
-            'additionalValue002' => ['AdditionalValue002', false],
-            'additionalValue003' => ['AdditionalValue003', false],
-            'additionalValue004' => ['AdditionalValue004', false],
-            'additionalValue005' => ['AdditionalValue005', false],
-            'additionalValue006' => ['AdditionalValue006', false],
-            'additionalValue007' => ['AdditionalValue007', false],
-            'additionalValue008' => ['AdditionalValue008', false],
-            'additionalValue009' => ['AdditionalValue009', false],
+
         ];
 
         foreach ($map as $key => [$property, $binary]) {
@@ -807,6 +790,7 @@ HTML;
         foreach (self::VISUALIZATION_EXTRA_IDENT_MAP as $property => $idents) {
             $key = lcfirst($property);
             $this->AddVariableData($data, $key, $property, str_starts_with($property, 'MixerOpen') || str_starts_with($property, 'MixerClose') || str_starts_with($property, 'MixerPump') || $property === 'ThermalSolarPump');
+
         }
         $input = $this->GetVisualizationPointData('InputPower');
         if ($input !== null) {
@@ -839,7 +823,7 @@ HTML;
             $id = $entry['variableId'];
             $data[$entry['key']] = ['variableId' => $id, 'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
         }
-        foreach ($this->GetVisualizationFooter() as $entry) {
+        foreach (array_merge($this->GetVisualizationFooter(), $this->GetVisualizationExternalFooter()) as $entry) {
             $id = $entry['variableId'];
             $data[$entry['key']] = ['variableId' => $id, 'value' => GetValue($id),
                 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
@@ -2930,40 +2914,47 @@ window.SymconHeatPump = {
                 show('#gHKRadiator' + n, type === 'radiator');
             });
 
-            const heatingCircuitCount = [hk1, hk2, hk3].filter(Boolean).length;
+
+            const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0,3) : [];
+            const narrowHydraulics = !previewAll && !cfg.tankHP && !cfg.thermalSolarAvailable;
+            const activeMixers = mixers.some(item => [hk1,hk2,hk3][(item.circuit || item.number) - 1]);
+            const contentRight = narrowHydraulics ? Math.max(activeMixers ? 1235 : 1120,nextButtonX - buttonGap) : 1568;
+            const heatingShift = narrowHydraulics ? Math.min(0,contentRight - 1525) : 0;
+            svg.querySelector('#gHeating')?.setAttribute('transform','translate(' + heatingShift + ' 0)');
+            const hotHeaderX = Math.max(725,945 + heatingShift);
+            const coldHeaderX = hotHeaderX + 20;
+            const hotHeaderLocalX = hotHeaderX - heatingShift;
+            const coldHeaderLocalX = coldHeaderX - heatingShift;
+            const mixerReadingX = Math.max(990,coldHeaderLocalX + 15);
+            const crowdedMixerLabels = narrowHydraulics && mixerReadingX > 990;
 
             // Separate supply/return headers feed each independently mixed branch.
-            const useManifold = heating && (heatingCircuitCount > 1 || !hk1);
-            show('#gHeatingManifold', useManifold);
-            const manifoldLabel = svg.querySelector('#gHeatingManifold > text');
-            if (manifoldLabel) {
-                manifoldLabel.setAttribute('x', '940');
-                manifoldLabel.setAttribute('y', '180');
-                manifoldLabel.setAttribute('text-anchor', 'middle');
-            }
             const lastCircuit = hk3 ? 3 : (hk2 ? 2 : 1);
             const lastReturn = 295 + (lastCircuit - 1) * 120;
             const headers = group('gHeatingHeaders', svg.querySelector('#gHeating'));
-            node(headers, 'path', {class:'hot',d:'M945 245V' + (245 + (lastCircuit - 1) * 120)});
-            node(headers, 'path', {class:'cold',d:'M965 ' + Math.min(295 + ([hk1,hk2,hk3].findIndex(Boolean)) * 120,380) + 'V' + Math.max(lastReturn,380)});
+            node(headers, 'path', {class:'hot',d:'M' + hotHeaderLocalX + ' 245V' + (245 + (lastCircuit - 1) * 120)});
+            node(headers, 'path', {class:'cold',d:'M' + coldHeaderLocalX + ' ' + Math.min(295 + ([hk1,hk2,hk3].findIndex(Boolean)) * 120,380) + 'V' + Math.max(lastReturn,380)});
             [1,2,3].forEach(n => {
                 const y = 245 + (n - 1) * 120;
-                svg.querySelector('#gHK' + n + ' > path.hot')?.setAttribute('d','M945 ' + y + 'H1260');
-                svg.querySelector('#gHK' + n + ' > path.cold')?.setAttribute('d','M1260 ' + (y + 50) + 'H965');
+                svg.querySelector('#gHK' + n + ' > path.hot')?.setAttribute('d','M' + hotHeaderLocalX + ' ' + y + 'H1260');
+                svg.querySelector('#gHK' + n + ' > path.cold')?.setAttribute('d','M1260 ' + (y + 50) + 'H' + coldHeaderLocalX);
                 svg.querySelector('#gHKPumpIcon' + n)?.setAttribute('transform','translate(-25 0)');
                 svg.querySelector('#textHeatingPump' + n)?.setAttribute('x','1170');
+                const mixedBranch = mixers.some(item => (item.circuit || item.number) === n);
+                svg.querySelector('#textHeatingPump' + n)?.setAttribute('y',String(y - (crowdedMixerLabels && mixedBranch ? 79 : 31)));
             });
             const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
             const bufferGeometry = ['M750 640V460H690V245H720','M720 380H705V440H720V835H675','M890 245H945','M965 380H890'];
             bufferPaths.forEach((path,index) => path.setAttribute('d',bufferGeometry[index]));
-            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M750 640V245H945');
-            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M965 380H720V835H675');
+            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d',(narrowHydraulics ? 'M750 640V550H705V245H' : 'M750 640V245H') + hotHeaderX);
+            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M' + coldHeaderX + (narrowHydraulics ? ' 380H690V835H675' : ' 380H720V835H675'));
 
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
             show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
-            show('#gDHW', previewAll || !!cfg.tankWW);
-            const solarBuffer = cfg.solarTarget === 'buffer';
-            show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? !!cfg.tankHP && heating : !!cfg.tankWW)));
+            const solarBuffer = cfg.solarTarget === 'buffer' && !!cfg.tankHP;
+            const solarHotWater = !!cfg.thermalSolarAvailable && !solarBuffer;
+            show('#gDHW', previewAll || !!cfg.tankWW || solarHotWater);
+            show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? heating : true)));
             const solarPipe = svg.querySelector('#gSolar > path.sol');
             if (solarPipe) solarPipe.setAttribute('d', solarBuffer
                 ? 'M884 300H910V155H1230V680H1260M1260 820H1245V140H900V330H884'
@@ -2987,7 +2978,6 @@ window.SymconHeatPump = {
                     '#gSolar',
                     '#gCirculatingPumpVisual',
                     '#gHeating',
-                    '#gHeatingManifold',
                     '#gHK1',
                     '#gHK2',
                     '#gHK3'
@@ -3053,7 +3043,6 @@ window.SymconHeatPump = {
 
             // Each mixer belongs to its selected branch, downstream of the optional buffer.
             // Auf/Zu are independent relay signals, not valve position measurements.
-            const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0, 3) : [];
             const circuitPump = n => {
                 const mixer = mixers.find(item => (item.circuit || item.number) === n);
                 return mixer ? mixer.pump : cfg[n === 1 ? 'heatingCircuitPumpRunning' : 'heatingCircuitPumpRunning' + n];
@@ -3099,7 +3088,7 @@ window.SymconHeatPump = {
                 node(hydraulic, 'path', {id:'pathHKMixingReturn' + n,class:'cold',d:'M1045 ' + (y + 50) + 'V' + (y + 18)});
                 node(hydraulic, 'circle', {cx:1045,cy:y + 50,r:4,fill:'#35a6ff'});
                 mixerSymbol(hydraulic, mixer, 1045, y, 18);
-                const readings = node(mixerReadings, 'g', {id:'gMixerReading' + n,transform:'translate(990 ' + (y - 54) + ')'});
+                const readings = node(mixerReadings, 'g', {id:'gMixerReading' + n,transform:'translate(' + mixerReadingX + ' ' + (y - 54) + ')'});
                 node(readings, 'text', {class:'sm',x:0,y:0,style:'font-size:14px'},'Mischer ' + mixer.number);
                 fittedText(readings, {id:'textMixerActual' + n,class:'sm',x:0,y:16,style:'font-size:14px'},'Ist ' + (formatted(mixer.actual) || '—'),100);
                 fittedText(readings, {id:'textMixerTarget' + n,class:'sm',x:0,y:32,style:'font-size:14px'},'Soll ' + (formatted(mixer.target) || '—'),100);
@@ -3196,12 +3185,12 @@ window.SymconHeatPump = {
                 const mixer = mixers.find(item => (item.circuit || item.number) === n);
                 if (mixer) {
                     supply = formatted(mixer.actual) ? mixer.actual : cfg.supplyTemperature;
-                    // The controller does not provide a return sensor per mixer.
-                    reflux = '';
+                    // Use a configured circuit return, otherwise the confirmed common WP return.
+                    if (!formatted(reflux)) reflux = cfg.heatPumpReturnTemperature;
                     pumpValueItem = mixer.number === 1 ? cfg.heatingCircuitPumpValue : '';
                 } else {
                     if (!formatted(supply) || (cfg.tankHP && n === 1)) supply = cfg.supplyTemperature;
-                    if (cfg.tankHP && n === 1) reflux = '';
+                    if (!formatted(reflux)) reflux = cfg.heatPumpReturnTemperature;
                 }
                 const supplySelector = n === 1 ? '#textSupplyTemperatureHeating' : '#textSupplyTemperatureHeating' + n;
                 const refluxSelector = n === 1 ? '#textRefluxTemperatureHeating' : '#textRefluxTemperatureHeating' + n;
@@ -3210,14 +3199,42 @@ window.SymconHeatPump = {
                 if (supplyLabel) supplyLabel.textContent = wpFallback ? 'WP VL' : 'VL';
                 setText(supplySelector, formatted(supply));
                 setText(refluxSelector, formatted(reflux));
+                const returnValue = svg.querySelector(refluxSelector);
+                if (returnValue) {
+                    const returnLabel = returnValue.previousElementSibling;
+                    let reading = svg.querySelector('#gHeatingReturnReading' + n);
+                    if (!reading) {
+                        reading = node(returnValue.parentElement,'g',{id:'gHeatingReturnReading' + n});
+                        node(reading,'title',{});
+                        reading.appendChild(returnLabel);
+                        reading.appendChild(returnValue);
+                    }
+                    const common = reflux === cfg.heatPumpReturnTemperature || data[reflux]?.ident === 'Ruecklauftemperatur_Heizkreis';
+                    reading.querySelector('title').textContent = common ? 'RL: gemeinsamer Rücklauf der Wärmepumpe; kein eigener Heizkreisfühler.' : 'Rücklauf Heizkreis ' + n;
+                }
                 {
                     const hasTarget = formatted(cfg.returnTemperatureSetpoint) !== '';
                     const offset = (n - 1) * 120;
                     const name = svg.querySelector('#textHeatingCircuitName' + n);
-                    if (name) name.setAttribute('y', String((hasTarget ? 228 : 232) + offset));
-                    [[supplySelector, hasTarget ? 252 : 265], [refluxSelector, hasTarget ? 274 : 297]].forEach(([selector, y]) => {
+                    if (name) {
+                        name.setAttribute('y',String((hasTarget ? 225 : 232) + offset));
+                        name.setAttribute('x','1392.5');
+                        name.setAttribute('text-anchor','middle');
+                        name.style.fontSize = '18px';
+                        name.removeAttribute('textLength');
+                        name.removeAttribute('lengthAdjust');
+                        if (name.getComputedTextLength() > 235) {
+                            name.setAttribute('textLength','235');
+                            name.setAttribute('lengthAdjust','spacingAndGlyphs');
+                        }
+                    }
+                    [[supplySelector, hasTarget ? 247 : 265], [refluxSelector, hasTarget ? 273 : 297]].forEach(([selector, y]) => {
                         const el = svg.querySelector(selector);
                         if (!el) return;
+                        el.style.fontSize = '18px';
+                        el.setAttribute('x','1510');
+                        el.setAttribute('text-anchor','end');
+                        if (el.previousElementSibling) el.previousElementSibling.style.fontSize = '18px';
                         el.setAttribute('y', y + offset);
                         if (el.previousElementSibling) el.previousElementSibling.setAttribute('y', y + offset);
                     });
@@ -3252,34 +3269,50 @@ window.SymconHeatPump = {
             setText('#textCondenserPressure', formatted(cfg.condenserPressure));
             setText('#textCondenserTemperature', formatted(cfg.condenserTemperature));
             setText('#textExpansionValveOpening', formatted(cfg.expansionValveOpening));
+            const eevCooling = binary(cfg.heatingPumpCoolingMode);
+            const eevKey = eevCooling ? cfg.eevCoolingOpening : cfg.eevHeatingOpening;
+            const eevValue = raw(eevKey);
+            const validEEV = eevValue !== null && eevValue !== '' && typeof eevValue !== 'boolean'
+                && Number.isFinite(Number(eevValue)) && Number(eevValue) >= 0 && Number(eevValue) <= 100;
+            setText('#textExpansionValveOpening', 'EEV ' + (eevCooling ? 'Kühlen' : 'Heizen') + ': ' + (validEEV ? Number(eevValue).toFixed(1) + ' %' : '—'));
 
             // Umschaltventil: EIN = Warmwasser, AUS = Heizung.
             // Nur anzeigen, wenn eine Variable konfiguriert ist.
             const wwValveToHotWater =
                 !!cfg.wwHeatingValve && binary(cfg.wwHeatingValve);
 
-            setText(
-                '#textWWHeatingValveState',
-                cfg.wwHeatingValve ? (wwValveToHotWater ? 'Warmwasser' : 'Heizung') : ''
-            );
-
             // Angeforderte Richtung darstellen; keine gemessene Ventilposition.
             // Heizung    = von links kommend nach oben
             // Warmwasser = von links nach rechts durchgehend
+            const valveKnown = !!cfg.wwHeatingValve && raw(cfg.wwHeatingValve) !== null && raw(cfg.wwHeatingValve) !== undefined;
             const switchValveFlow = svg.querySelector('#switchValveFlow');
             if (switchValveFlow) {
                 switchValveFlow.setAttribute(
                     'd',
-                    wwValveToHotWater ? 'M-16 0H16' : 'M-16 0H0V-16'
+                    !valveKnown ? '' : wwValveToHotWater ? 'M-16 0H16' : 'M-16 0H0V-16'
                 );
                 switchValveFlow.classList.toggle('wp-valve-recent', recentlyChanged(cfg.wwHeatingValve));
-                switchValveFlow.setAttribute('aria-label', 'Ansteuerung ' + (wwValveToHotWater ? 'Warmwasser' : 'Heizung') + '; keine Positionsrückmeldung');
+                switchValveFlow.setAttribute('data-target', !valveKnown ? 'unknown' : wwValveToHotWater ? 'hotwater' : 'heating');
+                const description = valveKnown ? 'Ansteuerung ' + (wwValveToHotWater ? 'Warmwasser' : 'Heizung') + '; keine Positionsrückmeldung' : 'Ansteuerung unbekannt; keine Positionsrückmeldung';
+                switchValveFlow.setAttribute('aria-label',description);
+                const valve = svg.querySelector('#switchValve');
+                let title = valve.querySelector('title');
+                if (!title) title = node(valve,'title',{});
+                title.textContent = description;
             }
             if (valveExpiries.length) {
                 valveActivityTimer = setTimeout(() => applyModernDashboard(card), Math.min(...valveExpiries) + 50);
             }
             setText('#textPowerValue', formatted(cfg.heatingPumpPower));
             setText('#textCompressorSpeedValue', formatted(cfg.compressorValue));
+            const frequencyReadings = group('gCompressorFrequencyReadings', svg.querySelector('#gRefrigerantCircuit'));
+            if (formatted(cfg.compressorFrequencyTarget)) {
+                const frequencyActual = data[cfg.compressorValue]?.ident === 'Verdichterfrequenz';
+                setText('#textCompressorSpeedValue', 'Ist ' + (formatted(cfg.compressorValue) || '—'));
+                const targetText = frequencyActual ? 'Soll ' + formatted(cfg.compressorFrequencyTarget)
+                    : 'Frequenz Ist ' + (formatted(cfg.compressorFrequencyActual) || '—') + ' / Soll ' + formatted(cfg.compressorFrequencyTarget);
+                node(frequencyReadings,'text',{id:'textCompressorFrequencyTarget',class:'sm',x:422.5,y:644,'text-anchor':'middle',style:'font-size:16px'},targetText);
+            }
             setText('#textThermalSolarPanelTemp', formatted(cfg.thermalSolarPanelTemp));
             setText('#textThermalSolarPumpSpeed', formatted(cfg.thermalSolarPumpSpeed) || (cfg.thermalSolarPump ? relay(cfg.thermalSolarPump) : '—'));
 
@@ -3298,8 +3331,10 @@ window.SymconHeatPump = {
             const flow = formatted(cfg.heatingFlow);
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
-                node(flowReadings, 'text', {class:'sm', x:710, y:610, 'text-anchor':'end', style:'font-size:14px'}, 'Durchfluss');
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:710, y:632,
+                const flowX = narrowHydraulics ? 675 : 710;
+                node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
+                node(flowReadings, 'text', {class:'sm', x:flowX, y:610, 'text-anchor':'end', style:'font-size:14px'}, 'Durchfluss');
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:flowX, y:632,
                     'text-anchor':'end', style:'font-size:16px'}, flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 75);
             }
             if (formatted(cfg.supplyTemperature)) {
@@ -3308,9 +3343,11 @@ window.SymconHeatPump = {
             }
             [hk1, hk2, hk3].forEach((enabled, index) => {
                 if (!enabled || !formatted(cfg.returnTemperatureSetpoint)) return;
-                const prefix = heatingCircuitCount > 1 || !hk1 ? 'WP RL Soll ' : 'RL Soll ';
-                fittedText(circuitTargets, {id:'textHeatingReturnTarget' + (index + 1), class:'sm', x:1510, y:302 + index * 120,
-                    'text-anchor':'end', style:'font-size:14px'}, prefix + formatted(cfg.returnTemperatureSetpoint), 240);
+                const y = 299 + index * 120;
+                const row = node(circuitTargets,'g',{id:'gHeatingReturnTarget' + (index + 1)});
+                node(row,'title',{},'RL Soll: gemeinsamer Rücklauf-Sollwert der Wärmepumpe.');
+                node(row,'text',{id:'textHeatingReturnTargetLabel' + (index + 1),class:'sm',x:1378,y,style:'font-size:18px'},'RL Soll');
+                node(row,'text',{id:'textHeatingReturnTarget' + (index + 1),class:'sm',x:1510,y,'text-anchor':'end',style:'font-size:18px'},formatted(cfg.returnTemperatureSetpoint));
             });
 
             // Touch handling. Bind once per SVG element.
@@ -3461,16 +3498,16 @@ window.SymconHeatPump = {
                 : typeof compressorRaw === 'string' && compressorRaw.trim() !== ''
                     ? Number(compressorRaw.replace(',', '.')) : NaN;
             const hasCompressorSpeed = Number.isFinite(compressorSpeed);
-            // A configured OFF signal or a measured zero must keep the rotor still.
-            // Without usable rpm, retain the existing running-state fallback.
+            // Measured actual speed/frequency wins over the relay and setpoint.
+            // Without a usable actual reading, retain the legacy relay fallback.
             const compressorActive = hasCompressorSpeed
-                ? compressorSpeed > 0 && (!cfg.compressorRunning || binary(cfg.compressorRunning))
+                ? compressorSpeed > 0
                 : binary(cfg.compressorRunning);
             const compressor = svg.querySelector('#pathCompressor');
             if (compressor) {
                 // Frequency and rpm use different schematic scales. The displayed
                 // value/profile is unchanged; no conversion to physical rpm is inferred.
-                const referenceSpeed = data[cfg.compressorValue]?.ident === 'Verdichterfrequenz' ? 100 : 3000;
+                const referenceSpeed = /Hz/i.test(data[cfg.compressorValue]?.unit || data[cfg.compressorValue]?.formatted || '') ? 100 : 3000;
                 const duration = compressorActive
                     ? (hasCompressorSpeed ? Math.max(0.6, Math.min(3.0, referenceSpeed / compressorSpeed)) : 1.4)
                     : 0;
@@ -3483,39 +3520,28 @@ window.SymconHeatPump = {
                 );
             }
 
-            // Fußzeile: die 10 in der Konfiguration vorhandenen
-            // Zusatzwerte 000...009 verwenden. Unkonfigurierte Plätze verschwinden.
+            // Native checkbox values and an unrestricted external list share the same footer.
             const footerValues = [];
-            for (const item of (cfg.instanceFooter || [])) {
+            for (const item of [...(cfg.instanceFooter || []), ...(cfg.externalFooter || [])]) {
                 const value = item.key ? formatted(item.key) : '';
                 if (value) footerValues.push({label: String(item.label || ''), value});
-            }
-            for (let index = 0; index < 10; index++) {
-                const suffix = String(index).padStart(3, '0');
-                const label = String(cfg['additionalLabel' + suffix] || '').trim();
-                const key = cfg['additionalValue' + suffix] || '';
-                const value = key ? formatted(key) : '';
-                if (value) {
-                    footerValues.push({
-                        label: label,
-                        value: value
-                    });
-                }
             }
 
             const footer = svg.querySelector('#gFooter');
             if (footer) {
                 footer.querySelectorAll('text[id^="textFooterAdditional"]').forEach(el => el.remove());
-                const columns = Math.min(5, Math.max(1, footerValues.length));
+                const footerWidth = contentRight - 68;
+                const columns = Math.min(5, Math.max(1,Math.floor(footerWidth / 220)), Math.max(1,footerValues.length));
                 const rows = Math.max(1, Math.ceil(footerValues.length / columns));
                 const height = Math.max(50, rows * 38 + 12);
                 footer.querySelector('rect')?.setAttribute('height', String(height));
-                svg.setAttribute('viewBox', '15 0 1570 ' + Math.max(985, 935 + height));
+                footer.querySelector('rect')?.setAttribute('width',String(contentRight - 28));
+                svg.setAttribute('viewBox','15 0 ' + (narrowHydraulics ? contentRight : 1570) + ' ' + Math.max(985,935 + height));
                 footerValues.forEach((item, index) => {
                     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                     text.id = 'textFooterAdditional' + String(index).padStart(3, '0');
                     text.setAttribute('class', 'sm');
-                    text.setAttribute('x', String(50 + (index % columns) * (1500 / columns)));
+                    text.setAttribute('x', String(50 + (index % columns) * (footerWidth / columns)));
                     text.setAttribute('y', String(948 + Math.floor(index / columns) * 38));
                     const title = document.createElementNS(text.namespaceURI, 'title');
                     title.textContent = item.label;
@@ -4113,22 +4139,27 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 ['type' => 'Select', 'name' => 'VisualizationSolarTarget', 'caption' => 'Solarwärme an',
                     'options' => [['caption'=>'Warmwasserspeicher','value'=>'hotwater'],['caption'=>'Pufferspeicher (Heizunterstützung)','value'=>'buffer']]]
             ]],
-            ['type' => 'Label', 'caption' => 'Solarziel Pufferspeicher: Dazu muss auch der Pufferspeicher aktiviert sein.',
+            ['type' => 'Label', 'caption' => 'Ohne Pufferspeicher wird die Solarwärme am Warmwasserspeicher dargestellt.',
                 'visible' => $this->ReadPropertyBoolean('ThermalSolarAvailable') && $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer' && !$this->ReadPropertyBoolean('TankHP')],
-            ['type' => 'RowLayout', 'items' => array_map(static fn(int $i): array =>
-                ['type' => 'CheckBox', 'name' => 'VisualizationHeatingCircuit' . $i, 'caption' => 'Heizkreis ' . $i], range(1, 3))],
-            ['type' => 'RowLayout', 'items' => array_map(static fn(int $i): array =>
-                ['type' => 'Select', 'name' => 'VisualizationHeatingCircuitMixer' . $i, 'caption' => 'Heizkreis ' . $i . ' – Anbindung',
-                    'options' => [['caption'=>'Direkt','value'=>0],['caption'=>'Mischkreis 1','value'=>1],
-                        ['caption'=>'Mischkreis 2','value'=>2],['caption'=>'Mischkreis 3','value'=>3]]], range(1, 3))],
+            ...array_map(static fn(int $i): array => ['type'=>'RowLayout','items'=>[
+                ['type'=>'CheckBox','name'=>'VisualizationHeatingCircuit' . $i,'caption'=>'Heizkreis ' . $i],
+                ['type'=>'ValidationTextBox','name'=>'HeatingCircuitName' . $i,'caption'=>'Bezeichnung'],
+                ['type'=>'Select','name'=>'VisualizationHeatingCircuitMixer' . $i,'caption'=>'Anbindung',
+                    'options'=>[['caption'=>'Direkt','value'=>0],['caption'=>'Mischkreis 1','value'=>1],
+                        ['caption'=>'Mischkreis 2','value'=>2],['caption'=>'Mischkreis 3','value'=>3]]]
+            ]],range(1,3)),
             ['type' => 'ExpansionPanel', 'caption' => 'Heizstäbe', 'items' => [
                 ['type' => 'Label', 'caption' => 'Gemessene Leistungen in W oder kW laut Variablenprofil; ohne Einheit wird W verwendet. Schaltzustände liefern keine Leistung.'],
                 ...array_map(fn(int $i): array => $this->HeaterConfigurationFields($i), range(1, 3))
             ]],
-            ['type' => 'ExpansionPanel', 'caption' => 'Bis zu drei Innentemperaturen', 'items' => $this->VisualizationRoomFields()],
-            ['type' => 'ExpansionPanel', 'caption' => 'Drei optionale Fremdvariablen – frei benennbar', 'items' => $this->VisualizationExternalFooterFields()]
+            ['type' => 'ExpansionPanel', 'caption' => 'Innentemperaturen', 'items' => $this->VisualizationRoomFields()],
+            ['type' => 'ExpansionPanel', 'caption' => 'Externe Variablen für Fußzeile', 'items' => $this->VisualizationExternalFooterFields()]
         ];
-        $form['elements'][] = ['type' => 'ExpansionPanel', 'caption' => 'HTML-SDK / Visualisierung', 'items' => $items];
+        $index = count($form['elements']);
+        foreach ($form['elements'] as $position => $element) {
+            if (($element['name'] ?? '') === 'IDListe') { $index = $position; break; }
+        }
+        array_splice($form['elements'], $index, 0, [['type' => 'ExpansionPanel', 'caption' => 'HTML-SDK / Visualisierung', 'items' => $items]]);
         return $form;
     }
 
@@ -4136,8 +4167,21 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     {
         if (!isset($data['configuration']) || !is_array($data['configuration'])) return false;
         $config = &$data['configuration'];
+        $changed = false;
+        if (($config['VisualizationExternalFooter'] ?? '') === '') {
+            $rows = [];
+            for ($i = 0; $i < 10; ++$i) {
+                $suffix = sprintf('%03d', $i);
+                $id = (int)($config['AdditionalValue' . $suffix] ?? 0);
+                if ($id > 0) $rows[] = ['label' => (string)($config['AdditionalLabel' . $suffix] ?? ''), 'variableID' => $id];
+            }
+            if ($rows !== []) {
+                $config['VisualizationExternalFooter'] = json_encode($rows, JSON_THROW_ON_ERROR);
+                $changed = true;
+            }
+        }
         if (array_key_exists('VisualizationHeatingCircuit1', $config)
-            || !array_key_exists('VisualizationDirectCircuit', $config)) return false;
+            || !array_key_exists('VisualizationDirectCircuit', $config)) return $changed;
         // Retain the number of displayed places from 4.9/Build 1. Old mixer flags
         // remain stored; mixer telemetry is now discovered automatically.
         $count = !empty($config['VisualizationDirectCircuit']) ? 1 : 0;
@@ -4199,7 +4243,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             $profileName = $definition['profile'];
             $profile = $profileName !== '' && IPS_VariableProfileExists($profileName) ? IPS_GetVariableProfile($profileName) : [];
             $unit = trim((string)($profile['Suffix'] ?? match ($profileName) {
-                '~Temperature' => ' °C', '~Watt' => ' W', 'WPLUX.kW' => ' kW', 'WPLUX.lh' => ' l/h', default => ''
+                '~Temperature' => ' °C', '~Watt' => ' W', 'WPLUX.kW' => ' kW', 'WPLUX.lh' => ' l/h', 'WPLUX.Ver' => ' rpm', default => ''
             }));
             $value = $entry['value'];
             $formatted = is_bool($value) ? ($value ? 'Ein' : 'Aus') : (string)$value;
@@ -4220,6 +4264,20 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         if ($id <= 0 || !IPS_VariableExists($id)) return null;
         return ['variableId' => $id, 'ident' => (string)(IPS_GetObject($id)['ObjectIdent'] ?? ''),
             'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
+    }
+
+    /** On-demand read-only capture for identifying undocumented controller values. */
+    public function GetEEVDiagnosticData(): string
+    {
+        if (!$this->ReadPropertyBoolean('InstanceStatus')) throw new RuntimeException('Die Instanz ist deaktiviert.');
+        if ($this->ReadPropertyString('CommunicationMode') !== 'java') throw new RuntimeException('Diese Diagnose benötigt den Java-Betrieb.');
+        $values = $this->ReadData(3004);
+        if ($values === null) throw new RuntimeException('Keine vollständige Java-Antwort erhalten.');
+        $rows = [];
+        foreach ($values as $id => $value) {
+            $rows[] = ['id'=>$id,'ident'=>self::DATA_POINT_CONFIG[$id]['name'] ?? ('ID_' . $id),'raw'=>$value];
+        }
+        return json_encode(['command'=>3004,'count'=>count($rows),'values'=>$rows], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
     }
 
     private function GetVisualizationRequiredPointIDs(): array
@@ -4321,15 +4379,54 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function VisualizationExternalFooterFields(): array
     {
-        $fields = [];
-        for ($i = 0; $i < 3; ++$i) {
-            $suffix = sprintf('%03d', $i);
-            $fields[] = ['type' => 'RowLayout', 'items' => [
-                ['type' => 'ValidationTextBox', 'name' => 'AdditionalLabel' . $suffix, 'caption' => 'Bezeichnung ' . ($i + 1)],
-                $this->VariableSelect('Externer Wert ' . ($i + 1), 'AdditionalValue' . $suffix)
-            ]];
+        return [[
+            'type' => 'List', 'name' => 'VisualizationExternalFooter', 'rowCount' => 5,
+            'add' => true, 'delete' => true, 'changeOrder' => true,
+            'loadValuesFromConfiguration' => false,
+            'columns' => [
+                ['name' => 'label', 'caption' => 'Bezeichnung (leer = Variablenname)', 'width' => 'auto',
+                    'save' => true, 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['name' => 'variableID', 'caption' => 'Variable', 'width' => '300px',
+                    'save' => true, 'add' => 0, 'edit' => ['type' => 'SelectVariable']]
+            ],
+            'values' => $this->VisualizationExternalFooterRows()
+        ]];
+    }
+
+    /** Legacy fixed slots remain readable until the list is first saved. */
+    private function VisualizationExternalFooterRows(): array
+    {
+        $raw = $this->ReadPropertyString('VisualizationExternalFooter');
+        if ($raw !== '') {
+            $saved = json_decode($raw, true);
+            $rows = [];
+            foreach (is_array($saved) ? $saved : [] as $row) {
+                if (!is_array($row)) continue;
+                $rows[] = ['label' => is_scalar($row['label'] ?? '') ? (string)($row['label'] ?? '') : '',
+                    'variableID' => is_numeric($row['variableID'] ?? null) ? max(0, (int)$row['variableID']) : 0];
+            }
+            return $rows;
         }
-        return $fields;
+        $rows = [];
+        for ($i = 0; $i < 10; ++$i) {
+            $suffix = sprintf('%03d', $i);
+            $id = $this->ReadPropertyInteger('AdditionalValue' . $suffix);
+            if ($id > 0) $rows[] = ['label' => $this->ReadPropertyString('AdditionalLabel' . $suffix), 'variableID' => $id];
+        }
+        return $rows;
+    }
+
+    private function GetVisualizationExternalFooter(): array
+    {
+        $footer = [];
+        foreach ($this->VisualizationExternalFooterRows() as $index => $row) {
+            $id = $row['variableID'];
+            if ($id <= 0 || !IPS_VariableExists($id)) continue;
+            $label = trim($row['label']);
+            $footer[] = ['key' => 'externalFooter' . $index, 'variableId' => $id,
+                'label' => $label !== '' ? $label : IPS_GetName($id)];
+        }
+        return $footer;
     }
 
 }

@@ -116,10 +116,37 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     return JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
                 }''')
                 assert page.locator('#wp-view-toggle,#wp-compact-view').count()==0
+                assert page.locator('#gHeatingManifold').count()==0
+                assert 'Verteiler' not in page.locator('#wp-card svg').text_content()
+                # The BUP command changes the actual valve path; no measured position is inferred.
+                valve=json.loads(json.dumps(payload))
+                key=valve['config']['wwHeatingValve']
+                for hotwater,path in [(True,'M-16 0H16'),(False,'M-16 0H0V-16')]:
+                    valve['data'][key]['value']=hotwater
+                    page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',valve)
+                    assert page.locator('#switchValveFlow').get_attribute('d')==path
+                valve['config']['wwHeatingValve']=''
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',valve)
+                assert page.locator('#switchValveFlow').get_attribute('data-target')=='unknown'
+                assert page.locator('#switchValveFlow').get_attribute('d')==''
+                assert page.locator('#textWWHeatingValveState').count()==0
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
+                # EEV mode selection uses engineering percentages; unknown values stay unknown.
+                eev=json.loads(json.dumps(payload))
+                eev['config'].update(eevHeatingOpening='testEEVHeating',eevCoolingOpening='testEEVCooling',heatingPumpCoolingMode='testCoolingMode')
+                eev['data'].update(testEEVHeating={'value':52.5},testEEVCooling={'value':100},testCoolingMode={'value':False})
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',eev)
+                assert page.locator('#textExpansionValveOpening').text_content()=='EEV Heizen: 52.5 %'
+                eev['data']['testCoolingMode']['value']=True
+                page.evaluate('(data)=>window.handleMessage({type:"update",data})',eev['data'])
+                assert page.locator('#textExpansionValveOpening').text_content()=='EEV Kühlen: 100.0 %'
+                eev['data']['testEEVCooling']['value']=1000
+                page.evaluate('(data)=>window.handleMessage({type:"update",data})',eev['data'])
+                assert page.locator('#textExpansionValveOpening').text_content()=='EEV Kühlen: —'
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
                 # Native checkbox selections must not be limited to the old ten footer slots.
                 footer_sample=json.loads(json.dumps(payload))
-                for i in range(10):
-                    footer_sample['config']['additionalValue'+str(i).zfill(3)]=''
+                footer_sample['config']['externalFooter']=[]
                 footer_sample['config']['instanceFooter']=[]
                 for i in range(13):
                     key='internalTest'+str(i)
@@ -130,6 +157,33 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert '0 °C' in page.locator('#textFooterAdditional000').text_content()
                 assert '12 °C' in page.locator('#textFooterAdditional012').text_content()
                 assert page.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.height')>985
+                # External footer rows are unbounded too, including zero, labels and live data.
+                footer_sample['config']['instanceFooter']=[]
+                footer_sample['config']['externalFooter']=[]
+                for i in range(27):
+                    key='externalTest'+str(i)
+                    footer_sample['config']['externalFooter'].append({'key':key,'label':'Extern '+str(i),'variableId':98000+i})
+                    footer_sample['data'][key]={'value':i,'formatted':str(i)+' kWh','binary':False}
+                footer_sample['config']['externalFooter'][26]['label']='<script>unsafe()</script>'
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',footer_sample)
+                assert page.locator('#gFooter text[id^="textFooterAdditional"]').count()==27
+                assert '0 kWh' in page.locator('#textFooterAdditional000').text_content()
+                assert '<script>unsafe()</script>' in page.locator('#textFooterAdditional026').text_content()
+                assert page.locator('#gFooter script').count()==0
+                footer_sample['data']['externalTest26'].update(value=42,formatted='42 kWh')
+                page.evaluate('(p)=>window.handleMessage({type:"update",data:p.data})',footer_sample)
+                assert '42 kWh' in page.locator('#textFooterAdditional026').text_content()
+                footer_sample['config']['externalFooter']=[]
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',footer_sample)
+                assert page.locator('#gFooter text[id^="textFooterAdditional"]').count()==0
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
+                # A full control bar sets the right edge of the automatic narrow layout.
+                narrow=json.loads(json.dumps(payload))
+                narrow['config'].update(tankHP=False,thermalSolarAvailable=False,luxtronikWebInterfaceURL=f'http://127.0.0.1:{server.server_port}/luxtronik-test.html')
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',narrow)
+                edges=page.evaluate("()=>{const b=document.querySelector('#gSettings rect').getBoundingClientRect(),h=document.querySelector('#gHK1 > rect.pn').getBoundingClientRect();return {button:b.right,card:h.right};}")
+                assert abs(edges['button']-edges['card'])<1,edges
+                assert page.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.width')<1570
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
                 # Only an intercepted local WebSocket and a local fallback page are used.
                 assert not page.locator('#gSettings').is_visible()
@@ -253,12 +307,19 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert page.locator('#textTankTempWW'+suffix).count()==0
                 assert page.locator('#symconBoilerSupplyTemperature,#symconBoilerRefluxTemperature').count()==0
                 for index in [1,2,3]:
-                    assert page.locator('#textHeatingReturnTarget'+str(index)).text_content()=='WP RL Soll 30.0 °C'
+                    assert page.locator('#textHeatingReturnTarget'+str(index)).text_content()=='30.0 °C'
                 positions=page.evaluate('''()=>{
                     const box=(id)=>document.querySelector('#'+id).getBoundingClientRect();
                     return {rlBottom:box('textRefluxTemperatureHeating').bottom,targetTop:box('textHeatingReturnTarget1').top};
                 }''')
                 assert positions['rlBottom']<positions['targetTop'],positions
+                for n in [1,2,3]:
+                    ids=['textSupplyTemperatureHeating'+('' if n==1 else str(n)),'textRefluxTemperatureHeating'+('' if n==1 else str(n)),'textHeatingReturnTarget'+str(n)]
+                    sizes=page.evaluate('(ids)=>ids.map(id=>getComputedStyle(document.getElementById(id)).fontSize)',ids)
+                    assert len(set(sizes))==1,sizes
+                    assert page.locator('#textHeatingReturnTargetLabel'+str(n)).text_content()=='RL Soll'
+                    assert ('28.9' if n==1 else '25.5') in page.locator('#'+ids[1]).text_content()
+
                 assert page.locator('#textHeaterRodStatus,#gHeaterRodWaves').count()==0
                 assert page.locator('#pathBoilerHeatBolt').get_attribute('class')=='wp-boiler-heater-active'
                 assert page.locator('#textBoilerHeaterPower').text_content()=='0.08 kW'
@@ -385,7 +446,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 for speed in [0,-1]:
                     assert compressor_reading(speed)['name']=='none'
                     assert page.locator('#gRefrigerantCircuit .wp-live-flow').count()==0
-                assert compressor_reading(3000,running=False)['name']=='none'
+                assert compressor_reading(3000,running=False)['name']=='symcon-modern-rotate'
                 for speed in [None,'','unavailable',False]:
                     assert compressor_reading(speed)=={'name':'symcon-modern-rotate','duration':1.4}
                 assert compressor_reading(3000,missing_speed=True)['duration']==1.4
@@ -420,7 +481,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('.wp-live-flow').first.evaluate("e=>getComputedStyle(e).animationName")=='none'
                 assert page.locator('#pathCompressor').evaluate("e=>getComputedStyle(e).animationName")=='none'
                 idle=json.loads(json.dumps(payload))
-                for key in ['compressorRunning','storageChargingPumpRunning',
+                for key in ['compressorValue','compressorRunning','storageChargingPumpRunning',
                             'heatingCircuitPumpRunning','heatingCircuitPumpRunning2',
                             'heatingCircuitPumpRunning3','thermalSolarPumpSpeed','thermalSolarPump']:
                     entity=idle['config'].get(key)
@@ -451,7 +512,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert '30' in mixed.locator('#textSupplyTemperatureHeating').text_content()
                 assert '50' in mixed.locator('#textWPSupplyTemperature').text_content()
                 assert '35' in mixed.locator('#textSupplyTemperatureHeating2').text_content()
-                assert mixed.locator('#textRefluxTemperatureHeating3').text_content()==''
+                assert '40' in mixed.locator('#textRefluxTemperatureHeating3').text_content()
                 assert mixed.locator('#gMixerReadings').count()==0
                 assert mixed.locator('[id^="gHKMixer"]').count()==3
                 assert mixed.locator('[id^="pathHKMixingReturn"]').count()==3
@@ -465,9 +526,10 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert len(set(label_fonts))==1,label_fonts
                 geometry=mixed.evaluate("""()=>{
                     const box=(id)=>{const b=document.querySelector('#'+id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom};};
-                    return Object.fromEntries(['gMixerValveReadings','gHeatingManifold','heatPumpPanel','switchValve','gHPUnitCabinet','gEfficiency','gRefrigerantCircuit','info'].map(id=>[id,box(id)]));
+                    return Object.fromEntries(['gMixerValveReadings','gHeatingHeaders','heatPumpPanel','switchValve','gHPUnitCabinet','gEfficiency','gRefrigerantCircuit','info'].map(id=>[id,box(id)]));
                 }""")
-                assert geometry['gMixerValveReadings']['x']>geometry['gHeatingManifold']['right'],geometry
+                assert mixed.locator('#gMixerValveSymbol1').bounding_box()['x']>geometry['info']['right'],geometry
+                assert geometry['gMixerValveReadings']['x']>geometry['gHeatingHeaders']['right'],geometry
                 assert geometry['switchValve']['x']>geometry['heatPumpPanel']['x'],geometry
                 assert geometry['switchValve']['right']<geometry['heatPumpPanel']['right'],geometry
                 assert geometry['gEfficiency']['y']<geometry['info']['bottom'],geometry
@@ -479,6 +541,12 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
                     return JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
                 }""")
+                renamed=json.loads(json.dumps(original))
+                renamed['config'].update(heatingCircuitName1='Fußboden Erdgeschoss',heatingCircuitName2='Heizkörper Obergeschoss',heatingCircuitName3='Sehr langer Name für den dritten Heizkreis im Dachgeschoss')
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',renamed)
+                assert mixed.locator('#textHeatingCircuitName1').text_content()=='Fußboden Erdgeschoss'
+                assert mixed.locator('#textHeatingCircuitName2').text_content()=='Heizkörper Obergeschoss'
+                assert float(mixed.locator('#textHeatingCircuitName3').get_attribute('textLength'))==235
                 # Buffer precedes all mixer branches; removing it retains connected pipes.
                 for has_buffer in [True,False]:
                     layout=json.loads(json.dumps(original))
@@ -488,7 +556,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert mixed.locator('#gNoBuffer').evaluate('e=>getComputedStyle(e).display')==('none' if has_buffer else 'inline')
                     for n in [1,2,3]:
                         assert mixed.locator('#gHK'+str(n)+' > path.hot').get_attribute('d').endswith('H1260')
-                        assert mixed.locator('#gHK'+str(n)+' > path.cold').get_attribute('d').endswith('H965')
+                        assert mixed.evaluate("n=>{const p=document.querySelector('#gHK'+n+' > path.cold'),h=document.querySelector('#gHeatingHeaders > path.cold');return Math.abs(p.getPointAtLength(p.getTotalLength()).x-h.getPointAtLength(0).x)<.1;}",n)
                         assert mixed.locator('#pathHKMixingReturn'+str(n)).get_attribute('d').endswith('V'+str(263+(n-1)*120))
                     placement=mixed.evaluate("""()=>{
                         const box=id=>{const b=document.querySelector('#'+id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom};};
@@ -501,15 +569,35 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert placement['gMixerValveSymbol1']['right']<placement['gHKPumpIcon1']['x'],placement
                     screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                     if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'mixed-buffer-{has_buffer}-{width}.png'))
+                # Without buffer and solar, the circuit moves left and the canvas/footer shrink together.
+                slim=json.loads(json.dumps(original))
+                slim['config'].update(tankHP=False,thermalSolarAvailable=False)
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',slim)
+                assert mixed.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.width')<1570
+                slim_x=mixed.locator('#gHK1').bounding_box()['x']
+                full=json.loads(json.dumps(slim));full['config']['tankHP']=True
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',full)
+                assert mixed.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.width')==1570
+                # SVG coordinates, independent of the changed viewport scale.
+                assert mixed.locator('#gHeating').get_attribute('transform')=='translate(0 0)'
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',slim)
+                assert float(mixed.locator('#gHeating').get_attribute('transform').split('(')[1].split()[0])<0
+                screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
+                if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'no-buffer-no-solar-{width}.png'))
                 # Direct circuits omit mixers; a missing secondary sensor uses labelled WP VL.
                 direct=json.loads(json.dumps(original))
                 direct['config'].update(mixers=[],tankHP=True)
+                direct['config']['returnTemperatureSetpoint']='testDirectReturnTarget'
+                direct['data']['testDirectReturnTarget']={'value':27,'formatted':'27.0 °C'}
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',direct)
                 assert mixed.locator('[id^="gMixerValveSymbol"]').count()==0
                 for n in [1,2,3]:
                     selector='#textSupplyTemperatureHeating'+('' if n==1 else str(n))
                     assert '50' in mixed.locator(selector).text_content()
                     assert mixed.locator(selector).evaluate('e=>e.previousElementSibling.textContent')=='WP VL'
+                    sizes=mixed.evaluate("n=>['textSupplyTemperatureHeating'+(n===1?'':n),'textRefluxTemperatureHeating'+(n===1?'':n),'textHeatingReturnTarget'+n].map(id=>getComputedStyle(document.getElementById(id)).fontSize)",n)
+                    assert len(set(sizes))==1,sizes
+
                 missing=json.loads(json.dumps(original))
                 missing['data'].pop('mixerActual1')
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',missing)
@@ -541,7 +629,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert mixed.locator('#gMixerValveSymbol1 .wp-valve-recent').count()==1
                 assert mixed.locator('#switchValveFlow.wp-valve-recent').count()==1
                 assert 'Ansteuerung Zu' in mixed.locator('#gMixerValveSymbol1').get_attribute('aria-label')
-                assert mixed.locator('#textWWHeatingValveState').text_content()=='Warmwasser'
+                assert mixed.locator('#switchValveFlow').get_attribute('data-target')=='hotwater'
+                assert mixed.locator('#switchValveFlow').get_attribute('d')=='M-16 0H16'
                 mixed.clock.fast_forward(60100)
                 assert mixed.locator('.wp-valve-recent').count()==0
                 assert mixed.locator('#gMixerValveSymbol1').get_attribute('data-state')=='closing'
@@ -554,8 +643,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 # A sole third heating place still has a connected distributor.
                 updated['config'].update(heatingCircuitType1='off',heatingCircuitType2='off')
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
-                assert mixed.locator('#gHeatingManifold').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert mixed.locator('#gNoBuffer > path.cold').get_attribute('d')=='M965 380H720V835H675'
+                assert mixed.locator('#gHeatingHeaders').evaluate('e=>getComputedStyle(e).display')!='none'
+                assert mixed.locator('#gNoBuffer > path.cold').get_attribute('d').endswith('V835H675')
                 assert mixed.locator('#gHKMixer1 > g,#gHKMixer2 > g').count()==0
                 updated['config']['tankHP']=True
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
@@ -613,6 +702,21 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert font_sizes[0]>font_sizes[1]>=font_sizes[2],font_sizes
             print(json.dumps({'heating_places':'PASS','mixer_telemetry':'PASS','indoor_1_2_3':'PASS','cop_jaz':'PASS'}))
 
+            # Actual frequency controls movement; a positive setpoint alone never does.
+            for width in [1200,390]:
+                frequency=browser.new_page(viewport={'width':width,'height':850})
+                frequency.goto(f'http://127.0.0.1:{server.server_port}/compressor-frequency.html')
+                assert frequency.locator('#wp-error').text_content()==''
+                assert frequency.locator('#textCompressorSpeedValue').text_content()=='Ist 55 rpm'
+                assert frequency.locator('#textCompressorFrequencyTarget').text_content()=='Soll 60 rpm'
+                assert frequency.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='symcon-modern-rotate'
+                update=json.loads(Path(artifacts,'compressor-frequency-update.json').read_text())
+                frequency.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
+                assert frequency.locator('#textCompressorSpeedValue').text_content()=='Ist 0 rpm'
+                assert frequency.locator('#textCompressorFrequencyTarget').text_content()=='Soll 60 rpm'
+                assert frequency.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='none'
+                frequency.close()
+
             # Native measurements render and update with no measurement objects at all.
             internal_update=json.loads(Path(artifacts,'internal-only-update.json').read_text())
             for width in [1200,390]:
@@ -649,9 +753,15 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert comp.locator('#gSolar > path.sol').get_attribute('d').startswith('M884 300')
                 screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                 if screenshot_dir: comp.screenshot(path=str(Path(screenshot_dir)/f'solar-buffer-{width}.png'))
+                changed['config'].update(tankHP=False,tankWW=False,solarTarget='buffer')
+                comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
+                assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')!='none'
+                assert comp.locator('#gDHW').evaluate('e=>getComputedStyle(e).display')!='none'
+                assert comp.locator('#gSolar > path.sol').get_attribute('d').startswith('M1064 790')
                 changed['config']['thermalSolarAvailable']=False
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')=='none'
+                assert comp.locator('#gDHW').evaluate('e=>getComputedStyle(e).display')=='none'
                 comp.close()
 
             # Integration of PHP's direct Ident resolver and actual VM_UPDATE payload.

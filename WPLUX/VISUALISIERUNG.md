@@ -18,7 +18,8 @@ welche Messwertvariablen im Objektbaum angelegt werden. Die gespeicherte Auswahl
 wird nicht verändert. Bedienvariablen
 werden weiterhin über die bisherigen Optionen aktiviert.
 
-Der zusätzliche Bereich **HTML-SDK / Visualisierung** bleibt bewusst schlank:
+Die Bereiche **Modbus TCP / SHI** und **HTML-SDK / Visualisierung** stehen vor der
+ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
 
 - Komponenten-Checkboxen für Puffer, Warmwasserspeicher und Solarthermie.
 - Optionale Warmwasser-Zirkulation mit Pumpe, Leitung und Hahn; ihr Zustand
@@ -35,16 +36,18 @@ Der zusätzliche Bereich **HTML-SDK / Visualisierung** bleibt bewusst schlank:
   ohne Einheit W) und jeweils eine optionale Schaltvariable mit Aktion und
   Assoziationen. Legacy-Profile und moderne Aufzählungen werden unterstützt.
 - Solarwärme wahlweise an Warmwasserspeicher oder Puffer (Heizunterstützung),
-  direkt neben dem Solarthermie-Schalter. Für das Solarziel Puffer muss auch der
-  Pufferspeicher aktiviert sein.
+  direkt neben dem Solarthermie-Schalter. Ohne aktivierten Puffer wird Solarthermie
+  automatisch am Warmwasserspeicher dargestellt, der dafür bei Bedarf eingeblendet wird.
 - Ansteuerung der Heizwasserpumpe über ID 183 in Prozent. Eine separate
   U/min-Drehzahl ist nicht bestätigt und wird nicht angezeigt.
 - Eingangsleistung aus der bereits konfigurierten COP-Quelle `kwin` (kW), ohne
   weiteren Picker. Ist diese nicht konfiguriert, wird der übertragene Wert
   `Leistungsaufnahme` (ID 268, Watt) verwendet. Das allein bestätigt keine echte
   Strommessung. Die verwendete Quelle steht im Tooltip des Leistungswerts.
-- **Drei optionale Fremdvariablen**, jeweils nur Bezeichnung und Variablenauswahl.
-  Sie erscheinen als frei benannte Werte in der Fußzeile.
+- **Externe Variablen für Fußzeile**: beliebig viele Zeilen mit Bezeichnung und
+  Variablenauswahl, hinzufügbar, löschbar und umsortierbar. Eine leere Bezeichnung
+  verwendet den Variablennamen. Bisherige Zuordnungen werden übernommen; eine
+  bewusst leer gespeicherte Liste bleibt leer.
 
 Es gibt keine separaten Auswahlfelder für einzelne Speicherfühler, Pumpen oder
 interne Heizkreiswerte. Ein umfassendes Zuordnungsformular, Zuordnungsdiagnosen,
@@ -55,7 +58,7 @@ der drei Heizkreisplätze. Vom Luxtronik-Regler gelieferte Mischkreiswerte
 sind interne Werte, auch wenn Mischer und Pumpen außerhalb des Wärmepumpengehäuses
 montiert sind. Fremdvariablen stammen beispielsweise von separaten Symcon-Zählern.
 
-Je Heizkreis wird unter **Anbindung** zwischen **Direkt** und **Mischkreis 1–3**
+Je Heizkreis lässt sich eine **Bezeichnung** vergeben. Unter **Anbindung** wird zwischen **Direkt** und **Mischkreis 1–3**
 gewählt. Standardmäßig gehört Mischer 1 zu Heizkreis 1, entsprechend 2 und 3.
 Nur aktivierte Heizkreisplätze zeigen ihre ausgewählten Mischer. Messwerte allein
 beweisen nicht, dass ein Mischkreis tatsächlich verbaut ist.
@@ -64,14 +67,18 @@ Der optionale Parallelpuffer sitzt links beim Infobereich, vor dem Verteiler.
 Jeder gemischte Abgang erhält rechts davon sein eigenes Ventil mit
 Rücklaufbeimischung, Pumpe und Heizfläche. Ohne Puffer führen die Leitungen direkt
 von der Wärmepumpe zu den Abgängen; direkte Heizkreise zeigen kein Mischerventil.
-Die Heizfläche steht stellvertretend für die angeschlossenen Verbraucher.
+Die Heizfläche steht stellvertretend für die angeschlossenen Verbraucher. Ohne
+Puffer und Solarthermie rücken die Heizkreisabgänge automatisch nach links;
+Zeichenfläche und Fußzeile passen sich bis zur Bedienleiste an. Mindestabstände
+für Mischer und Pumpen bleiben erhalten. Dies ist keine separate Kompaktansicht.
 
 Der allgemeine Vorlauf nutzt `Vorlauftemperatur_Heizkreis` (ID 10). Ein separater
 allgemeiner Sekundärvorlauf ist in der verwendeten Schnittstelle nicht bestätigt.
 Mischkreise zeigen ihren eigenen Vorlauf (IDs 21, 24, 137). Fehlt dieser, verwendet
 die Heizkreisanzeige den normalen Vorlauf mit der Beschriftung **WP VL**. Es wird
-kein zusätzlicher Messwert errechnet. Ein eigener Rücklauf je Mischer ist ebenfalls
-nicht bestätigt und wird nicht aus dem gemeinsamen Wärmepumpen-Rücklauf abgeleitet.
+kein zusätzlicher Messwert errechnet. Ein eigener Rücklauf je Mischer ist nicht bestätigt. Ohne ausdrücklich konfigurierte
+Rücklaufquelle erscheint der vorhandene gemeinsame Wärmepumpen-Rücklauf als RL;
+der Tooltip benennt diese Quelle. VL, RL und RL Soll stehen gleich groß im Heizkreiskasten.
 
 Die separaten Mischerdaten nutzen `Mischkreis_N_Vorlauftemperatur`,
 `Mischkreis_N_Vorlauf_Soll_Temperatur`, `Ausgang_Mischkreis_N_Auf` und
@@ -98,6 +105,14 @@ daraus werden keine drei Speicherfühler abgeleitet. Solarthermie nutzt
 `Ausgang_Solarladepumpe` (52). Die Komponenten-Schalter steuern die Darstellung
 und die interne Datenauswahl. Das Solarziel muss zur tatsächlichen Anlage passen.
 
+Jedes Grafikfeld verwendet genau einen festen Ident. Die Kondensatortemperatur
+liest `Liquefaction_Temperature` (233), Verdichter Ist `Verdichterfrequenz` (231)
+und Verdichter Soll `Verdichterfrequenz_Soll` (236). Es gibt keine automatische
+Auswahl anhand von Null-/Nichtnullwerten. Echte Nullwerte bleiben sichtbar.
+Für die Animation zählt der Istwert; ein positiver Sollwert allein startet sie
+nicht. Das Relais dient nur bei fehlendem Istwert als Rückfall. Einheiten werden
+aus dem Modul übernommen; es erfolgt keine Umrechnung zwischen RPM und Hz.
+
 **Status, COP und JAZ** erscheinen im oberen Infobereich. COP/JAZ nutzen die eigenen
 Instanzvariablen `copfaktor` und `jazfaktor`, sobald sie vorhanden sind. Die Grafik übernimmt
 deren berechnete Werte und Live-Änderungen; Berechnung und Zählerkonfiguration
@@ -106,14 +121,13 @@ Beschriftungen und Werte verwenden dieselben Schriftstile wie die anderen
 Leistungsfelder; COP/JAZ werden nicht horizontal verkleinert.
 
 Heizleistung und Eingangsleistung stehen ebenfalls im Infobereich. Der
-Rücklauf-Sollwert steht bei den aktiven Heizkreisen. Bei mehreren Kreisen heißt er
-„WP RL Soll“ und bezeichnet ausdrücklich den gemeinsamen Wärmepumpen-Sollwert.
-Der Durchfluss des Wärmemengenzählers (ID 155, l/h)
-steht am gemeinsamen Wärmepumpenausgang vor der Verzweigung. Der als
-Wärmequellendurchfluss bezeichnete Wert (ID 173) wird dafür nicht verwendet.
+Rücklauf-Sollwert steht bei den aktiven Heizkreisen. Der Tooltip bezeichnet ihn ausdrücklich als gemeinsamen Wärmepumpen-Sollwert.
+Der Durchfluss liest ausschließlich `Flow_Rate` (ID 254, l/h) und steht am
+gemeinsamen Wärmepumpenausgang. WMZ-Durchfluss (155) und Wärmequellendurchfluss
+(173) werden dafür nicht ersatzweise verwendet.
 
 Der Warmwasserspeicher zeigt nur Ist (`Warmwasser_Ist_Temperatur`) und Soll
-(`Warmwasser_Soll_Temperatur`, alternativ `Anpassung_WW`). Gespeicherte Zuordnungen
+(`Warmwasser_Soll_Temperatur`). Gespeicherte Zuordnungen
 weiterer Fühler bleiben erhalten. Die Summe der ausgewählten Heizstableistungen
 steht mit einem gelben Blitz im Boiler; bei Leistung über null pulsiert er.
 Schaltzustände werden nicht in Watt umgedeutet, doppelt ausgewählte Variablen
@@ -161,10 +175,8 @@ letzte Werte enthalten; die SHI-Unterstützung ist in der Konfiguration ausgewie
 
 ## Messwerte und Bedienung
 
-Die vollständige Ident-Tabelle aus dem Quellstand wurde übernommen, einschließlich
-der Alternativen für Verdichterdrehzahl/-frequenz, Kondensationstemperatur und
-Raumtemperaturen. Es wird ausschließlich innerhalb der eigenen Instanz nach
-internen Idents gesucht. Ohne passenden Ident bleibt eine bereits ausdrücklich
+Jedes Grafikfeld verwendet einen eindeutigen, fest zugeordneten Ident. Es wird in der eigenen Instanz nach diesem
+internen Ident gesucht. Ohne passenden Ident bleibt eine bereits ausdrücklich
 konfigurierte externe Variable als Fallback erhalten; dafür wird keine neue
 umfassende Zuordnungsmaske eingeführt. Unbelegte Temperaturfelder
 werden ausgeblendet; dieselbe konfigurierte Variable darf mehrere Speicherpositionen
@@ -226,3 +238,19 @@ Fußzeile, Raumquellen, Mischerdaten, COP/JAZ und das simulierte LUX-Bedienfeld.
 Die echte Symbolbibliothek wird von Symcon bereitgestellt; lokal werden Bindung
 und sichere Symbolklassen geprüft. Eine echte Symcon-Instanz mit Wärmepumpe
 wurde in dieser Cloud-Umgebung nicht verwendet.
+
+
+EEV Heizen/Kühlen wird abhängig vom Kühlstatus am Expansionsventil beschriftet.
+Die numerischen Java-IDs und deren Skalierung sind noch nicht bestätigt; ID 247
+wird dafür ausdrücklich nicht verwendet. Bis zur Bestätigung erscheint „—“.
+Vorhandene, bereits in Prozent aufbereitete eigene Idents `EEV_Heizen` und
+`EEV_Kuehlen` können direkt gelesen werden; das Modul legt diese nicht an.
+Zur gezielten Zuordnung kann `WPLUX_GetEEVDiagnosticData(InstanzID)` eine einzelne,
+rein lesende Java-3004-Abfrage mit unveränderten Rohwerten und Indizes liefern.
+Ein Vergleich mit den Geräteanzeigen während laufendem Verdichter ist erforderlich.
+Die Diagnose läuft niemals automatisch und ist in SHI sowie bei deaktivierter Instanz gesperrt.
+
+Das Umschaltventil zeigt ohne zusätzliche Beschriftung seinen angeforderten
+Durchgang: BUP (38) ein führt nach rechts zum Warmwasserspeicher, aus nach oben
+zur Heizung. Bei unbekanntem Ausgang wird keine Stellung gezeichnet. Der Tooltip
+weist darauf hin, dass keine mechanische Positionsrückmeldung vorliegt.

@@ -21,11 +21,9 @@
         "Aussentemperatur"
     ],
     "AmbientTemperatureNormal": [
-        "Raumtemperatur_Sollwert",
         "Desired_Room_Temperature"
     ],
     "AmbientTemperatureActual": [
-        "Raumtemperatur_Istwert",
         "Raumtemperatur_Raumstation_1"
     ],
     "SupplyTemperature": [
@@ -44,7 +42,6 @@
         "Ausgang_Verdichter_1"
     ],
     "CompressorValue": [
-        "Verdichterdrehzahl",
         "Verdichterfrequenz"
     ],
     "HeatingPumpPower": [
@@ -60,7 +57,6 @@
         "Hochdruck"
     ],
     "CondenserTemperature": [
-        "Kondensationstemperatur",
         "Liquefaction_Temperature"
     ],
     "SupplyTemperatureHeating1": [

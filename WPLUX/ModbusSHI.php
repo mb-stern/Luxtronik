@@ -188,7 +188,7 @@ trait LuxtronikModbusSHI
                 ['caption' => 'Modbus TCP / SHI (Testversion, nur lesen)', 'value' => 'modbus']
             ]
         ]]);
-        $form['elements'][] = [
+        $panel = [
             'type' => 'ExpansionPanel', 'caption' => 'Modbus TCP / SHI',
             'items' => [
                 ['type' => 'Label', 'caption' => 'Nur bei Modbus: Luxtronik 2.1 ab V3.90.1 mit aktivem SHI. IP-Adresse wie oben. Java-Einstellungen bleiben erhalten.'],
@@ -197,6 +197,11 @@ trait LuxtronikModbusSHI
                 ['type' => 'NumberSpinner', 'name' => 'ModbusTimeout', 'caption' => 'Modbus-Timeout (Millisekunden, 100–5000)']
             ]
         ];
+        $index = count($form['elements']);
+        foreach ($form['elements'] as $position => $element) {
+            if (($element['name'] ?? '') === 'IDListe') { $index = $position; break; }
+        }
+        array_splice($form['elements'], $index, 0, [$panel]);
         if ($modbus) {
             foreach ($form['elements'] as &$element) {
                 if (($element['name'] ?? '') === 'Port') {

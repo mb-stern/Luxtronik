@@ -11,7 +11,7 @@ Die Bedeutung den Typ der Variablen sind hier zu finden: https://loxwiki.atlassi
 Ab Version 5.0 enthält die Instanz eine HTML-SDK-Wärmepumpengrafik als Vollansicht.
 Sie bindet die internen Messwerte automatisch über Idents an, unabhängig von der ID-Liste.
 Unter „HTML-SDK / Visualisierung“ werden Komponenten, Raumtemperaturen, externe
-Leistungsquellen und bis zu drei frei benannte Zusatzwerte konfiguriert. Interne Werte für die Fußzeile
+Leistungsquellen und beliebig viele externe Fußzeilenwerte konfiguriert. Interne Werte für die Fußzeile
 werden mit der zusätzlichen Checkbox „Fußzeile“ in der bestehenden ID-Liste gewählt.
 [Einrichtung und Hinweise zur Visualisierung](WPLUX/VISUALISIERUNG.md).
 
