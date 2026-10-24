@@ -71,6 +71,8 @@ $tests['visualization retains all existing property defaults and the complete so
     $expected = json_decode(file_get_contents(__DIR__ . '/fixtures/visualization-ident-map.json'), true, 512, JSON_THROW_ON_ERROR);
     check((new ReflectionClass($module))->getConstant('LUXTRONIK_IDENT_MAP') === $expected, 'Incomplete source Ident map');
     check($module->visualizationType === 1, 'HTML-SDK not activated');
+    $module->properties['HeatingCircuitName1'] = 'Mischkreis nur als Name';
+    check(invoke($module, 'BuildCardConfig')['heatingCircuitMixed1'] === false, 'Circuit name incorrectly enables a mixer');
     foreach (['LuxtronikInstanceID', 'ManualConfiguration'] as $removed) check(!array_key_exists($removed, $module->properties), 'Separate source/manual mode retained');
 };
 $tests['visualization settings expose only external additions and layout; footer lives in the native list'] = static function (): void {
@@ -251,6 +253,7 @@ $tests['component checkboxes bind three mixed circuits without individual assign
     for ($i = 1; $i <= 3; ++$i) {
         $suffix = $i === 1 ? '' : (string)$i;
         check($payload['config']['heatingCircuitName' . $i] === 'Mischkreis ' . $i, 'Mixed circuit name guessed');
+        check($payload['config']['heatingCircuitMixed' . $i] === true, 'Mixed circuit has no hydraulic mixer descriptor');
         check($payload['data']['supplyTemperatureHeating' . $suffix]['value'] === 25.0 + $i * 5, 'Wrong mixed-circuit Ident');
         check($payload['config']['refluxTemperatureHeating' . $suffix] === '', 'Invented mixed-circuit return');
     }

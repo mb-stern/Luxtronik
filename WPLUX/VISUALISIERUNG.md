@@ -35,6 +35,11 @@ montiert sind. Fremdvariablen stammen beispielsweise von separaten Symcon-Zähle
 Ein direkter Heizkreis nutzt die Idents des Wärmepumpenkreises. Die Mischkreise
 nutzen jeweils `Mischkreis_1_Vorlauftemperatur`,
 `Mischkreis_2_Vorlauftemperatur` bzw. `Mischkreis_3_Vorlauftemperatur`.
+Bei einem ausgewählten Mischkreis zeigt die Grafik ein Dreiwege-Mischventil mit
+Beimischleitung vom zugehörigen Rücklauf vor Pumpe und Heizfläche. Beim direkten
+Heizkreis entfällt es. Das Ventilsymbol ist schematisch und gibt keine gemessene
+Ventilstellung vor. Die Heizfläche steht stellvertretend für die angeschlossenen
+Verbraucher, etwa mehrere Fußbodenheizungs-Schleifen mit gemeinsamem Vorlauf.
 Fehlende Rücklauffühler werden nicht vom Wärmepumpen-Rücklauf übernommen; die
 betreffenden Felder bleiben leer. Mischer-Auf/Zu wird nicht als Pumpensignal
 interpretiert. Der Wärmepumpen-Rücklauf im allgemeinen Infobereich bleibt davon

@@ -682,6 +682,7 @@ HTML;
             $circuit = $circuits[$i - 1] ?? null;
             $type = $this->ReadPropertyString('HeatingCircuitType' . $i);
             $config['heatingCircuitType' . $i] = $circuit === null ? 'off' : ($type === 'radiator' ? 'radiator' : 'underfloor');
+            $config['heatingCircuitMixed' . $i] = $circuit !== null && str_starts_with($circuit['source'], 'mixed');
             $name = $this->ReadPropertyString('HeatingCircuitName' . $i);
             $config['heatingCircuitName' . $i] = $circuit === null ? '' : ($name === 'HK' . $i ? $circuit['name'] : $name);
         }
@@ -5794,6 +5795,53 @@ window.SymconHeatPump = {
                 hkPumpText1.setAttribute('x', heatingCircuitCount === 1 ? '1165' : '1195');
             }
 
+            // Each mixed circuit has its own three-way valve upstream of its
+            // pump/emitter and a branch from that circuit's return. The symbol
+            // is schematic; no valve position is inferred from Auf/Zu signals.
+            for (let n = 1; n <= 3; n++) {
+                const circuit = svg.querySelector('#gHK' + n);
+                if (!circuit) continue;
+                let mixer = circuit.querySelector('#gHKMixer' + n);
+                const enabled = [hk1, hk2, hk3][n - 1] && !!cfg['heatingCircuitMixed' + n];
+                if (!enabled) {
+                    if (mixer) mixer.remove();
+                    continue;
+                }
+                if (!mixer) {
+                    const ns = 'http://www.w3.org/2000/svg';
+                    mixer = document.createElementNS(ns, 'g');
+                    mixer.id = 'gHKMixer' + n;
+                    const title = document.createElementNS(ns, 'title');
+                    title.textContent = 'Dreiwege-Mischventil mit Rücklaufbeimischung (schematisch)';
+                    mixer.appendChild(title);
+                    const branch = document.createElementNS(ns, 'path');
+                    branch.id = 'pathHKMixingReturn' + n;
+                    branch.setAttribute('class', 'cold');
+                    branch.setAttribute('d', 'M0 50V12');
+                    mixer.appendChild(branch);
+                    const junction = document.createElementNS(ns, 'circle');
+                    junction.setAttribute('cy', '50');
+                    junction.setAttribute('r', '4');
+                    junction.setAttribute('fill', '#35a6ff');
+                    mixer.appendChild(junction);
+                    const symbol = document.createElementNS(ns, 'circle');
+                    symbol.setAttribute('r', '12');
+                    symbol.setAttribute('fill', 'var(--wp-button)');
+                    symbol.setAttribute('stroke', 'var(--wp-icon)');
+                    symbol.setAttribute('stroke-width', '2');
+                    mixer.appendChild(symbol);
+                    const ports = document.createElementNS(ns, 'path');
+                    ports.setAttribute('d', 'M-10-5L0 0L-10 5Z M10-5L0 0L10 5Z M-5 10L0 0L5 10Z');
+                    ports.setAttribute('fill', 'none');
+                    ports.setAttribute('stroke', 'var(--wp-icon)');
+                    ports.setAttribute('stroke-width', '1.3');
+                    mixer.appendChild(ports);
+                    circuit.insertBefore(mixer, svg.querySelector('#gHKPumpIcon' + n));
+                }
+                const x = n === 1 && heatingCircuitCount === 1 ? 1120 : 1152;
+                mixer.setAttribute('transform', 'translate(' + x + ' ' + (245 + (n - 1) * 120) + ')');
+            }
+
             const manifoldBody = svg.querySelector('#heatingManifoldBody');
             if (manifoldBody) {
                 if (heatingCircuitCount === 2) {
@@ -6219,9 +6267,9 @@ window.SymconHeatPump = {
                 ['#main path.hot, #main path.cold', compressorActive],
                 ['#gBuffer > path.hot, #gBuffer > path.cold', chargingActive || heatingActive],
                 ['#gNoBuffer path.hot, #gNoBuffer path.cold', heatingActive],
-                ['#gHK1 > path.hot, #gHK1 > path.cold', binary(cfg.heatingCircuitPumpRunning)],
-                ['#gHK2 > path.hot, #gHK2 > path.cold', binary(cfg.heatingCircuitPumpRunning2)],
-                ['#gHK3 > path.hot, #gHK3 > path.cold', binary(cfg.heatingCircuitPumpRunning3)],
+                ['#gHK1 > path.hot, #gHK1 > path.cold, #gHKMixer1 > path.cold', binary(cfg.heatingCircuitPumpRunning)],
+                ['#gHK2 > path.hot, #gHK2 > path.cold, #gHKMixer2 > path.cold', binary(cfg.heatingCircuitPumpRunning2)],
+                ['#gHK3 > path.hot, #gHK3 > path.cold, #gHKMixer3 > path.cold', binary(cfg.heatingCircuitPumpRunning3)],
                 ['#gDHW > path.hot, #gDHW > path.cold', chargingActive && binary(cfg.wwHeatingValve)],
                 ['#gSolar path.sol', solarActive]
             ];

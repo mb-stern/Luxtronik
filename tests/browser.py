@@ -446,6 +446,30 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert not errors,errors
                 print(json.dumps({'viewport':width,**result,'updates':'PASS'}))
                 page.close()
+            def check_mixer_geometry(page, index):
+                geometry=page.evaluate("""(n)=>{
+                    const hk=document.querySelector('#gHK'+n);
+                    const mixer=hk.querySelector('#gHKMixer'+n);
+                    const branch=mixer.querySelector('path.cold');
+                    const pump=hk.querySelector('#gHKPumpIcon'+n+' > circle');
+                    const emitter=hk.querySelector(':scope > rect');
+                    const ret=hk.querySelector(':scope > path.cold');
+                    const screen=(el,x,y)=>{const p=new DOMPoint(x,y).matrixTransform(el.getScreenCTM());return {x:p.x,y:p.y};};
+                    const point=(el,length)=>{const p=el.getPointAtLength(length);return screen(el,p.x,p.y);};
+                    return {
+                        mixer:screen(mixer,0,0),pump:screen(pump,pump.cx.baseVal.value,pump.cy.baseVal.value),
+                        emitter:screen(emitter,emitter.x.baseVal.value,emitter.y.baseVal.value),
+                        branchStart:point(branch,0),branchEnd:point(branch,branch.getTotalLength()),
+                        returnStart:point(ret,0),returnEnd:point(ret,ret.getTotalLength())
+                    };
+                }""",index)
+                assert geometry['mixer']['x']<geometry['pump']['x']<geometry['emitter']['x'],geometry
+                assert abs(geometry['mixer']['y']-geometry['pump']['y'])<0.1,geometry
+                assert abs(geometry['branchStart']['y']-geometry['returnStart']['y'])<0.1,geometry
+                assert geometry['returnEnd']['x']<geometry['branchStart']['x']<geometry['returnStart']['x'],geometry
+                assert abs(geometry['branchEnd']['x']-geometry['mixer']['x'])<0.1,geometry
+                assert geometry['branchStart']['y']>geometry['branchEnd']['y']>geometry['mixer']['y'],geometry
+
             # Component-only configuration resolves three native mixed circuits automatically.
             for width in [1200,390]:
                 mixed=browser.new_page(viewport={'width':width,'height':850})
@@ -458,6 +482,26 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert mixed.locator('#textRefluxTemperatureHeating'+suffix).text_content()==''
                     assert mixed.locator('#textRefluxTemperatureHeating'+suffix).evaluate('e=>getComputedStyle(e).display')=='none'
                 assert '40' in mixed.locator('#textReturnTemperatureActualValue').text_content()
+                assert mixed.locator('[id^="gHKMixer"]').count()==3
+                for index in [1,2,3]: check_mixer_geometry(mixed,index)
+                screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
+                if screenshot_dir:
+                    mixed.screenshot(path=str(Path(screenshot_dir)/f'mixed-{width}.png'))
+                original=mixed.evaluate("""()=>{
+                    const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
+                    return JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
+                }""")
+                single=json.loads(json.dumps(original))
+                single['config'].update(heatingCircuitType2='off',heatingCircuitType3='off')
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',single)
+                assert mixed.locator('[id^="gHKMixer"]').count()==1
+                check_mixer_geometry(mixed,1)
+                single['config']['heatingCircuitMixed1']=False
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',single)
+                assert mixed.locator('[id^="gHKMixer"]').count()==0
+                assert mixed.locator('[id^="pathHKMixingReturn"]').count()==0
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',original)
+                assert mixed.locator('[id^="gHKMixer"]').count()==3
                 mixed.close()
 
             # Integration of PHP's direct Ident resolver and actual VM_UPDATE payload.
