@@ -47,7 +47,7 @@ function configuredVisualization(): Luxtronik
     $external = new Luxtronik();
     foreach ($module->properties as $property => $default) {
         if (!is_int($default) || $default !== 0 || isset($base[$property]) || isset($map[$property])
-            || str_starts_with($property, 'VisualizationRoomVariable') || str_contains($property, 'Threshold') || str_contains($property, 'Count')) continue;
+            || str_starts_with($property, 'VisualizationRoomVariable') || str_starts_with($property, 'VisualizationHeaterSwitch') || str_contains($property, 'Threshold') || str_contains($property, 'Count')) continue;
         $id = visualizationVariable($external, $property, 25.5);
         $module->properties[$property] = $id;
     }
@@ -63,6 +63,12 @@ function configuredVisualization(): Luxtronik
     visualizationVariable($module, 'Ruecklauf_Soll_Heizkreis', 30.0, '~Temperature');
     $GLOBALS['testVariables'][$module->GetIDForIdent('Ruecklauftemperatur_Heizkreis')]['formatted'] = '28.9 °C';
     $GLOBALS['testVariables'][$module->GetIDForIdent('Ruecklauf_Soll_Heizkreis')]['formatted'] = '30.0 °C';
+    visualizationVariable($module, 'Waermemengenzaehler_Durchfluss', 607.0);
+    for ($i = 1; $i <= 3; ++$i) {
+        $id = visualizationVariable($external, 'HeaterSwitch' . $i, false);
+        $external->EnableAction('HeaterSwitch' . $i);
+        $module->properties['VisualizationHeaterSwitch' . $i] = $id;
+    }
     return $module;
 }
 
@@ -89,7 +95,7 @@ $tests['visualization settings expose only external additions and layout; footer
         check(!isset($sdkFields[$removed]), 'Obsolete mixer configuration retained');
     }
     $pickers = array_filter($sdkFields, fn($e) => ($e['type'] ?? '') === 'SelectVariable');
-    check(array_keys($pickers) === ['VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3', 'AdditionalValue000', 'AdditionalValue001', 'AdditionalValue002'], 'Unexpected assignment controls beyond three rooms and three free external values');
+    check(array_keys($pickers) === ['VisualizationInputPower', 'HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3', 'AdditionalValue000', 'AdditionalValue001', 'AdditionalValue002'], 'Unexpected assignment controls beyond heaters, rooms and external values');
     foreach (['LuxtronikInstanceID', 'ManualConfiguration', 'OperatingStatusVariable', 'OutdoorTemperature', 'CompressorValue', 'ExpansionValveOpening'] as $property) {
         check(!isset($fields[$property]), 'Unwanted assignment UI: ' . $property);
     }
@@ -296,6 +302,10 @@ $tests['three named room sources keep duplicate IDs zero values and safe variabl
     check($payload['config']['roomTemperatures'][0]['icon'] === 'fa-light fa-temperature-half', 'Variable icon ignored');
     check($payload['config']['roomTemperatures'][1]['icon'] === 'fa-light fa-bath', 'Profile icon ignored');
     check($payload['config']['roomTemperatures'][2]['icon'] === '', 'Unsafe icon accepted');
+    $module->properties['VisualizationRoomDisplay1'] = 'name';
+    $module->properties['VisualizationRoomDisplay2'] = 'icon';
+    $module->properties['VisualizationRoomDisplay3'] = 'both';
+    check(array_column(invoke($module, 'BuildCardConfig')['roomTemperatures'], 'display') === ['name', 'icon', 'both'], 'Per-room display preferences lost');
     $module->properties['VisualizationRoomVariable3'] = $module->properties['VisualizationRoomVariable1'];
     $GLOBALS['testVariables'][$module->properties['VisualizationRoomVariable1']]['value'] = 0.0;
     check(count(invoke($module, 'BuildCardConfig')['roomTemperatures']) === 3, 'Repeated source suppressed');
@@ -380,6 +390,100 @@ function mixedCircuitVisualization(): Luxtronik
     visualizationVariable($module, 'jazfaktor', 3.75);
     return $module;
 }
+
+$tests['empty ID list still supplies core graphic and exact mixer Idents through one Java read'] = static function (): void {
+    $values = array_fill(0, 269, 0);
+    foreach ([10=>250, 11=>245, 15=>89, 17=>485, 18=>500, 21=>249, 22=>200, 40=>1, 41=>0, 155=>607, 257=>65, 268=>1500] as $id=>$value) $values[$id]=$value;
+    withServer([[pack('N*',3004,0),frame(3004,$values)], [pack('N*',3004,0),frame(3004,$values)]], static function (Luxtronik $module): void {
+        $module->Update();
+        $payload=visualizationPayload($module);
+        check($module->properties['IDListe']==='[]','Automatic readings changed saved selections');
+        check($payload['data']['mixerActual1']['value']===24.9 && $payload['data']['mixerTarget1']['value']===20.0,'Native mixer temperatures missing or rescaled');
+        check($payload['data']['mixerOpen1']['value']===true && $payload['data']['mixerClose1']['value']===false,'Native motor signals missing');
+        check($payload['data']['inputPower']['watts']==1500 && $payload['data']['dHWSetpoint']['value']===50.0,'Input power or DHW setpoint missing');
+        check($payload['data']['heatingFlow']['value']==607,'Heat-meter flow missing');
+        $id=$module->GetIDForIdent('Mischkreis_1_Vorlauftemperatur');
+        $module->Update();
+        check($module->GetIDForIdent('Mischkreis_1_Vorlauftemperatur')===$id,'Core variable deleted by empty ID list');
+        check($payload['config']['instanceFooter']===[],'Automatic points added to footer');
+    });
+};
+
+$tests['input power prefers native watts then external source then existing COP source'] = static function (): void {
+    $module = new Luxtronik(); $external = new Luxtronik();
+    $kw = visualizationVariable($external,'COPPower',2.5);
+    $watts = visualizationVariable($external,'Power',1800.0);
+    $module->properties['kwin']=$kw;
+    check(invoke($module,'BuildVisualizationData')['inputPower']['watts']===2500.0,'COP source kW interpreted as W');
+    $module->properties['VisualizationInputPower']=$watts;
+    check(invoke($module,'BuildVisualizationData')['inputPower']['watts']===1800.0,'Explicit source ignored');
+    visualizationVariable($module,'Leistungsaufnahme',1250.0,'~Watt');
+    check(invoke($module,'BuildVisualizationData')['inputPower']['watts']===1250.0,'Native source not preferred');
+};
+
+$tests['heater power sums W and kW but never invents power from booleans or duplicate IDs'] = static function (): void {
+    $module = new Luxtronik(); $external = new Luxtronik();
+    $GLOBALS['testProfiles']['PowerKW']=['Suffix'=>' kW'];
+    $a=visualizationVariable($external,'RodA',1500.0);
+    $b=visualizationVariable($external,'RodB',2.0,'PowerKW');
+    // Selecting power sources is sufficient; no separate count needs to be set.
+    $module->properties['HeaterRodCount']=0;
+    $module->properties['HeaterRod1']=$a; $module->properties['HeaterRod2']=$b; $module->properties['HeaterRod3']=$a;
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===3500.0,'Mixed units or duplicates mishandled');
+    $module->GetVisualizationTile();
+    $GLOBALS['testVariables'][$a]['value']=0.0;
+    $module->MessageSink(1,$a,VM_UPDATE,[]);
+    check(end($module->updates)['data']['heaterRodTotalPower']['value']==2000.0,'Power sum not live');
+    $module->properties['HeaterRod2']=visualizationVariable($external,'Relay',true);
+    check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===null,'Relay treated as watts');
+};
+
+$tests['heater switching calls only configured external actions and waits for reported state'] = static function (): void {
+    $module = new Luxtronik(); $external = new Luxtronik();
+    $switch = visualizationVariable($external, 'HeaterRelay', false);
+    $external->EnableAction('HeaterRelay');
+    $module->properties['VisualizationHeaterSwitch1'] = $switch;
+    $module->GetVisualizationTile();
+    check(isset($module->messages[$switch][VM_UPDATE]), 'Heater switch not subscribed');
+    $GLOBALS['testRequestedActions'] = [];
+    $module->RequestAction('SetHeaterSwitch', json_encode(['number'=>1,'value'=>true,'variableId'=>999999]));
+    check($GLOBALS['testRequestedActions'] === [[$switch,true]], 'Action target came from browser or wrong dispatch');
+    check(GetValue($switch) === false, 'Switch state set directly before confirmation');
+    $GLOBALS['testVariables'][$switch]['value'] = true;
+    $module->MessageSink(1,$switch,VM_UPDATE,[]);
+    check(end($module->updates)['controls']['heaterSwitches'][0]['currentValue'] === true, 'Reported heater state not live');
+    $module->properties['CommunicationMode'] = 'modbus';
+    $module->RequestAction('SetHeaterSwitch', ['number'=>1,'value'=>false]);
+    check(end($GLOBALS['testRequestedActions']) === [$switch,false], 'External heater was confused with native SHI writes');
+    $GLOBALS['testRequestActionResult'] = false;
+    try {
+        try { $module->RequestAction('SetHeaterSwitch', ['number'=>1,'value'=>false]); throw new LogicException('Failed action accepted'); }
+        catch (RuntimeException $expected) {}
+        check(GetValue($switch) === true, 'Failed action changed the displayed state');
+    } finally { unset($GLOBALS['testRequestActionResult']); }
+};
+$tests['heater switching rejects malformed unconfigured disabled own and non-action variables'] = static function (): void {
+    $module = new Luxtronik(); $external = new Luxtronik();
+    $switch = visualizationVariable($external,'Relay',false); $external->EnableAction('Relay');
+    $module->properties['VisualizationHeaterSwitch1']=$switch;
+    $GLOBALS['testRequestedActions']=[];
+    foreach ([[],['number'=>0,'value'=>true],['number'=>4,'value'=>true],['number'=>'1','value'=>true],['number'=>1,'value'=>1],['number'=>2,'value'=>true]] as $payload) {
+        try { $module->RequestAction('SetHeaterSwitch',$payload); }
+        catch (InvalidArgumentException|RuntimeException $expected) { continue; }
+        throw new RuntimeException('Invalid heater action accepted');
+    }
+    $module->properties['InstanceStatus']=false;
+    try { $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>true]); throw new LogicException('Disabled instance switched'); } catch (RuntimeException $expected) {}
+    $module->properties['InstanceStatus']=true;
+    $GLOBALS['testVariables'][$switch]['custom_action']=1;
+    try { $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>true]); throw new LogicException('Disabled custom action switched'); } catch (RuntimeException $expected) {}
+    $own = visualizationVariable($module,'OwnRelay',false); $module->EnableAction('OwnRelay');
+    $module->properties['VisualizationHeaterSwitch1']=$own;
+    try { $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>true]); throw new LogicException('Own variable recursively switched'); } catch (RuntimeException $expected) {}
+    $module->properties['VisualizationHeaterSwitch1']=visualizationVariable($external,'IntegerRelay',0);
+    try { $module->RequestAction('SetHeaterSwitch',['number'=>1,'value'=>true]); throw new LogicException('Nonboolean switched'); } catch (RuntimeException $expected) {}
+    check($GLOBALS['testRequestedActions']===[], 'Rejected action reached external handler');
+};
 
 $failed=0;
 foreach ($tests as $name=>$test) {

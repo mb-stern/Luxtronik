@@ -9,8 +9,9 @@ Dieses Modul funktioniert nur mit Java-Abfrage, ab einem gewissen FW-Stand finde
 Die Bedeutung den Typ der Variablen sind hier zu finden: https://loxwiki.atlassian.net/wiki/spaces/LOX/pages/1533935933/Java+Webinterface
 
 Ab Version 5.0 enthält die Instanz eine HTML-SDK-Wärmepumpengrafik als Vollansicht.
-Sie nutzt direkt die vorhandenen Idents. Unter „HTML-SDK / Visualisierung“ werden
-nur die vorhandenen Komponenten und bis zu drei frei benannte Fremdvariablen konfiguriert. Interne Werte für die Fußzeile
+Sie bindet die internen Messwerte automatisch über Idents an, unabhängig von der ID-Liste.
+Unter „HTML-SDK / Visualisierung“ werden Komponenten, Raumtemperaturen, externe
+Leistungsquellen und bis zu drei frei benannte Zusatzwerte konfiguriert. Interne Werte für die Fußzeile
 werden mit der zusätzlichen Checkbox „Fußzeile“ in der bestehenden ID-Liste gewählt.
 [Einrichtung und Hinweise zur Visualisierung](WPLUX/VISUALISIERUNG.md).
 

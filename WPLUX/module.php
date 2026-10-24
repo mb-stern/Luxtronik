@@ -926,6 +926,10 @@ class Luxtronik extends IPSModuleStrict
 
     public function RequestAction(string $Ident, mixed $Value): void 
     {
+        if ($Ident === 'SetHeaterSwitch') {
+            $this->HandleHeaterSwitchAction($Value);
+            return;
+        }
         if (in_array($Ident, ['SetControlMode', 'SetNumericControl', 'SetBinaryControl'], true)) {
             $this->HandleVisualizationAction($Ident, $Value);
             return;
@@ -1248,6 +1252,9 @@ class Luxtronik extends IPSModuleStrict
             }
         }
 
+        // The integrated graphic owns its core measurements independently of IDListe.
+        $enabledIds += $this->GetVisualizationRequiredPointIDs();
+
         $daten_raw = $this->ReadData(3004);
         if ($daten_raw === null) {
             return;
@@ -1313,6 +1320,7 @@ class Luxtronik extends IPSModuleStrict
          * neue Socket-Verbindung je Sollwert.
          */
         $this->RefreshControlValues();
+        $this->RefreshVisualization();
     }
 
     /** Eine vollständige Antwort lesen, bevor Modulvariablen verändert werden. */

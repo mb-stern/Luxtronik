@@ -44,12 +44,18 @@ function IPS_GetVariable(int $id): array
 {
     $v = $GLOBALS['testVariables'][$id];
     return ['VariableType' => $v['type'], 'VariableProfile' => $v['profile'],
-        'VariableCustomProfile' => '', 'VariableAction' => $v['action'] ?? 0, 'VariableCustomAction' => 0];
+        'VariableCustomProfile' => '', 'VariableAction' => $v['action'] ?? 0, 'VariableCustomAction' => $v['custom_action'] ?? 0];
 }
 
 function GetValue(int $id): mixed
 {
     return $GLOBALS['testVariables'][$id]['value'];
+}
+
+function RequestAction(int $id, mixed $value): bool
+{
+    $GLOBALS['testRequestedActions'][] = [$id, $value];
+    return $GLOBALS['testRequestActionResult'] ?? true;
 }
 
 function IPS_GetObjectIDByIdent(string $ident, int $instanceID): int|false

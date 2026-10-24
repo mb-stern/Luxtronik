@@ -47,7 +47,10 @@ trait LuxtronikVisualization
         'MixerOpen2' => ['Ausgang_Mischkreis_2_Auf'], 'MixerClose2' => ['Ausgang_Mischkreis_2_Zu'],
         'MixerActual3' => ['Mischkreis_3_Vorlauftemperatur'], 'MixerTarget3' => ['Mischkreis_3_Vorlauf_Soll_Temperatur'],
         'MixerOpen3' => ['Ausgang_Mischkreis_3_Auf'], 'MixerClose3' => ['Ausgang_Mischkreis_3_Zu'],
-        'ComputedCOP' => ['copfaktor'], 'ComputedJAZ' => ['jazfaktor']
+        'ComputedCOP' => ['copfaktor'], 'ComputedJAZ' => ['jazfaktor'],
+        'InputPower' => ['Leistungsaufnahme'],
+        'HeatingFlow' => ['Waermemengenzaehler_Durchfluss'],
+        'DHWSetpoint' => ['Warmwasser_Soll_Temperatur', 'Anpassung_WW']
     ];
 
     private function CreateVisualization(): void
@@ -60,10 +63,13 @@ trait LuxtronikVisualization
         $this->RegisterPropertyBoolean('VisualizationMixedCircuit2', false);
         $this->RegisterPropertyBoolean('VisualizationMixedCircuit3', false);
         $this->RegisterPropertyInteger('HeatPumpReturnTemperature', 0);
+        $this->RegisterPropertyInteger('VisualizationInputPower', 0);
         for ($i = 1; $i <= 3; ++$i) {
             $this->RegisterPropertyBoolean('VisualizationHeatingCircuit' . $i, $i === 1);
             $this->RegisterPropertyInteger('VisualizationRoomVariable' . $i, 0);
             $this->RegisterPropertyString('VisualizationRoomLabel' . $i, '');
+            $this->RegisterPropertyString('VisualizationRoomDisplay' . $i, 'both');
+            $this->RegisterPropertyInteger('VisualizationHeaterSwitch' . $i, 0);
         }
         $this->RegisterPropertyBoolean('VisualizationRoomIcons', true);
 
@@ -715,6 +721,9 @@ HTML;
                 'close' => $this->DataKey('MixerClose' . $i, 'mixerClose' . $i)];
         }
         $config['roomTemperatures'] = $this->GetVisualizationRoomSources();
+        $config['inputPower'] = $this->DataKey('InputPower', 'inputPower');
+        $config['heatingFlow'] = $this->DataKey('HeatingFlow', 'heatingFlow');
+        $config['dhwSetpoint'] = $this->DataKey('DHWSetpoint', 'dHWSetpoint');
         $config['computedCOP'] = $this->DataKey('ComputedCOP', 'computedCOP');
         $config['computedJAZ'] = $this->DataKey('ComputedJAZ', 'computedJAZ');
         $config['circuitWarning'] = '';
@@ -837,6 +846,26 @@ HTML;
             $key = lcfirst($property);
             $this->AddVariableData($data, $key, $property, str_starts_with($property, 'MixerOpen') || str_starts_with($property, 'MixerClose'));
         }
+        $input = $this->GetVisualizationVariableID('InputPower');
+        if ($input > 0) {
+            $power = $this->VisualizationPowerData($input, $input === $this->ReadPropertyInteger('kwin') ? 'kW' : 'W');
+            if ($power !== null) $data['inputPower'] = $power;
+            else unset($data['inputPower']);
+        }
+        $total = 0.0;
+        $sources = [];
+        $complete = true;
+        $selected = false;
+        for ($i = 1; $i <= 3; ++$i) {
+            $id = $this->ReadPropertyInteger('HeaterRod' . $i);
+            if ($id <= 0 || isset($sources[$id])) continue;
+            $selected = true;
+            $sources[$id] = true;
+            $power = $this->VisualizationPowerData($id, 'W');
+            if ($power === null) $complete = false;
+            else $total += $power['watts'];
+        }
+        if ($selected) $data['heaterRodTotalPower'] = ['value' => $complete ? $total : null, 'unit' => 'W', 'binary' => false];
         foreach ($this->GetVisualizationRoomSources() as $entry) {
             $id = $entry['variableId'];
             $data[$entry['key']] = ['variableId' => $id, 'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
@@ -939,6 +968,7 @@ HTML;
 
         return [
             'hasOperatingStatus'           => $hasOperatingStatus,
+            'heaterSwitches'               => $this->BuildVisualizationHeaters(),
             'operatingStatusValue'         => $operatingStatusValue,
             'operatingStatusCoolingValues' => $this->ReadPropertyString(
                 'OperatingStatusCoolingValues'
@@ -2595,6 +2625,37 @@ window.SymconHeatPump = {
                 menu.appendChild(button);
             });
 
+            menu.style.display = 'block';
+        };
+
+        const openHeaterMenu = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const menu = document.getElementById('wp-mode-menu');
+            if (!menu) return;
+            menu.replaceChildren();
+            const title = document.createElement('div');
+            title.className = 'wp-mode-title';
+            title.textContent = 'Heizstäbe';
+            menu.appendChild(title);
+            const heaters = Array.isArray(currentControls.heaterSwitches) ? currentControls.heaterSwitches : [];
+            heaters.forEach((heater) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.heater = String(heater.number);
+                button.disabled = !heater.configured;
+                const command = heater.configured ? (heater.currentValue ? 'Ausschalten' : 'Einschalten') : 'Nicht schaltbar';
+                const power = typeof heater.powerWatts === 'number' ? (heater.powerWatts / 1000).toFixed(2) + ' kW' : '—';
+                button.textContent = heater.label + ': ' + command + ' · ' + power;
+                button.addEventListener('click', (clickEvent) => {
+                    clickEvent.preventDefault();
+                    clickEvent.stopPropagation();
+                    if (!heater.configured) return;
+                    requestAction('SetHeaterSwitch', JSON.stringify({number:heater.number, value:!heater.currentValue}));
+                    closeModeMenu();
+                });
+                menu.appendChild(button);
+            });
             menu.style.display = 'block';
         };
 
@@ -5748,6 +5809,22 @@ window.SymconHeatPump = {
                 }
             });
 
+            const heaterControls = Array.isArray(controls.heaterSwitches) ? controls.heaterSwitches : [];
+            show('#gHeaterControlButton', heaterControls.length > 0);
+            const heaterButton = svg.querySelector('#gHeaterControlButton');
+            if (heaterButton) {
+                const onCount = heaterControls.filter((heater) => heater.currentValue === true).length;
+                setText('#textHeaterButtonState', onCount > 0 ? onCount + ' Ein' : heaterControls.some((heater) => heater.currentValue === false) ? 'Aus' : 'Übersicht');
+                heaterButton.style.cursor = 'pointer';
+                if (!heaterButton.dataset.bound) {
+                    bindTap(heaterButton, openHeaterMenu);
+                    heaterButton.addEventListener('keydown', (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') openHeaterMenu(event);
+                    });
+                    heaterButton.dataset.bound = '1';
+                }
+            }
+
             // Sichtbare Buttons lückenlos von links anordnen.
             const topButtons = [
                 '#gHPStatusWW',
@@ -5755,6 +5832,7 @@ window.SymconHeatPump = {
                 '#gHPStatusCooling',
                 '#gSymconWarmWaterSetpoint',
                 '#gSymconHeatingCorrection',
+                '#gHeaterControlButton',
                 '#gSettings'
             ];
             let nextButtonX = 28;
@@ -5934,21 +6012,15 @@ window.SymconHeatPump = {
             show('#textIndoorTemperatureValue', rooms.length === 0);
             show('#indoorDefaultIcon', rooms.length === 0);
             const roomHeading = svg.querySelector('#textIndoorTemperatureLabel');
-            if (roomHeading) roomHeading.textContent = rooms.length === 1 ? (rooms[0].label || 'Innentemperatur') : 'Innentemperatur';
-            if (roomHeading) {
-                roomHeading.removeAttribute('textLength');
-                roomHeading.removeAttribute('lengthAdjust');
-                if (roomHeading.getComputedTextLength() > 250) {
-                    roomHeading.setAttribute('textLength', '250');
-                    roomHeading.setAttribute('lengthAdjust', 'spacingAndGlyphs');
-                }
-            }
+            if (roomHeading) { roomHeading.textContent = ''; show('#textIndoorTemperatureLabel', false); }
             rooms.forEach((room, index) => {
                 const single = rooms.length === 1;
-                const size = single ? 48 : (rooms.length === 2 ? 27 : 19);
-                const y = single ? 350 : 338 + index * (rooms.length === 2 ? 40 : 25);
+                const size = single ? 54 : (rooms.length === 2 ? 31 : 27);
+                const y = single ? 343 : (rooms.length === 2 ? 316 + index * 47 : 307 + index * 35);
                 const row = node(roomGroup, 'g', {id: 'gRoomTemperature' + (index + 1)});
-                if (room.icon !== 'none') {
+                const showIcon = room.display !== 'name' && room.icon !== 'none';
+                const showName = room.display !== 'icon';
+                if (showIcon) {
                     if (room.icon && /^fa-(light|regular|solid|brands|kit) fa-[a-z0-9-]+$/.test(room.icon)) {
                         const icon = node(row, 'foreignObject', {x: 59, y, width: size + 5, height: size + 2});
                         const body = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
@@ -5963,11 +6035,12 @@ window.SymconHeatPump = {
                             transform:'translate(59 ' + y + ') scale(' + size / 48 + ')'});
                     }
                 }
-                if (!single) fittedText(row, {class:'sm', x:96, y:y + size * .8}, room.label || 'Raum', 108);
-                fittedText(row, {id:'textRoomTemperature' + (index + 1), class:'md', x:single ? 135 : 305,
+                if (showName) fittedText(row, {id:'textRoomName' + (index + 1), class:'sm', x:single || !showIcon ? 55 : 101, y:single ? 325 : y + size * .8,
+                    style:'font-size:' + (single ? 19 : 18) + 'px'}, room.label || 'Raum', single ? 250 : showIcon ? 103 : 149);
+                fittedText(row, {id:'textRoomTemperature' + (index + 1), class:'md', x:single ? (showIcon ? 135 : 55) : 305,
                     y:single ? 393 : y + size * .8, 'text-anchor':single ? 'start' : 'end',
-                    style:'font-size:' + (single ? 38 : rooms.length === 2 ? 24 : 18) + 'px'},
-                    formatted(room.key), single ? 175 : 94);
+                    style:'font-size:' + (single ? 42 : rooms.length === 2 ? 26 : 23) + 'px'},
+                    formatted(room.key), single ? (showIcon ? 175 : 250) : 94);
             });
 
             // Mixer telemetry sits at the heat pump, before the heating distributor.
@@ -5983,63 +6056,51 @@ window.SymconHeatPump = {
                     fill:'none', stroke:'var(--wp-icon)', 'stroke-width':1.5});
                 return symbol;
             };
-            mixers.forEach((mixer, index) => {
-                const card = node(mixerGroup, 'g', {id:'gMixerReading' + mixer.number, transform:'translate(' + (43 + index * 208) + ' 453)'});
-                node(card, 'rect', {class:'pn', width:200, height:56, rx:5});
-                node(card, 'text', {class:'sm', x:8, y:16, style:'font-weight:bold;font-size:15px'}, 'Mischkreis ' + mixer.number);
-                if (mixer.number > 1) mixerSymbol(card, mixer, 182, 13, 10);
-                fittedText(card, {id:'textMixerActual' + mixer.number, class:'sm', x:8, y:34, style:'font-size:14px'},
-                    formatted(mixer.actual) ? 'Ist ' + formatted(mixer.actual) : '', 116);
-                fittedText(card, {id:'textMixerTarget' + mixer.number, class:'sm', x:8, y:50, style:'font-size:14px'},
-                    formatted(mixer.target) ? 'Soll ' + formatted(mixer.target) : '', 116);
-                node(card, 'text', {id:'textMixerOpen' + mixer.number, class:'sm', x:128, y:33, style:'font-size:13px'}, 'Auf: ' + relay(mixer.open));
-                node(card, 'text', {id:'textMixerClose' + mixer.number, class:'sm', x:128, y:49, style:'font-size:13px'}, 'Zu: ' + relay(mixer.close));
-            });
+            mixerGroup.remove();
             const mixerValve = group('gPrimaryMixerValve', svg.querySelector('#main'));
+            const mixerReadings = group('gMixerValveReadings', svg.querySelector('#main'));
             if (mixers.length && heating) {
                 node(mixerValve, 'path', {class:'cold', d:'M720 565H750V524'});
                 mixerSymbol(mixerValve, mixers[0], 750, 510, 14);
-                node(mixerValve, 'text', {class:'sm', x:773, y:515, style:'font-size:13px'}, 'Mischer 1');
+                mixers.forEach((mixer, index) => {
+                    const readings = node(mixerReadings, 'g', {transform:'translate(773 ' + (470 + index * 55) + ')'});
+                    node(readings, 'text', {class:'sm', x:0, y:0, style:'font-size:13px'}, 'Mischer ' + mixer.number);
+                    fittedText(readings, {id:'textMixerActual' + mixer.number, class:'sm', x:0, y:15, style:'font-size:13px'},
+                        'Ist ' + (formatted(mixer.actual) || '—'), 118);
+                    fittedText(readings, {id:'textMixerTarget' + mixer.number, class:'sm', x:0, y:30, style:'font-size:13px'},
+                        'Soll ' + (formatted(mixer.target) || '—'), 118);
+                    node(readings, 'text', {id:'textMixerOpen' + mixer.number, class:'sm', x:0, y:45, style:'font-size:11px'}, 'Auf: ' + relay(mixer.open));
+                    node(readings, 'text', {id:'textMixerClose' + mixer.number, class:'sm', x:60, y:45, style:'font-size:11px'}, 'Zu: ' + relay(mixer.close));
+                });
             }
+
+            // The information panel keeps its size; operating data replaces VL/RL.
+            show('#textSupplyTemperatureValue', false);
+            show('#textReturnTemperatureValue', false);
+            show('#textHeaterRodStatus', false);
+            show('#gHeaterRodWaves', false);
+            const info = svg.querySelector('#info');
             const status = svg.querySelector('#textHPStatus');
             if (status) {
-                status.setAttribute('x', mixers.length ? '250' : '55');
-                status.setAttribute('y', mixers.length ? '898' : '480');
-                status.style.fontSize = mixers.length ? '20px' : '';
+                info.appendChild(status);
+                status.setAttribute('x', '365');
+                status.setAttribute('y', '185');
+                status.style.fontSize = '20px';
             }
-            const efficiency = group('gEfficiency', svg.querySelector('#heatPump'));
-            [[cfg.computedCOP, 'COP'], [cfg.computedJAZ, 'JAZ']].filter(([key]) => formatted(key) !== '').forEach(([key, label], index) => {
-                node(efficiency, 'text', {class:'sm', x:60, y:865 + index * 28}, label);
-                fittedText(efficiency, {id:'textComputed' + label, class:'md', x:225, y:865 + index * 28,
-                    'text-anchor':'end', style:'font-size:23px'}, formatted(key), 105);
+            const efficiency = group('gEfficiency', info);
+            [[cfg.computedCOP, 'COP', 365, 480], [cfg.computedJAZ, 'JAZ', 505, 650]].forEach(([key, label, x, right]) => {
+                node(efficiency, 'text', {class:'sm', x, y:248}, label);
+                fittedText(efficiency, {id:'textComputed' + label, class:'md', x:right, y:248,
+                    'text-anchor':'end', style:'font-size:22px'}, formatted(key) || '—', 65);
             });
-
-            setText('#textSupplyTemperatureValue', formatted(cfg.supplyTemperature));
-            const returnValue = svg.querySelector('#textReturnTemperatureValue');
-            if (returnValue) {
-                const actual = formatted(cfg.heatPumpReturnTemperature || cfg.refluxTemperatureHeating);
-                const target = formatted(cfg.returnTemperatureSetpoint);
-                // Keep the existing info box; move the values towards their label.
-                returnValue.setAttribute('x', '462');
-                returnValue.style.fontSize = target ? '21px' : '25px';
-                returnValue.removeAttribute('textLength');
-                returnValue.removeAttribute('lengthAdjust');
-                returnValue.replaceChildren();
-                const actualSpan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                actualSpan.setAttribute('id', 'textReturnTemperatureActualValue');
-                actualSpan.textContent = actual;
-                returnValue.appendChild(actualSpan);
-                const targetSpan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                targetSpan.setAttribute('id', 'textReturnTemperatureSetpointValue');
-                targetSpan.style.fontSize = '17px';
-                targetSpan.textContent = target ? (actual ? ' / Soll ' : 'Soll ') + target : '';
-                returnValue.appendChild(targetSpan);
-                // Long profile suffixes must also stay inside the unchanged frame.
-                const availableWidth = 650 - 462 - 2;
-                if (returnValue.getComputedTextLength() > availableWidth) {
-                    returnValue.setAttribute('textLength', String(availableWidth));
-                    returnValue.setAttribute('lengthAdjust', 'spacingAndGlyphs');
-                }
+            const inputPower = group('gInputPower', info);
+            const inputWatts = data[cfg.inputPower]?.watts;
+            const powerText = (watts) => typeof watts === 'number' && Number.isFinite(watts) ? (watts / 1000).toFixed(2) + ' kW' : '—';
+            fittedText(inputPower, {id:'textInputPower', class:'md', x:650, y:385, 'text-anchor':'end', style:'font-size:23px'}, powerText(inputWatts), 100);
+            const heatOutput = svg.querySelector('#textPowerValue');
+            if (heatOutput) {
+                heatOutput.setAttribute('x', '650');
+                heatOutput.setAttribute('text-anchor', 'end');
             }
 
             // Each sensor keeps its physical level, even if the other sensors
@@ -6055,11 +6116,29 @@ window.SymconHeatPump = {
                 });
             };
 
-            placeTankValues([
-                ['#textTankTempWWUp', cfg.tankTempWWUp, 85],
-                ['#textTankTempWWMiddle', cfg.tankTempWWMiddle, 162],
-                ['#textTankTempWWDown', cfg.tankTempWWDown, 240]
-            ]);
+            // DHW has one measured actual value and one setpoint, never three levels.
+            ['#textTankTempWWUp', '#textTankTempWWMiddle', '#textTankTempWWDown'].forEach((selector) => {
+                setText(selector, '');
+                show(selector, false);
+            });
+            const dhwReadings = group('gDHWTemperatures', svg.querySelector('#gDHW'));
+            [['Ist', cfg.tankTempWWMiddle, 685], ['Soll', cfg.dhwSetpoint, 745]].forEach(([label, key, y]) => {
+                node(dhwReadings, 'text', {class:'sm', x:925, y:y - 23}, label);
+                fittedText(dhwReadings, {id:'textDHW' + label, class:'md', x:1055, y, 'text-anchor':'end'}, formatted(key) || '—', 130);
+            });
+            const boilerPower = group('gBoilerHeaterPower', svg.querySelector('#gDHW'));
+            const total = data.heaterRodTotalPower?.value;
+            if (data.heaterRodTotalPower) {
+                const active = typeof total === 'number' && total > 0;
+                node(boilerPower, 'path', {id:'pathBoilerHeatBolt', d:'M945 782L934 804H944L939 824L958 798H948L954 782Z',
+                    fill:'#ffc51b', class:active ? 'wp-boiler-heater-active' : '', opacity:active ? 1 : .35});
+                fittedText(boilerPower, {id:'textBoilerHeaterPower', class:'sm', x:1055, y:813, 'text-anchor':'end'}, powerText(total), 93);
+            }
+            let heaterStyle = svg.querySelector('#boilerHeaterStyle');
+            if (!heaterStyle) {
+                heaterStyle = node(svg, 'style', {id:'boilerHeaterStyle'});
+                heaterStyle.textContent = '@keyframes boilerHeatPulse{0%,100%{opacity:.45}50%{opacity:1}}.wp-boiler-heater-active{animation:boilerHeatPulse 1.6s ease-in-out infinite}@media(prefers-reduced-motion:reduce){.wp-boiler-heater-active{animation:none}}';
+            }
 
             placeTankValues([
                 ['#textTankTempHPUp', cfg.tankTempHPUp, 82],
@@ -6080,6 +6159,18 @@ window.SymconHeatPump = {
                 const refluxSelector = n === 1 ? '#textRefluxTemperatureHeating' : '#textRefluxTemperatureHeating' + n;
                 setText(supplySelector, formatted(supply));
                 setText(refluxSelector, formatted(reflux));
+                {
+                    const hasTarget = formatted(cfg.returnTemperatureSetpoint) !== '';
+                    const offset = (n - 1) * 120;
+                    const name = svg.querySelector('#textHeatingCircuitName' + n);
+                    if (name) name.setAttribute('y', String((hasTarget ? 228 : 232) + offset));
+                    [[supplySelector, hasTarget ? 252 : 265], [refluxSelector, hasTarget ? 274 : 297]].forEach(([selector, y]) => {
+                        const el = svg.querySelector(selector);
+                        if (!el) return;
+                        el.setAttribute('y', y + offset);
+                        if (el.previousElementSibling) el.previousElementSibling.setAttribute('y', y + offset);
+                    });
+                }
                 // A mixed circuit does not imply a measured return temperature.
                 [[supplySelector, supply], [refluxSelector, reflux]].forEach(([selector, key]) => {
                     const element = svg.querySelector(selector);
@@ -6130,6 +6221,28 @@ window.SymconHeatPump = {
             // Wärmepumpen-Status: ausschließlich der formatierte Profilwert
             // der konfigurierten Betriebsstatusvariable. Keine erfundenen Texte.
             setText('#textHPStatus', cfg.operatingStatus ? formatted(cfg.operatingStatus) : '');
+            if (status) {
+                status.removeAttribute('textLength');
+                status.removeAttribute('lengthAdjust');
+                if (status.getComputedTextLength() > 285) {
+                    status.setAttribute('textLength', '285');
+                    status.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+                }
+            }
+            const circuitTargets = group('gCircuitReturnTargets', svg.querySelector('#gHeating'));
+            const flow = formatted(cfg.heatingFlow);
+            const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
+            if (flow !== '') {
+                node(flowReadings, 'text', {class:'sm', x:710, y:610, 'text-anchor':'end', style:'font-size:14px'}, 'Durchfluss');
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:710, y:632,
+                    'text-anchor':'end', style:'font-size:16px'}, flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 75);
+            }
+            [hk1, hk2, hk3].forEach((enabled, index) => {
+                if (!enabled || !formatted(cfg.returnTemperatureSetpoint)) return;
+                const prefix = heatingCircuitCount > 1 || !hk1 ? 'WP RL Soll ' : 'RL Soll ';
+                fittedText(circuitTargets, {id:'textHeatingReturnTarget' + (index + 1), class:'sm', x:1510, y:302 + index * 120,
+                    'text-anchor':'end', style:'font-size:14px'}, prefix + formatted(cfg.returnTemperatureSetpoint), 240);
+            });
 
             // Touch handling. Bind once per SVG element.
             [
@@ -6387,8 +6500,7 @@ window.SymconHeatPump = {
             // Heizstab-Anzeige im modernen Renderer ebenfalls aktualisieren.
             // Bisher wurde diese Funktion nur im klassischen Renderer aufgerufen,
             // weil applyModernDashboard() vorher mit true zurückkehrt.
-            applyHeaterRodInfoField(card);
-            applyThreeHeaterRods(card);
+            // Heater power is aggregated in the backend and shown only inside DHW.
 
             return true;
         };
@@ -6901,6 +7013,13 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 return $id;
             }
         }
+        if ($property === 'InputPower') {
+            foreach (['VisualizationInputPower', 'kwin'] as $fallback) {
+                $id = $this->ReadPropertyInteger($fallback);
+                if ($id > 0 && IPS_VariableExists($id)) return $id;
+            }
+            return 0;
+        }
         if (isset(self::VISUALIZATION_EXTRA_IDENT_MAP[$property])) return 0;
         $configured = $this->ReadPropertyInteger($property);
         return $configured > 0 && IPS_VariableExists($configured) ? $configured : 0;
@@ -6949,6 +7068,46 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         $variable = IPS_GetVariable($id);
         return in_array((int)$variable['VariableType'], [1, 2], true)
             && (int)($variable['VariableCustomAction'] ?: $variable['VariableAction']) > 0;
+    }
+
+    private function BuildVisualizationHeaters(): array
+    {
+        $heaters = [];
+        for ($i = 1; $i <= 3; ++$i) {
+            $switchID = $this->ReadPropertyInteger('VisualizationHeaterSwitch' . $i);
+            $powerID = $this->ReadPropertyInteger('HeaterRod' . $i);
+            if ($switchID <= 0 && $powerID <= 0) continue;
+            $exists = $switchID > 0 && IPS_VariableExists($switchID);
+            $variable = $exists ? IPS_GetVariable($switchID) : [];
+            $boolean = $exists && (int)$variable['VariableType'] === VARIABLETYPE_BOOLEAN;
+            $action = (int)($variable['VariableCustomAction'] ?? 0) ?: (int)($variable['VariableAction'] ?? 0);
+            $power = $powerID > 0 ? $this->VisualizationPowerData($powerID, 'W') : null;
+            $heaters[] = ['number' => $i, 'label' => 'Heizstab ' . $i, 'variableId' => $exists ? $switchID : 0,
+                'configured' => $boolean && $action > 1 && $action !== $this->InstanceID && IPS_GetParent($switchID) !== $this->InstanceID && $this->ReadPropertyBoolean('InstanceStatus'),
+                'currentValue' => $boolean ? (bool)GetValue($switchID) : null,
+                'powerWatts' => $power['watts'] ?? null];
+        }
+        return $heaters;
+    }
+
+    private function HandleHeaterSwitchAction(mixed $value): void
+    {
+        $payload = is_string($value) ? json_decode($value, true, 512, JSON_THROW_ON_ERROR) : $value;
+        if (!is_array($payload) || !isset($payload['number']) || !is_int($payload['number'])
+            || $payload['number'] < 1 || $payload['number'] > 3 || !isset($payload['value']) || !is_bool($payload['value'])) {
+            throw new InvalidArgumentException('Ungültiger Heizstab-Schaltauftrag.');
+        }
+        foreach ($this->BuildVisualizationHeaters() as $heater) {
+            if ($heater['number'] !== $payload['number']) continue;
+            if (!$heater['configured']) throw new RuntimeException('Keine aktive externe Boolean-Schaltaktion für diesen Heizstab.');
+            // Only the configured target is resolved server-side. Never set the variable directly.
+            if (!\RequestAction($heater['variableId'], $payload['value'])) {
+                throw new RuntimeException('Die Heizstab-Schaltaktion wurde nicht ausgeführt.');
+            }
+            $this->RefreshVisualization();
+            return;
+        }
+        throw new RuntimeException('Dieser Heizstab ist nicht konfiguriert.');
     }
 
     private function HandleVisualizationAction(string $action, mixed $value): void
@@ -7089,7 +7248,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         }
         unset($element);
         $items = [
-            ['type' => 'Label', 'caption' => 'Komponenten auswählen; interne Werte werden über die Idents dieser Instanz gelesen. Benötigte Messpunkte wie bisher in der ID-Liste aktivieren. Interne Zusatzwerte dort mit „Fußzeile“ auswählen.'],
+            ['type' => 'Label', 'caption' => 'Komponenten auswählen; die Grafik erhält ihre internen Messwerte automatisch, unabhängig von der ID-Liste. Interne Zusatzwerte dort mit „Fußzeile“ auswählen.'],
             ['type' => 'RowLayout', 'items' => [
                 ['type' => 'CheckBox', 'name' => 'TankHP', 'caption' => 'Pufferspeicher'],
                 ['type' => 'CheckBox', 'name' => 'TankWW', 'caption' => 'Warmwasserspeicher'],
@@ -7097,10 +7256,16 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             ]],
             ['type' => 'RowLayout', 'items' => array_map(static fn(int $i): array =>
                 ['type' => 'CheckBox', 'name' => 'VisualizationHeatingCircuit' . $i, 'caption' => 'Heizkreis ' . $i], range(1, 3))],
-            ['type' => 'Label', 'caption' => 'Mischkreis 1 wird immer angezeigt, weitere automatisch bei vorhandenen Werten. COP/JAZ erscheinen über die bestehende Zählerkonfiguration unter dem Heizgerät.'],
+            ['type' => 'Label', 'caption' => 'Mischerdaten stehen beim Ventil. COP/JAZ erscheinen im Infobereich.'],
+            $this->VariableSelect('Externe Eingangsleistung (W/kW; optional, sonst bisherige COP-Leistungsquelle)', 'VisualizationInputPower'),
+            ['type' => 'ExpansionPanel', 'caption' => 'Heizstäbe', 'items' => [
+                ['type' => 'Label', 'caption' => 'Gemessene Leistungen in W oder kW laut Variablenprofil; ohne Einheit wird W verwendet. Schaltzustände liefern keine Leistung.'],
+                ...array_map(fn(int $i): array => ['type' => 'RowLayout', 'items' => [
+                    $this->VariableSelect('Ist-Leistung Heizstab ' . $i, 'HeaterRod' . $i),
+                    $this->VariableSelect('Schalter Heizstab ' . $i . ' (Boolean mit Aktion)', 'VisualizationHeaterSwitch' . $i)
+                ]], range(1, 3))
+            ]],
             ['type' => 'ExpansionPanel', 'caption' => 'Bis zu drei Innentemperaturen', 'items' => $this->VisualizationRoomFields()],
-            ['type' => 'Select', 'name' => 'HeaterRodCount', 'caption' => 'Anzahl Heizstäbe',
-                'options' => array_map(static fn(int $i): array => ['caption' => (string)$i, 'value' => $i], range(0, 3))],
             ['type' => 'ExpansionPanel', 'caption' => 'Drei optionale Fremdvariablen – frei benennbar', 'items' => $this->VisualizationExternalFooterFields()]
         ];
         $form['elements'][] = ['type' => 'ExpansionPanel', 'caption' => 'HTML-SDK / Visualisierung', 'items' => $items];
@@ -7121,6 +7286,34 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         return true;
     }
 
+    private function GetVisualizationRequiredPointIDs(): array
+    {
+        $idents = [];
+        foreach (self::LUXTRONIK_IDENT_MAP + self::VISUALIZATION_EXTRA_IDENT_MAP as $property => $candidates) {
+            if (preg_match('/^Mixer(?:Actual|Target|Open|Close)([23])$/D', $property, $match)
+                && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[1])) continue;
+            if ($property === 'ThermalSolarPanelTemp' && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
+            foreach ($candidates as $ident) $idents[$ident] = true;
+        }
+        $result = [];
+        foreach (self::DATA_POINT_CONFIG as $id => $point) {
+            if (isset($idents[$point['name']])) $result[$id] = true;
+        }
+        return $result;
+    }
+
+    private function VisualizationPowerData(int $id, string $fallbackUnit): ?array
+    {
+        if (!IPS_VariableExists($id)) return null;
+        $value = GetValue($id);
+        if (is_bool($value) || !is_numeric($value) || !is_finite((float)$value) || $value < 0) return null;
+        $unit = trim($this->GetVariableUnit($id));
+        if ($unit === '') $unit = $fallbackUnit;
+        if (!in_array(strtolower($unit), ['w', 'kw'], true)) return null;
+        return ['variableId' => $id, 'value' => $value, 'watts' => $value * (strtolower($unit) === 'kw' ? 1000 : 1),
+            'formatted' => GetValueFormatted($id), 'unit' => $unit, 'binary' => false];
+    }
+
     private function GetVisualizationRoomSources(): array
     {
         $sources = [];
@@ -7136,8 +7329,10 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                     if ($profile !== '' && IPS_VariableProfileExists($profile)) $icon = (string)(IPS_GetVariableProfile($profile)['Icon'] ?? '');
                 }
             }
+            $display = $this->ReadPropertyString('VisualizationRoomDisplay' . $i);
             $sources[] = ['key' => 'roomTemperature' . $i, 'variableId' => $id,
                 'label' => $label === '' ? IPS_GetName($id) : $label,
+                'display' => in_array($display, ['name', 'icon', 'both'], true) ? $display : 'both',
                 'icon' => $this->VisualizationIconClass($icon)];
         }
         return $sources;
@@ -7159,7 +7354,9 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         for ($i = 1; $i <= 3; ++$i) {
             $fields[] = ['type' => 'RowLayout', 'items' => [
                 ['type' => 'ValidationTextBox', 'name' => 'VisualizationRoomLabel' . $i, 'caption' => 'Raum ' . $i . ' (leer = Variablenname)'],
-                $this->VariableSelect('Temperatur ' . $i, 'VisualizationRoomVariable' . $i)
+                $this->VariableSelect('Temperatur ' . $i, 'VisualizationRoomVariable' . $i),
+                ['type' => 'Select', 'name' => 'VisualizationRoomDisplay' . $i, 'caption' => 'Anzeige',
+                    'options' => [['caption' => 'Name und Icon', 'value' => 'both'], ['caption' => 'Nur Name', 'value' => 'name'], ['caption' => 'Nur Icon', 'value' => 'icon']]]
             ]];
         }
         return $fields;

@@ -104,15 +104,13 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 page.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
                 page.wait_for_timeout(250)
                 assert page.locator('#wp-error').text_content()==''
-                result=page.evaluate('''() => {
-                    const box=document.querySelector('#info > rect');
-                    const text=document.querySelector('#textReturnTemperatureValue');
-                    const bounds=text.getBBox();
-                    return {width:box.getAttribute('width'),actual:document.querySelector('#textReturnTemperatureActualValue').textContent,target:document.querySelector('#textReturnTemperatureSetpointValue').textContent,x:bounds.x,right:bounds.x+bounds.width};
-                }''')
-                assert result['width']=='650',result
-                assert result['actual']=='28.9 °C' and result['target']==' / Soll 30.0 °C',result
-                assert result['x']==462 and result['right']<=650.1,result
+                result={'panel':'status, COP/JAZ, heating and input power'}
+                assert page.locator('#info > rect').get_attribute('width')=='650'
+                assert page.locator('#info #textHPStatus').count()==1
+                assert page.locator('#heatPump #textHPStatus').count()==0
+                assert 'Heizleistung' in page.locator('#info').text_content()
+                assert 'Eingangsleistung' in page.locator('#info').text_content()
+                assert page.locator('#textSupplyTemperatureValue').evaluate('e=>getComputedStyle(e).display')=='none'
                 payload=page.evaluate('''() => {
                     const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
                     return JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
@@ -247,89 +245,33 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert len(luxtronik.commands)==commands_before
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',payload)
                 assert not page.locator('#gSettings').is_visible()
-                target_key=payload['config']['returnTemperatureSetpoint']
-                actual_key=payload['config'].get('heatPumpReturnTemperature') or payload['config']['refluxTemperatureHeating']
-                # Missing tank sensors must leave no stale or synthetic readings.
-                tanks=[
-                    ('tankTempWW', 'textTankTempWW', {'Up':85,'Middle':162,'Down':240}),
-                    ('tankTempHP', 'textTankTempHP', {'Up':82,'Middle':158,'Down':232}),
-                ]
-                def tank_readings():
-                    return page.evaluate('''() => Object.fromEntries(
-                        [...document.querySelectorAll('text[id^="textTankTemp"]')].map(e=>[
-                            e.id,{text:e.textContent,display:getComputedStyle(e).display,y:Number(e.getAttribute('y'))}
-                        ])
-                    )''')
-                def update_tanks(p):
-                    page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',p)
-                for active in [[],['Up'],['Up','Down'],['Up','Middle','Down']]:
-                    changed=json.loads(json.dumps(payload))
-                    for key_prefix, text_prefix, positions in tanks:
-                        for suffix in ['Up','Middle','Down']:
-                            if suffix not in active:
-                                # Retain old data deliberately: an unlinked config must win.
-                                changed['config'][key_prefix+suffix]=''
-                    update_tanks(changed)
-                    readings=tank_readings()
-                    for key_prefix, text_prefix, positions in tanks:
-                        for suffix in ['Up','Middle','Down']:
-                            reading=readings[text_prefix+suffix]
-                            if suffix in active:
-                                assert reading['text']=='25.5' and reading['display']!='none',reading
-                                assert reading['y']==positions[suffix],reading
-                            else:
-                                assert reading['text']=='' and reading['display']=='none',reading
-                # Boiler loading must not synthesize temperatures from the heating circuit.
-                boiler=json.loads(json.dumps(payload))
-                boiler['config']['heatingCircuitType1']='underfloor'
-                boiler['config']['heatingCircuitType2']='off'
-                boiler['config']['heatingCircuitType3']='off'
-                boiler['config']['singleCircuitHotWaterTemperatureSwitch']=True
-                boiler['config']['wwHeatingValve']='testBoilerValve'
-                boiler['data']['testBoilerValve']={'value':True,'formatted':'On'}
+                # DHW uses only actual/setpoint; other stored sensor selections are retained but hidden.
+                assert page.locator('#textDHWIst').text_content()=='25.5'
+                assert page.locator('#textDHWSoll').text_content().startswith('50')
+                assert page.locator('#main #textHeatingFlow').text_content()=='607 l/h'
                 for suffix in ['Up','Middle','Down']:
-                    boiler['config']['tankTempWW'+suffix]=''
-                update_tanks(boiler)
-                for suffix in ['Up','Middle','Down']:
-                    assert tank_readings()['textTankTempWW'+suffix]['text']==''
+                    assert page.locator('#textTankTempWW'+suffix).evaluate('e=>getComputedStyle(e).display')=='none'
                 assert page.locator('#symconBoilerSupplyTemperature,#symconBoilerRefluxTemperature').count()==0
-                boiler['config']['tankTempWWMiddle']='testDHWActual'
-                boiler['data']['testDHWActual']={'value':48.5,'formatted':'48.5 °C'}
-                update_tanks(boiler)
-                readings=tank_readings()
-                assert '48.5' in readings['textTankTempWWMiddle']['text']
-                assert readings['textTankTempWWMiddle']['y']==162
-                assert readings['textTankTempWWUp']['text']==readings['textTankTempWWDown']['text']==''
-                assert page.locator('#symconBoilerSupplyTemperature,#symconBoilerRefluxTemperature').count()==0
-                # A selected sensor may subsequently lose its data or yield no value.
-                for missing_value in ['missing',None,'','   ']:
-                    changed=json.loads(json.dumps(payload))
-                    for key_prefix, _, _ in tanks:
-                        for suffix in ['Up','Middle','Down']:
-                            key=changed['config'][key_prefix+suffix]
-                            if missing_value=='missing':
-                                changed['data'].pop(key,None)
-                            else:
-                                changed['data'][key].update(value=missing_value,formatted='57.2 °C')
-                    update_tanks(changed)
-                    for reading in tank_readings().values():
-                        assert reading['text']=='' and reading['display']=='none',reading
-                # Zero is a legitimate measurement; the component preview adds no data.
-                zero=json.loads(json.dumps(payload))
-                for key_prefix, _, _ in tanks:
-                    for suffix in ['Up','Middle','Down']:
-                        zero['data'][zero['config'][key_prefix+suffix]].update(value=0,formatted='0.0 °C')
-                update_tanks(zero)
-                for reading in tank_readings().values():
-                    assert reading['text']=='0.0 °C' and reading['display']!='none',reading
-                zero['config']['fullConfigurationPreview']=True
-                for key_prefix, _, _ in tanks:
-                    for suffix in ['Up','Middle','Down']:
-                        zero['config'][key_prefix+suffix]=''
-                update_tanks(zero)
-                for reading in tank_readings().values():
-                    assert reading['text']=='' and reading['display']=='none',reading
-                update_tanks(payload)
+                for index in [1,2,3]:
+                    assert page.locator('#textHeatingReturnTarget'+str(index)).text_content()=='WP RL Soll 30.0 °C'
+                positions=page.evaluate('''()=>{
+                    const box=(id)=>document.querySelector('#'+id).getBoundingClientRect();
+                    return {rlBottom:box('textRefluxTemperatureHeating').bottom,targetTop:box('textHeatingReturnTarget1').top};
+                }''')
+                assert positions['rlBottom']<positions['targetTop'],positions
+                assert page.locator('#textHeaterRodStatus').evaluate('e=>getComputedStyle(e).display')=='none'
+                assert page.locator('#pathBoilerHeatBolt').get_attribute('class')=='wp-boiler-heater-active'
+                assert page.locator('#textBoilerHeaterPower').text_content()=='0.08 kW'
+                changed=json.loads(json.dumps(payload))
+                changed['data']['heaterRodTotalPower']['value']=0
+                changed['data'][changed['config']['inputPower']]['watts']=1800
+                changed['data'][changed['config']['dhwSetpoint']].update(value=52.5,formatted='52.5 °C')
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
+                assert page.locator('#textInputPower').text_content()=='1.80 kW'
+                assert page.locator('#textDHWSoll').text_content()=='52.5 °C'
+                assert page.locator('#pathBoilerHeatBolt').get_attribute('class')==''
+                assert page.locator('#textBoilerHeaterPower').text_content()=='0.00 kW'
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
                 # Drive real numeric popups and capture only simulated SDK actions.
                 page.evaluate('''() => {
                     window.testActions=[];
@@ -366,6 +308,31 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                         assert page.evaluate('window.testActions.length')==before
                         page.keyboard.press('Escape')
                 page.evaluate('(controls)=>window.handleMessage({type:"update",controls})',payload['controls'])
+                # External heater actions use configured numbers; no object IDs come from the browser.
+                page.evaluate('(url)=>window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:url}})',web_url)
+                order=page.evaluate('''()=>['gSymconHeatingCorrection','gHeaterControlButton','gSettings'].map(id=>{
+                    const r=document.querySelector('#'+id).getBoundingClientRect();return {x:r.x,right:r.right};
+                })''')
+                assert order[0]['right']<order[1]['x'] and order[1]['right']<order[2]['x'],order
+                page.locator('#gHeaterControlButton').dispatch_event('click')
+                assert 'Einschalten' in page.locator('#wp-mode-menu [data-heater="1"]').text_content()
+                page.locator('#wp-mode-menu [data-heater="1"]').click()
+                assert page.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':True}}
+                heater_controls=json.loads(json.dumps(payload['controls']))
+                heater_controls['heaterSwitches'][0]['currentValue']=True
+                heater_controls['heaterSwitches'][2]['configured']=False
+                page.evaluate('(controls)=>window.handleMessage({type:"update",controls})',heater_controls)
+                assert page.locator('#textHeaterButtonState').text_content()=='1 Ein'
+                page.locator('#gHeaterControlButton').focus()
+                page.keyboard.press('Enter')
+                assert 'Ausschalten' in page.locator('#wp-mode-menu [data-heater="1"]').text_content()
+                assert page.locator('#wp-mode-menu [data-heater="3"]').is_disabled()
+                before=page.evaluate('window.testActions.length')
+                page.locator('#wp-mode-menu [data-heater="3"]').dispatch_event('click')
+                assert page.evaluate('window.testActions.length')==before
+                page.locator('#wp-mode-menu [data-heater="1"]').click()
+                assert page.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':False}}
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,controls:p.controls})',payload)
                 # Exact-Ident readings feed the display and schematic compressor speed.
                 def compressor_reading(speed, running=True, configure_speed=True,
                                        configure_running=True, missing_speed=False):
@@ -435,15 +402,6 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     if entity in idle['data']: idle['data'][entity]['value']=0
                 page.evaluate('(p) => window.handleMessage({type:"update",data:p.data,controls:p.controls})',idle)
                 assert page.locator('.wp-live-flow').count()==0
-                payload['data'][target_key]['formatted']='-123.45 °C langer Profiltext'
-                page.evaluate('(p) => window.handleMessage({type:"update",data:p.data,controls:p.controls})',payload)
-                assert page.evaluate('document.querySelector("#textReturnTemperatureValue").getBBox().x+document.querySelector("#textReturnTemperatureValue").getBBox().width')<=650.1
-                payload['data'].pop(target_key)
-                page.evaluate('(p) => window.handleMessage({type:"update",data:p.data,controls:p.controls})',payload)
-                assert page.locator('#textReturnTemperatureSetpointValue').text_content()==''
-                payload['data'].pop(actual_key)
-                page.evaluate('(p) => window.handleMessage({type:"update",data:p.data,controls:p.controls})',payload)
-                assert page.locator('#textReturnTemperatureValue').text_content()==''
                 assert not errors,errors
                 print(json.dumps({'viewport':width,**result,'updates':'PASS'}))
                 page.close()
@@ -463,20 +421,20 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert '50' in mixed.locator('#textSupplyTemperatureHeating').text_content()
                 assert mixed.locator('#textSupplyTemperatureHeating2').text_content()==''
                 assert mixed.locator('#textRefluxTemperatureHeating3').text_content()==''
-                assert '40' in mixed.locator('#textReturnTemperatureActualValue').text_content()
+                assert mixed.locator('#gMixerReadings').count()==0
                 assert mixed.locator('[id^="gHKMixer"]').count()==0
                 assert mixed.locator('[id^="pathHKMixingReturn"]').count()==0
                 assert mixed.locator('#textComputedCOP').text_content()=='4.25'
                 assert mixed.locator('#textComputedJAZ').text_content()=='3.75'
                 geometry=mixed.evaluate("""()=>{
                     const box=(id)=>{const b=document.querySelector('#'+id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom};};
-                    return Object.fromEntries(['gMixerReadings','gHeatingManifold','heatPumpPanel','switchValve','gHPUnitCabinet','gEfficiency','gRefrigerantCircuit'].map(id=>[id,box(id)]));
+                    return Object.fromEntries(['gMixerValveReadings','gHeatingManifold','heatPumpPanel','switchValve','gHPUnitCabinet','gEfficiency','gRefrigerantCircuit','info'].map(id=>[id,box(id)]));
                 }""")
-                assert geometry['gMixerReadings']['right']<geometry['gHeatingManifold']['x'],geometry
-                assert geometry['gMixerReadings']['bottom']<geometry['gRefrigerantCircuit']['y'],geometry
+                assert geometry['gMixerValveReadings']['right']<geometry['gHeatingManifold']['x'],geometry
                 assert geometry['switchValve']['x']>geometry['heatPumpPanel']['x'],geometry
                 assert geometry['switchValve']['right']<geometry['heatPumpPanel']['right'],geometry
-                assert geometry['gEfficiency']['y']>geometry['gHPUnitCabinet']['bottom'],geometry
+                assert geometry['gEfficiency']['y']<geometry['info']['bottom'],geometry
+                assert mixed.locator('#info #gEfficiency').count()==1
                 assert mixed.locator('#gPrimaryMixerValve > g').count()==1
                 original=mixed.evaluate("""()=>{
                     const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
@@ -518,7 +476,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert rooms.locator('#indoorDefaultIcon').evaluate('e=>getComputedStyle(e).display')=='none'
                     assert rooms.locator('#textRoomTemperature1').text_content()=='21.0 °C'
                     assert rooms.locator('#gRoomTemperature1 i').get_attribute('class')=='fa-light fa-temperature-half'
-                    if count==1: assert rooms.locator('#textIndoorTemperatureLabel').text_content()=='Wohnzimmer'
+                    assert rooms.locator('#textIndoorTemperatureLabel').text_content()==''
+                    if count==1: assert 'Wohnzimmer' in rooms.locator('#gRoomTemperature1').text_content()
                     if count>=2:
                         assert 'Bad' in rooms.locator('#gRoomTemperature2').text_content()
                         assert rooms.locator('#gRoomTemperature2 i').get_attribute('class')=='fa-light fa-bath'
@@ -529,6 +488,21 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     divider=rooms.locator('#info > line').first.bounding_box()
                     for box in boxes: assert box['right']<divider['x'],(boxes,divider)
                     for a,b in zip(boxes,boxes[1:]): assert a['bottom']<=b['y']+1,boxes
+                    rooms.evaluate('''()=>{
+                        const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
+                        const p=JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
+                        p.config.roomTemperatures.forEach((room,index)=>room.display=['name','icon','both'][index]);
+                        window.handleMessage({type:'update',config:p.config,data:p.data,controls:p.controls});
+                    }''')
+                    assert rooms.locator('#textRoomName1').count()==1
+                    assert rooms.locator('#gRoomTemperature1 foreignObject,#gRoomTemperature1 > path').count()==0
+                    assert rooms.locator('#textRoomTemperature1').text_content()=='21.0 °C'
+                    if count>=2:
+                        assert rooms.locator('#textRoomName2').count()==0
+                        assert rooms.locator('#gRoomTemperature2 foreignObject').count()==1
+                    if count==3:
+                        assert rooms.locator('#textRoomName3').count()==1
+                        assert rooms.locator('#gRoomTemperature3 > path').count()==1
                     screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                     if screenshot_dir: rooms.screenshot(path=str(Path(screenshot_dir)/f'rooms-{count}-{width}.png'))
                     assert not errors,errors

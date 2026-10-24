@@ -106,8 +106,10 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Optionaler Modbus-/SHI-Lesebetrieb; Java bleibt Standard.
 - Vorhandene Idents bleiben erhalten. [Hinweise für Tester](SHI-TEST.md).
 - HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration und Fußzeile per Checkbox.
-- Drei Raumtemperaturen mit automatischer Größe; COP/JAZ direkt unter dem Gerät.
+- Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
 - Drei Heizkreisplätze; Mischerdaten automatisch, Mischer- und Warmwasserventil nahe der Wärmepumpe.
+- Grafik unabhängig von der ID-Liste; Durchfluss am WP-Ausgang und RL-Soll beim Heizkreis.
+- Warmwasser mit Ist/Soll und summierter Heizstableistung samt gelbem Blitz; Heizstäbe über konfigurierbare Schalter bedienbar.
 
 Weitere Änderungen werden unter 5.0 ergänzt. Versions- und Buildnummer werden
 nicht für einzelne Änderungen erhöht, sondern erst für eine vereinbarte Veröffentlichung.

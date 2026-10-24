@@ -82,6 +82,12 @@ trait LuxtronikModbusSHI
             $requested[151] = self::SHI_DATA_POINTS[151];
             $requested[152] = self::SHI_DATA_POINTS[152];
         }
+        // Use only confirmed SHI mappings for the graphic; never fall back to Java.
+        $graphicPoints = array_intersect_key($this->GetVisualizationRequiredPointIDs(), self::SHI_DATA_POINTS);
+        foreach ($graphicPoints as $id => $_) {
+            $selected[$id] = true;
+            $requested[$id] = self::SHI_DATA_POINTS[$id];
+        }
         $unsupported = array_keys(array_diff_key($selected, self::SHI_DATA_POINTS));
         if ($unsupported !== []) {
             $this->SendDebug('SHI', 'Ohne SHI-Zuordnung; bestehende Werte bleiben unverändert: ' . implode(', ', $unsupported), 0);
@@ -154,6 +160,7 @@ trait LuxtronikModbusSHI
             $this->calc_jaz('jaz', $values[151] + $values[152]);
         }
         $this->SetStatus($values === [] ? 203 : ($unavailable === [] ? 102 : 204));
+        $this->RefreshVisualization();
     }
 
     private function DecodeModbusValue(array $words, string $type, float $factor): ?float

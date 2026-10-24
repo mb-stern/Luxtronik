@@ -12,6 +12,20 @@ function modbusFrame(int $transaction, int $unit, array $words): string
 /** One persistent TCP connection per SHI scan; every captured request must be FC04. */
 function withModbus(array $exchanges, callable $test, ?Luxtronik $existing = null, int $unit = 1): void
 {
+    // A successful scan now also reads the graphic's core points without IDListe.
+    // Keep explicit protocol/error cases first; append deterministic FC04 fixtures.
+    if ($exchanges === [] || is_array($exchanges[array_key_last($exchanges)][2])) {
+        $fixture = $existing ?? new Luxtronik();
+        $mappings = (new ReflectionClass($fixture))->getConstant('SHI_DATA_POINTS');
+        $covered = array_column($exchanges, 0);
+        foreach (invoke($fixture, 'GetVisualizationRequiredPointIDs') as $id => $_) {
+            if (!isset($mappings[$id])) continue;
+            [$address, $type] = $mappings[$id];
+            if (!in_array($address, $covered, true)) {
+                $exchanges[] = [$address, $type === 'int32' ? 2 : 1, $type === 'int32' ? [0, 0] : [0]];
+            }
+        }
+    }
     $listener = stream_socket_server('tcp://127.0.0.1:0');
     $address = stream_socket_get_name($listener, false);
     $port = (int)substr(strrchr($address, ':'), 1);
@@ -210,7 +224,7 @@ $tests['SHI keeps existing COP and JAZ IDs and external-meter semantics'] = stat
         $module->ApplyChanges();
         check($module->GetIDForIdent('copfaktor') === $copID && GetValue($copID) === 5.0, 'COP changed identity or semantics');
         check($module->GetIDForIdent('jazfaktor') === $jazID && GetValue($jazID) === 2.0, 'JAZ changed identity or semantics');
-        check($module->GetIDForIdent('Waermeleistung') === false, 'Unselected helper reading created a variable');
+        check(GetValue($module->GetIDForIdent('Waermeleistung')) === 10.0, 'Graphic heat output missing without ID selection');
     });
 };
 $tests['SHI rejects malformed MBAP and PDU frames atomically'] = static function (): void {
@@ -254,15 +268,15 @@ $tests['SHI custom unit and signed 32-bit big-endian decoding work'] = static fu
     check(invoke($module, 'DecodeModbusValue', [0, 32767], 'int32', 0.1) === null, 'INT32 sentinel not handled');
     check(invoke($module, 'DecodeModbusValue', [32767, 65535], 'int32', 0.1) === null, 'INT32 maximum not handled');
 };
-$tests['SHI unsupported selections stay selected without connections or deletion'] = static function (): void {
-    withoutConnection(static function (Luxtronik $module): void {
+$tests['SHI unsupported selections survive while independent graphic points are read'] = static function (): void {
+    withModbus([], static function (Luxtronik $module): void {
         $module->properties['CommunicationMode'] = 'modbus';
-        $module->properties['ModbusPort'] = $module->properties['Port'];
         $module->properties['IDListe'] = '[{"id":14,"enabled":true},{"id":300,"enabled":true}]';
         $module->RegisterVariableFloat('Heisgastemperatur', 'Keep me');
         $id = $module->GetIDForIdent('Heisgastemperatur');
         $module->Update();
-        check($module->GetIDForIdent('Heisgastemperatur') === $id && $module->status === 203, 'Unsupported value lost');
+        check($module->GetIDForIdent('Heisgastemperatur') === $id && $module->status === 102, 'Unsupported value lost or graphic scan failed');
+        check($module->GetIDForIdent('Aussentemperatur') !== false, 'Graphic values depend on ID selection');
         $form = fields(json_decode($module->GetConfigurationForm(), true));
         $rows = array_column($form['IDListe']['values'], null, 'id');
         check($rows[14]['enabled'] && $rows[300]['enabled'], 'Selections lost');

@@ -84,9 +84,14 @@ text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:
  <text id="gSymconHeatingCorrectionValue" class="md" x="18" y="78">–</text>
 </g>
 
+<g id="gHeaterControlButton" transform="translate(0 25)" display="none" role="button" tabindex="0" aria-label="Heizstäbe öffnen">
+ <rect class="bt" width="170" height="105" rx="10" />
+ <text class="hd" x="18" y="45">Heizstäbe</text>
+ <text id="textHeaterButtonState" class="md" x="18" y="78">Übersicht</text>
+</g>
 <g id="info"><rect class="pn" x="28" y="145" width="650" height="285" rx="10" /><line class="thin" x1="335" y1="165" x2="335" y2="410" />
  <text class="lb" x="55" y="185">Aussentemperatur</text><circle cx="105" cy="245" r="19" fill="#ffc51b" /><g stroke="#ffc51b" stroke-width="3"><path d="M105 214v-12M105 276v12M74 245H62M136 245h12M83 223l-9-9M127 267l9 9M127 223l9-9M83 267l-9 9" /></g><text id="textOutdoorTemperatureValue" class="bg" x="165" y="263" /><line class="thin" x1="55" y1="292" x2="305" y2="292" /><text id="textIndoorTemperatureLabel" class="lb" x="55" y="330">Innentemperatur</text><path id="indoorDefaultIcon" class="w" d="M65 382l38-35 38 35M76 373v35h54v-35" /><text id="textIndoorTemperatureValue" class="bg" x="165" y="394" />
- <text class="lb" x="365" y="185">Vorlauf</text><text id="textSupplyTemperatureValue" class="md" x="495" y="185" fill="#ff4545" /><line class="thin" x1="365" y1="210" x2="650" y2="210" /><text class="lb" x="365" y="248">Rücklauf</text><text id="textReturnTemperatureValue" class="md" x="495" y="248" fill="#35a6ff" /><line class="thin" x1="365" y1="273" x2="650" y2="273" /><text class="lb" x="365" y="315">Leistung</text><text id="textPowerValue" class="md" x="495" y="315" /><line class="thin" x1="365" y1="340" x2="650" y2="340" /><text class="lb" x="365" y="385">Heizstäbe</text>
+ <text id="textSupplyTemperatureValue" class="md" x="495" y="185" fill="#ff4545" /><line class="thin" x1="365" y1="210" x2="650" y2="210" /><text id="textReturnTemperatureValue" class="md" x="495" y="248" fill="#35a6ff" /><line class="thin" x1="365" y1="273" x2="650" y2="273" /><text class="lb" x="365" y="315">Heizleistung</text><text id="textPowerValue" class="md" x="495" y="315" /><line class="thin" x1="365" y1="340" x2="650" y2="340" /><text class="lb" x="365" y="385">Eingangsleistung</text>
 <text id="textHeaterRodStatus" class="md" x="495" y="385">Aus</text>
 <g id="gHeaterRodWaves" class="heater-rod-waves" transform="translate(545 374)" style="display:none">
   <path id="heaterWave1" class="thin" d="M0 0 q6 -7 12 0 t12 0" fill="none" />
