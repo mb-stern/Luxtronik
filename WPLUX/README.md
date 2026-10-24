@@ -109,7 +109,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Fehlende Modbus-Messwerte optional lesend über Java ergänzen; gültige Modbus-Werte haben Vorrang, Datenquelle im Debug sichtbar.
 - Bereinigte HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration vor der ID-Liste ohne Fußzeile.
 - Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
-- Puffer vor den konfigurierbaren Mischern 1–3; frei benennbare Heizkreisabgänge mit Mischkreis-Vorlauf; gemeinsamer VL/RL/RL-Soll direkt an der Wärmepumpe.
+- Puffer vor den konfigurierbaren Mischern 1–3; frei benennbare Heizkreisabgänge mit Mischkreis-Vorlauf; gemeinsamer VL/RL/RL-Soll direkt an den Geräteanschlüssen, mit geraden Steigleitungen und versetztem Boiler-Ventil.
 - Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss aus ID 254 am WP-Ausgang und Verdichter-Ist/-Soll.
 - Timer-Aufrufe bei nicht mehr verfügbarer Instanzschnittstelle mit einer Meldung abbrechen.
 - Lauf- oder Standzeit unter dem Wärmepumpenbild aus den Reglerwerten ID 67/73.

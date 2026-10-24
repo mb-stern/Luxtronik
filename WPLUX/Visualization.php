@@ -2897,10 +2897,10 @@ window.SymconHeatPump = {
             const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0,3) : [];
             const narrowHydraulics = !previewAll && !cfg.tankHP && !cfg.thermalSolarAvailable;
             const activeMixers = mixers.some(item => [hk1,hk2,hk3][(item.circuit || item.number) - 1]);
-            const contentRight = narrowHydraulics ? Math.max(activeMixers ? 1235 : 1120,nextButtonX - buttonGap) : 1568;
+            const contentRight = narrowHydraulics ? Math.max(activeMixers ? 1335 : 1235,nextButtonX - buttonGap) : 1568;
             const heatingShift = narrowHydraulics ? Math.min(0,contentRight - 1525) : 0;
             svg.querySelector('#gHeating')?.setAttribute('transform','translate(' + heatingShift + ' 0)');
-            const hotHeaderX = Math.max(725,945 + heatingShift);
+            const hotHeaderX = Math.max(835,945 + heatingShift);
             const coldHeaderX = hotHeaderX + 20;
             const hotHeaderLocalX = hotHeaderX - heatingShift;
             const coldHeaderLocalX = coldHeaderX - heatingShift;
@@ -2910,9 +2910,11 @@ window.SymconHeatPump = {
             // Separate supply/return headers feed each independently mixed branch.
             const lastCircuit = hk3 ? 3 : (hk2 ? 2 : 1);
             const lastReturn = 295 + (lastCircuit - 1) * 120;
+            const firstReturn = 295 + Math.max(0,[hk1,hk2,hk3].findIndex(Boolean)) * 120;
+            const firstSupply = firstReturn - 50;
             const headers = group('gHeatingHeaders', svg.querySelector('#gHeating'));
-            node(headers, 'path', {class:'hot',d:'M' + hotHeaderLocalX + ' 245V' + (245 + (lastCircuit - 1) * 120)});
-            node(headers, 'path', {class:'cold',d:'M' + coldHeaderLocalX + ' ' + Math.min(295 + ([hk1,hk2,hk3].findIndex(Boolean)) * 120,380) + 'V' + Math.max(lastReturn,380)});
+            node(headers, 'path', {class:'hot',d:'M' + hotHeaderLocalX + ' ' + (cfg.tankHP || previewAll ? 245 : firstSupply) + 'V' + (245 + (lastCircuit - 1) * 120)});
+            node(headers, 'path', {class:'cold',d:'M' + coldHeaderLocalX + ' ' + (cfg.tankHP || previewAll ? Math.min(firstReturn,380) : firstReturn) + 'V' + (cfg.tankHP || previewAll ? Math.max(lastReturn,380) : lastReturn)});
             [1,2,3].forEach(n => {
                 const y = 245 + (n - 1) * 120;
                 svg.querySelector('#gHK' + n + ' > path.hot')?.setAttribute('d','M' + hotHeaderLocalX + ' ' + y + 'H1260');
@@ -2923,10 +2925,10 @@ window.SymconHeatPump = {
                 svg.querySelector('#textHeatingPump' + n)?.setAttribute('y',String(y - (mixedBranch ? 48 : 31)));
             });
             const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
-            const bufferGeometry = ['M750 640V460H690V245H720','M720 380H705V440H720V835H675','M890 245H945','M965 380H890'];
+            const bufferGeometry = ['M835 640V430H690V245H720','M720 380H705V440H800V835H675','M890 245H945','M965 380H890'];
             bufferPaths.forEach((path,index) => path.setAttribute('d',bufferGeometry[index]));
-            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d',(narrowHydraulics ? 'M750 640V550H705V245H' : 'M750 640V245H') + hotHeaderX);
-            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M' + coldHeaderX + (narrowHydraulics ? ' 380H690V835H675' : ' 380H720V835H675'));
+            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M835 640V' + firstSupply + 'H' + hotHeaderX);
+            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M' + coldHeaderX + ' ' + firstReturn + 'H800V835H675');
 
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
             show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
@@ -3282,27 +3284,23 @@ window.SymconHeatPump = {
             const flow = formatted(cfg.heatingFlow);
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
-                const crowdedFlow = narrowHydraulics && lastCircuit === 3;
-                const flowX = narrowHydraulics && !crowdedFlow ? 725 : 780;
-                const flowY = crowdedFlow ? 575 : 485;
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:flowX, y:flowY,
-                    'text-anchor':'start', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:735, y:535,
+                    'text-anchor':'middle', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 110);
             }
             // Common WP temperatures belong before the DHW/heating split, in every operating mode.
             const wpTemperatures = group('gHeatPumpTemperatures', svg.querySelector('#heatPump'));
-            wpTemperatures.setAttribute('transform','translate(365 470)');
+            wpTemperatures.setAttribute('transform','translate(735 0)');
             [
-                ['textWPSupplyTemperature','VL',cfg.supplyTemperature],
-                ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature],
-                ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint]
-            ].forEach(([id,label,key], index) => {
+                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,620],
+                ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,780],
+                ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint,860]
+            ].forEach(([id,label,key,y]) => {
                 const reading = formatted(key);
                 if (!reading) return;
-                const x = index * 135;
-                node(wpTemperatures,'text',{id:id + 'Label',class:'sm',x,y:0,'text-anchor':'middle'},label);
-                fittedText(wpTemperatures,{id,class:'sm',x,y:26,'text-anchor':'middle'},reading,115);
+                node(wpTemperatures,'text',{id:id + 'Label',class:'sm',x:0,y,'text-anchor':'middle'},label);
+                fittedText(wpTemperatures,{id,class:'sm',x:0,y:y + 26,'text-anchor':'middle'},reading,110);
             });
 
             // Touch handling. Bind once per SVG element.
