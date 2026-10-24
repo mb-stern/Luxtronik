@@ -1,0 +1,96 @@
+{
+    "OperatingStatusVariable": [
+        "Betriebszustand"
+    ],
+    "HeatingControlVariable": [
+        "Mode_Heizung"
+    ],
+    "HotWaterControlVariable": [
+        "Mode_WW"
+    ],
+    "CoolingControlVariable": [
+        "Mode_Kuehlung"
+    ],
+    "WarmWaterSetpointVariable": [
+        "Anpassung_WW"
+    ],
+    "HeatingTemperatureCorrectionVariable": [
+        "Anpassung_Temp"
+    ],
+    "OutdoorTemperature": [
+        "Aussentemperatur"
+    ],
+    "AmbientTemperatureNormal": [
+        "Raumtemperatur_Sollwert",
+        "Desired_Room_Temperature"
+    ],
+    "AmbientTemperatureActual": [
+        "Raumtemperatur_Istwert",
+        "Raumtemperatur_Raumstation_1"
+    ],
+    "SupplyTemperature": [
+        "Vorlauftemperatur_Heizkreis"
+    ],
+    "ReturnTemperatureSetpointVariable": [
+        "Ruecklauf_Soll_Heizkreis"
+    ],
+    "FanSpeed": [
+        "Ventilator_Drehzahl"
+    ],
+    "HpRunning": [
+        "Ausgang_Solepumpe_Ventilator"
+    ],
+    "CompressorRunning": [
+        "Ausgang_Verdichter_1"
+    ],
+    "CompressorValue": [
+        "Verdichterdrehzahl",
+        "Verdichterfrequenz"
+    ],
+    "HeatingPumpPower": [
+        "Waermeleistung"
+    ],
+    "EvaporatorPressure": [
+        "Niederdruck"
+    ],
+    "EvaporatorTemperature": [
+        "Vapourisation_Temperature"
+    ],
+    "CondenserPressure": [
+        "Hochdruck"
+    ],
+    "CondenserTemperature": [
+        "Kondensationstemperatur",
+        "Liquefaction_Temperature"
+    ],
+    "SupplyTemperatureHeating1": [
+        "Vorlauftemperatur_Heizkreis"
+    ],
+    "RefluxTemperatureHeating1": [
+        "Ruecklauftemperatur_Heizkreis"
+    ],
+    "HeatingCircuitPumpRunning1": [
+        "Ausgang_Heizungsumwaelzpumpe"
+    ],
+    "HeatingCircuitPumpValue1": [
+        "Steuersignal_Umwaelzpumpe"
+    ],
+    "TankTempWWUp": [
+        "Temperatur_Brauchwasser_Oben"
+    ],
+    "TankTempWWMiddle": [
+        "Warmwasser_Ist_Temperatur"
+    ],
+    "WWHeatingValve": [
+        "Ausgang_Brauchwasserpumpe_Umstellventil"
+    ],
+    "StorageChargingPumpRunning": [
+        "Ausgang_Brauchwasserpumpe_Umstellventil"
+    ],
+    "CirculatingPumpRunning": [
+        "Ausgang_Zirkulationspumpe"
+    ],
+    "ThermalSolarPanelTemp": [
+        "Fuehler_Solarkollektor"
+    ]
+}

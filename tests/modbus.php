@@ -281,6 +281,17 @@ $tests['invalid SHI settings fail before network activity'] = static function ()
     }
 };
 
+$tests['footer selection enables a supported SHI point without any write'] = static function (): void {
+    withModbus([[10108, 1, [65511]]], static function (Luxtronik $module): void {
+        $module->properties['IDListe'] = '[{"id":15,"enabled":false,"visualizationFooter":true}]';
+        $module->Update();
+        $id = $module->GetIDForIdent('Aussentemperatur');
+        check($id !== false && GetValue($id) === -2.5, 'SHI footer selection not read');
+        $footer = invoke($module, 'GetVisualizationFooter');
+        check(count($footer) === 1 && $footer[0]['variableId'] === $id, 'SHI footer Ident not reused');
+    });
+};
+
 $failed = 0;
 foreach ($tests as $name => $test) {
     try {

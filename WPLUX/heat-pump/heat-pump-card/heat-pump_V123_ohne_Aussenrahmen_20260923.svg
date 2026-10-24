@@ -1,0 +1,202 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" data-symcon-modern="24" viewBox="15 0 1570 985">
+<defs>
+ <linearGradient id="p" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#111d24" /><stop offset="1" stop-color="#071015" /></linearGradient>
+ <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ed7867" /><stop offset=".5" stop-color="#a291b0" /><stop offset="1" stop-color="#499ce8" /></linearGradient><linearGradient id="fbhG1" gradientUnits="userSpaceOnUse" x1="1346" y1="0" x2="1404" y2="0"><stop stop-color="#ed7867" /><stop offset="1" stop-color="#b51f3b" /></linearGradient>
+ <linearGradient id="fbhG2" gradientUnits="userSpaceOnUse" x1="1404" y1="0" x2="1348" y2="0"><stop stop-color="#b51f3b" /><stop offset="1" stop-color="#a291b0" /></linearGradient>
+ <linearGradient id="fbhG3" gradientUnits="userSpaceOnUse" x1="1348" y1="0" x2="1404" y2="0"><stop stop-color="#a291b0" /><stop offset="1" stop-color="#5a1d82" /></linearGradient>
+ <linearGradient id="fbhG4" gradientUnits="userSpaceOnUse" x1="1404" y1="0" x2="1346" y2="0"><stop stop-color="#5a1d82" /><stop offset="1" stop-color="#499ce8" /></linearGradient>
+ <linearGradient id="s" x1="0" x2="1"><stop stop-color="#71808a" /><stop offset=".5" stop-color="#e3e9ec" /><stop offset="1" stop-color="#66737c" /></linearGradient>
+ <linearGradient id="wpEquipmentShell" x1="0" x2="1">
+ <stop offset="0" stop-color="var(--wp-equipment-edge)"/>
+ <stop offset=".28" stop-color="var(--wp-equipment-face)"/>
+ <stop offset=".7" stop-color="var(--wp-equipment-face)"/>
+ <stop offset="1" stop-color="var(--wp-equipment-edge)"/>
+</linearGradient>
+<linearGradient id="wpTemperatureRail" x1="0" y1="0" x2="0" y2="1">
+ <stop stop-color="#ed7867"/><stop offset=".5" stop-color="#aa9ab6"/><stop offset="1" stop-color="#499ce8"/>
+</linearGradient>
+<filter id="wpSoftShadow" x="-15%" y="-15%" width="130%" height="135%">
+ <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#071827" flood-opacity=".09"/>
+</filter>
+<style>
+:root{
+ --wp-bg:#020506;--wp-panel1:#111d24;--wp-panel2:#071015;--wp-button:#0b151b;
+ --wp-border:#557386;--wp-border2:#57798b;--wp-text:#f4f6f7;--wp-icon:#eef3f5;
+ --wp-equipment-face:#17232f;--wp-equipment-edge:#0e1824;
+ --wp-fan:#aeb8bf;--wp-fan-hub:#66737c
+}
+text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:var(--wp-text)}.sm{font-size:18px}.lb{font-size:21px}.md{font-size:25px}.bg{font-size:38px;font-weight:700}.hd{font-size:24px;font-weight:700}.pn{fill:url(#p);stroke:var(--wp-border);stroke-width:1.6}.bt{fill:var(--wp-button);stroke:var(--wp-border2);stroke-width:1.6}.on{fill:#063c1d;stroke:#00e75b;stroke-width:2}.hot{fill:none;stroke:#ed7867;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}.cold{fill:none;stroke:#499ce8;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}.sol{fill:none;stroke:#eab45a;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}.w{fill:none;stroke:var(--wp-icon);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.thin{stroke:var(--wp-border);stroke-width:1;opacity:.7}
+.pn,.bt{filter:url(#wpSoftShadow)}
+.bt{transition:stroke .2s ease,fill .2s ease}
+.bt:hover{stroke:#499ce8 !important}
+.wp-equipment-outline{stroke:var(--wp-border);stroke-width:1.5}
+.wp-live-flow{fill:none;stroke:#f2f8ff;stroke-width:2;stroke-dasharray:2 18;stroke-linecap:round;opacity:.8;pointer-events:none;animation:wp-flow 2.8s linear infinite}
+@keyframes wp-flow{to{stroke-dashoffset:-40}}
+@media(prefers-reduced-motion:reduce){
+ .wp-live-flow{animation:none;opacity:.45}
+ #pathHPFan,#pathCompressor,.hk-pump-rotor,.heater-rod-waves path{animation:none !important}
+}
+.heater-rod-waves path{
+ stroke:#ff9800 !important;
+ stroke-width:2.4;
+ filter:drop-shadow(0 0 2px #ff9800);
+ animation:heater-rod-pulse 1.15s ease-in-out infinite;
+}
+.heater-rod-waves #heaterWave2{animation-delay:.18s}
+.heater-rod-waves #heaterWave3{animation-delay:.36s}
+@keyframes heater-rod-pulse{
+ 0%,100%{opacity:.35}
+ 50%{opacity:1}
+}
+</style>
+
+<linearGradient id="evaporatorGradient" gradientUnits="userSpaceOnUse" x1="245" y1="692" x2="300" y2="692">
+  <stop offset="0" stop-color="#499ce8" />
+  <stop offset="1" stop-color="#a291b0" />
+</linearGradient>
+<linearGradient id="condenserGradient" gradientUnits="userSpaceOnUse" x1="515" y1="692" x2="570" y2="692">
+  <stop offset="0" stop-color="#a291b0" />
+  <stop offset="1" stop-color="#ed7867" />
+</linearGradient><linearGradient id="fbhSmooth" x1="0%" y1="0%" x2="0%" y2="100%">
+<stop offset="0%" stop-color="#ed7867"/>
+<stop offset="45%" stop-color="#b58397"/>
+<stop offset="100%" stop-color="#499ce8"/>
+</linearGradient>
+</defs>
+<rect id="symconThemeBackground" width="1600" height="1000" fill="transparent" />
+
+<g id="controls">
+ <g transform="translate(28 25)" id="gHPStatusOnOff"><rect class="on" width="205" height="105" rx="10" /><text class="hd" x="18" y="49">Betrieb</text><text id="textControlPower" x="18" y="80" font-size="25" fill="#29ef67">Ein</text></g>
+ <g transform="translate(245 25)" id="gHPStatusWW"><rect class="bt" width="225" height="105" rx="10" /><text class="hd" x="18" y="49">Warmwasser</text><text id="textControlHotWater" class="md" x="18" y="80">Auto</text></g>
+ <g transform="translate(482 25)" id="gHPStatusHeating"><rect class="bt" width="190" height="105" rx="10" /><text class="hd" x="18" y="49">Heizung</text><text id="textControlHeating" class="md" x="18" y="80">Auto</text></g>
+ <g transform="translate(684 25)" id="gHPStatusCooling"><rect class="bt" width="165" height="105" rx="10" /><text class="hd" x="18" y="49">Kühlen</text><text id="textControlCooling" class="md" x="18" y="80">Aus</text></g>
+ <g transform="translate(1210 25)" id="gSettings"><rect class="bt" width="360" height="105" rx="10" /><text class="hd" x="22" y="62">Einstellungen</text><text x="320" y="68" font-size="38">›</text></g>
+</g>
+<g id="gSymconWarmWaterSetpoint" transform="translate(1000 25)" display="none">
+ <rect class="bt" width="205" height="105" rx="10" />
+ <text class="hd" x="18" y="45">WW Soll</text>
+ <text id="gSymconWarmWaterSetpointValue" class="md" x="18" y="78">–</text>
+</g>
+<g id="gSymconHeatingCorrection" transform="translate(1217 25)" display="none">
+ <rect class="bt" width="230" height="105" rx="10" />
+ <text class="hd" x="18" y="45">Heizkorrektur</text>
+ <text id="gSymconHeatingCorrectionValue" class="md" x="18" y="78">–</text>
+</g>
+
+<g id="info"><rect class="pn" x="28" y="145" width="650" height="285" rx="10" /><line class="thin" x1="335" y1="165" x2="335" y2="410" />
+ <text class="lb" x="55" y="185">Aussentemperatur</text><circle cx="105" cy="245" r="19" fill="#ffc51b" /><g stroke="#ffc51b" stroke-width="3"><path d="M105 214v-12M105 276v12M74 245H62M136 245h12M83 223l-9-9M127 267l9 9M127 223l9-9M83 267l-9 9" /></g><text id="textOutdoorTemperatureValue" class="bg" x="165" y="263" /><line class="thin" x1="55" y1="292" x2="305" y2="292" /><text class="lb" x="55" y="330">Innentemperatur</text><path class="w" d="M65 382l38-35 38 35M76 373v35h54v-35" /><text id="textIndoorTemperatureValue" class="bg" x="165" y="394" />
+ <text class="lb" x="365" y="185">Vorlauf</text><text id="textSupplyTemperatureValue" class="md" x="495" y="185" fill="#ff4545" /><line class="thin" x1="365" y1="210" x2="650" y2="210" /><text class="lb" x="365" y="248">Rücklauf</text><text id="textReturnTemperatureValue" class="md" x="495" y="248" fill="#35a6ff" /><line class="thin" x1="365" y1="273" x2="650" y2="273" /><text class="lb" x="365" y="315">Leistung</text><text id="textPowerValue" class="md" x="495" y="315" /><line class="thin" x1="365" y1="340" x2="650" y2="340" /><text class="lb" x="365" y="385">Heizstäbe</text>
+<text id="textHeaterRodStatus" class="md" x="495" y="385">Aus</text>
+<g id="gHeaterRodWaves" class="heater-rod-waves" transform="translate(545 374)" style="display:none">
+  <path id="heaterWave1" class="thin" d="M0 0 q6 -7 12 0 t12 0" fill="none" />
+  <path id="heaterWave2" class="thin" d="M0 8 q6 -7 12 0 t12 0" fill="none" style="display:none" />
+  <path id="heaterWave3" class="thin" d="M0 16 q6 -7 12 0 t12 0" fill="none" style="display:none" />
+</g>
+</g>
+
+<g id="heatPump"><rect class="pn" x="28" y="445" width="650" height="465" rx="10" /><text id="textHPStatus" class="md" x="55" y="480" fill="#25e85d" />
+
+<g id="gHPUnitCabinet">
+ <defs>
+  <linearGradient id="hpCabinetV28" x1="0" x2="1">
+   <stop offset="0" stop-color="#dfe5e8" /><stop offset=".5" stop-color="#aeb8bd" /><stop offset="1" stop-color="#eef2f4" />
+  </linearGradient>
+ </defs>
+ <path d="M55 575L70 565H218L230 575V835H55Z" fill="url(#wpEquipmentShell)" stroke="var(--wp-border2)" stroke-width="2" />
+ <path d="M55 575L70 565H218L230 575H55Z" fill="var(--wp-equipment-face)" opacity=".9" />
+ <line x1="55" y1="775" x2="230" y2="775" stroke="var(--wp-border2)" />
+ <line x1="172" y1="775" x2="172" y2="835" stroke="var(--wp-border2)" />
+ <rect x="68" y="792" width="25" height="30" rx="2" fill="var(--wp-panel1)" stroke="var(--wp-border2)" />
+ <g stroke="#45545b" stroke-width="1.5">
+  <line x1="73" y1="799" x2="88" y2="799" /><line x1="73" y1="805" x2="88" y2="805" />
+  <line x1="73" y1="811" x2="88" y2="811" /><line x1="73" y1="817" x2="88" y2="817" />
+ </g>
+ <text x="190" y="810" font-size="16" font-weight="700" fill="#263238">WP</text>
+</g>
+<g id="gHPFan" transform="translate(145 690)"><circle r="83" fill="#090d10" stroke="#89959e" stroke-width="3" /><circle r="69" fill="#171e23" stroke="#56626b" /><g id="pathHPFan" fill="#aeb8bf">
+   <circle cx="0" cy="0" r="12" />
+   <path d="M-4-11 C-22-28 -34-50 -24-62 C-15-72 2-64 9-48 C14-36 9-21 4-11 C1-9-1-9-4-11Z" />
+   <path d="M11-4 C28-22 50-34 62-24 C72-15 64 2 48 9 C36 14 21 9 11 4 C9 1 9-1 11-4Z" />
+   <path d="M4 11 C22 28 34 50 24 62 C15 72-2 64-9 48 C-14 36-9 21-4 11 C-1 9 1 9 4 11Z" />
+   <path d="M-11 4 C-28 22-50 34-62 24 C-72 15-64-2-48-9 C-36-14-21-9-11-4 C-9-1-9 1-11 4Z" /></g><circle r="18" fill="#6c7882" stroke="#d4dade" stroke-width="2" /></g>
+ <g id="wpFanGrille" transform="translate(145 690)" fill="none" stroke="#b8c8d4" stroke-width=".9" opacity=".27" pointer-events="none">
+  <circle r="32"/><circle r="46"/><circle r="60"/><circle r="76"/>
+  <path d="M-76 0H76M0-76V76M-54-54L54 54M-54 54L54-54"/>
+ </g>
+ <g id="gRefrigerantCircuit" transform="translate(30 0)">
+<rect id="refrigerantPanel" class="pn" x="210" y="515" width="425" height="350" rx="10" /><path class="cold" d="M260 665V620Q260 575 305 575H401.5" /><g id="pathCompressor"><circle class="theme-surface" cx="422.5" cy="575" r="21" fill="var(--wp-button)" stroke="var(--wp-border2)" stroke-width="3" /><circle cx="422.5" cy="575" r="9" fill="none" stroke="var(--wp-icon)" stroke-width="3" /><path class="theme-dot" d="M422.5 554L430.5 570L414.5 570Z" fill="var(--wp-icon)" /></g><path class="hot" d="M443.5 575H540Q585 575 585 620V665M585 720V775Q585 820 540 820H445" /><path class="cold" d="M400.5 820H305Q260 820 260 775V720" /><g id="evaporatorElement">
+<rect class="theme-surface" x="230" y="665" width="55" height="55" rx="12" fill="var(--wp-button)" stroke="url(#evaporatorGradient)" stroke-width="5" />
+<path d="M240 676V709M250 676V709M260 676V709M270 676V709M280 676V709" fill="none" stroke="url(#evaporatorGradient)" stroke-width="4" stroke-linecap="round" />
+</g><g id="condenserElement">
+<rect class="theme-surface" x="565" y="665" width="55" height="55" rx="12" fill="var(--wp-button)" stroke="url(#condenserGradient)" stroke-width="5" />
+<path d="M575 676V709M585 676V709M595 676V709M605 676V709M615 676V709" fill="none" stroke="url(#condenserGradient)" stroke-width="4" stroke-linecap="round" />
+</g><text class="sm" x="295" y="674">Verdampfer</text><text class="sm" x="550" y="674" text-anchor="end">Kondensator</text><text id="textEvaporatorPressure" class="sm" x="295" y="698" /><text id="textEvaporatorTemperature" class="sm" x="295" y="720" /><text id="textCondenserPressure" class="sm" x="550" y="698" text-anchor="end" /><text id="textCondenserTemperature" class="sm" x="550" y="720" text-anchor="end" /><text class="sm" x="422.5" y="548" text-anchor="middle">Kompressor</text><text id="textCompressorSpeedValue" class="sm" x="422.5" y="620" text-anchor="middle" /><path class="w" d="M400.5 805l22 20 22-20v40l-22-20-22 20z" /><text class="sm" x="422.5" y="790" text-anchor="middle">Expansionsventil</text><text id="textExpansionValveOpening" class="sm" x="422.5" y="862" text-anchor="middle" />
+</g>
+</g>
+
+<g id="main">
+ <path class="hot" d="M675 665H775" />
+ <path class="cold" d="M720 835H675" />
+ <g id="switchValve" transform="translate(775 665)"><rect class="theme-surface" x="-25" y="-25" width="50" height="50" rx="4" fill="var(--wp-button)" stroke="var(--wp-border2)" stroke-width="2" /><path id="switchValveFlow" d="M-16 0H0V-16" fill="none" stroke="var(--wp-icon)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><circle class="theme-dot" r="6" fill="var(--wp-icon)" /></g>
+ <text class="sm" x="800" y="710" text-anchor="middle">Umschaltventil</text>
+ <text id="textWWHeatingValveState" class="sm" x="800" y="730" text-anchor="middle">Heizung</text>
+</g>
+
+<g id="gBuffer"><path class="hot" d="M775 640V245H900" /><g id="gStorageChargingPumpVisual"><circle cx="840" cy="245" r="23" fill="var(--wp-button)" stroke="var(--wp-icon)" stroke-width="2.5" /><g transform="translate(840 245)"><circle r="15" fill="none" stroke="var(--wp-icon)" stroke-width="1.5" opacity=".82" /><g id="storageChargingPumpRotor" class="hk-pump-rotor" fill="var(--wp-icon)"><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(120)" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(240)" /><circle r="4.5" /></g></g></g><path class="cold" d="M900 440H720V835H675" /><g transform="translate(900 190)"><ellipse cx="85" cy="18" rx="85" ry="18" fill="url(#s)" stroke="var(--wp-border)" stroke-width="1.5" /><rect y="18" width="170" height="250" fill="url(#wpEquipmentShell)" stroke="var(--wp-border)" stroke-width="1.5" /><ellipse cx="85" cy="268" rx="85" ry="18" fill="var(--wp-equipment-edge)" stroke="var(--wp-border)" stroke-width="1.5" /><rect x="12" y="42" width="5" height="202" rx="2.5" fill="url(#wpTemperatureRail)"/><path d="M28 102H150M28 182H150" stroke="var(--wp-border)" opacity=".35"/><text class="hd" x="85" y="-12" text-anchor="middle">Pufferspeicher</text><text id="textTankTempHPUp" class="md" x="85" y="82" text-anchor="middle" /><text id="textTankTempHPMiddle" class="md" x="85" y="158" text-anchor="middle" /><text id="textTankTempHPDown" class="md" x="85" y="232" text-anchor="middle" /></g><path class="hot" d="M1070 245H1105" /><path class="cold" d="M1105 440H1070" /></g>
+<g id="gNoBuffer" display="none"><path class="hot" d="M775 640V245H1105" /><path class="cold" d="M1105 440H720V835H675" /></g>
+
+<g id="gHeating"><g id="gHeatingManifold"><text class="lb" x="1085" y="180">Verteiler</text><rect id="heatingManifoldBody" x="1105" y="190" width="24" height="390" rx="8" fill="var(--wp-button)" stroke="var(--wp-icon)" stroke-width="2" /></g>
+ <g id="gHK1"><path id="pathHK1Supply" class="hot" d="M1129 245H1260" /><path id="pathHK1Return" class="cold" d="M1260 295H1129" /><g id="gHKPumpIcon1"><circle cx="1195" cy="245" r="23" fill="var(--wp-button)" stroke="var(--wp-icon)" stroke-width="2.5" /><g transform="translate(1195 245)"><circle r="15" fill="none" stroke="var(--wp-icon)" stroke-width="1.5" opacity=".82" /><g id="hkPumpRotor1" class="hk-pump-rotor" fill="var(--wp-icon)"><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(120)" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(240)" /><circle r="4.5" /></g></g></g><text id="textHeatingPump1" class="sm" x="1195" y="214" text-anchor="middle" /><rect class="pn" x="1260" y="205" width="265" height="105" rx="9" /><text id="textHeatingCircuitName1" class="lb" x="1378" y="232">HK1</text><text class="sm" x="1378" y="265">VL</text><text id="textSupplyTemperatureHeating" class="sm" x="1450" y="265" fill="#ff4545" /><text class="sm" x="1378" y="297">RL</text><text id="textRefluxTemperatureHeating" class="sm" x="1450" y="297" fill="#35a6ff" /><g id="gHKRadiator1"><rect x="1280" y="230" width="80" height="58" rx="6" fill="url(#t)" /><path d="M1293 238v42m14-42v42m14-42v42m14-42v42" stroke="#05070a" stroke-width="5" /></g><g id="gHKFloor1" display="none">
+<path d="M1285 242H1350
+ C1360 242 1360 254 1350 254
+ H1290
+ C1280 254 1280 266 1290 266
+ H1350
+ C1360 266 1360 277 1350 277
+ H1285"
+ fill="none" stroke="url(#fbhSmooth)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+</g></g>
+ <g id="gHK2"><path class="hot" d="M1129 365H1260" /><path class="cold" d="M1260 415H1129" /><g id="gHKPumpIcon2"><circle cx="1195" cy="365" r="23" fill="var(--wp-button)" stroke="var(--wp-icon)" stroke-width="2.5" /><g transform="translate(1195 365)"><circle r="15" fill="none" stroke="var(--wp-icon)" stroke-width="1.5" opacity=".82" /><g id="hkPumpRotor2" class="hk-pump-rotor" fill="var(--wp-icon)"><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(120)" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(240)" /><circle r="4.5" /></g></g></g><text id="textHeatingPump2" class="sm" x="1195" y="334" text-anchor="middle" /><rect class="pn" x="1260" y="325" width="265" height="105" rx="9" /><text id="textHeatingCircuitName2" class="lb" x="1378" y="352">HK2</text><text class="sm" x="1378" y="385">VL</text><text id="textSupplyTemperatureHeating2" class="sm" x="1450" y="385" fill="#ff4545" /><text class="sm" x="1378" y="417">RL</text><text id="textRefluxTemperatureHeating2" class="sm" x="1450" y="417" fill="#35a6ff" /><g id="gHKRadiator2"><rect x="1280" y="350" width="80" height="58" rx="6" fill="url(#t)" /><path d="M1293 358v42m14-42v42m14-42v42m14-42v42" stroke="#05070a" stroke-width="5" /></g><g id="gHKFloor2" display="none">
+<path d="M1285 362H1350
+ C1360 362 1360 374 1350 374
+ H1290
+ C1280 374 1280 386 1290 386
+ H1350
+ C1360 386 1360 397 1350 397
+ H1285"
+ fill="none" stroke="url(#fbhSmooth)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+</g></g>
+ <g id="gHK3"><path class="hot" d="M1129 485H1260" /><path class="cold" d="M1260 535H1129" /><g id="gHKPumpIcon3"><circle cx="1195" cy="485" r="23" fill="var(--wp-button)" stroke="var(--wp-icon)" stroke-width="2.5" /><g transform="translate(1195 485)"><circle r="15" fill="none" stroke="var(--wp-icon)" stroke-width="1.5" opacity=".82" /><g id="hkPumpRotor3" class="hk-pump-rotor" fill="var(--wp-icon)"><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(120)" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(240)" /><circle r="4.5" /></g></g></g><text id="textHeatingPump3" class="sm" x="1195" y="454" text-anchor="middle" /><rect class="pn" x="1260" y="445" width="265" height="105" rx="9" /><text id="textHeatingCircuitName3" class="lb" x="1378" y="472">HK3</text><text class="sm" x="1378" y="505">VL</text><text id="textSupplyTemperatureHeating3" class="sm" x="1450" y="505" fill="#ff4545" /><text class="sm" x="1378" y="537">RL</text><text id="textRefluxTemperatureHeating3" class="sm" x="1450" y="537" fill="#35a6ff" /><g id="gHKRadiator3"><rect x="1280" y="470" width="80" height="58" rx="6" fill="url(#t)" /><path d="M1293 478v42m14-42v42m14-42v42m14-42v42" stroke="#05070a" stroke-width="5" /></g><g id="gHKFloor3" display="none">
+<path d="M1285 482H1350
+ C1360 482 1360 494 1350 494
+ H1290
+ C1280 494 1280 506 1290 506
+ H1350
+ C1360 506 1360 517 1350 517
+ H1285"
+ fill="none" stroke="url(#fbhSmooth)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+</g></g>
+</g>
+
+<g id="gDHW"><path class="hot" d="M800 665H900" /><g id="gCirculatingPumpVisual">
+<path d="M1064 650H1215" fill="none" stroke="#ef5350" stroke-width="6" stroke-linecap="round" />
+<g id="gCirculatingPumpIcon"><circle cx="1125" cy="650" r="23" fill="var(--wp-button)" stroke="var(--wp-icon)" stroke-width="2.5" /><g transform="translate(1125 650)"><circle r="15" fill="none" stroke="var(--wp-icon)" stroke-width="1.5" opacity=".82" /><g id="circulatingPumpRotor" class="hk-pump-rotor" fill="var(--wp-icon)"><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(120)" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(240)" /><circle r="4.5" /></g></g></g>
+<g id="gHotWaterTap" transform="translate(1180 612)">
+  <!-- kleiner gefüllter Wasserhahn -->
+  <path d="M5 22H16V17C16 11 21 7 27 7H39C47 7 52 12 52 20V23H44V20C44 16 42 14 38 14H28C25 14 24 16 24 19V28H5Z" fill="var(--wp-icon)"/>
+  <rect x="44" y="21" width="17" height="8" rx="2" fill="var(--wp-icon)"/>
+  <rect x="55" y="27" width="6" height="7" rx="1.5" fill="var(--wp-icon)"/>
+  <rect x="20" y="0" width="7" height="10" rx="2" fill="var(--wp-icon)"/>
+  <rect x="11" y="-4" width="25" height="6" rx="3" fill="var(--wp-icon)"/>
+  <circle cx="23.5" cy="-1" r="3" fill="var(--wp-button)" stroke="var(--wp-icon)" stroke-width="2"/>
+  <path d="M58 38C54 44 54 47 58 50C62 47 62 44 58 38Z" fill="#35a6ff"/>
+</g>
+</g><path class="cold" d="M900 835H675" /><g transform="translate(900 575)"><ellipse cx="82" cy="18" rx="82" ry="18" fill="url(#s)" stroke="var(--wp-border)" stroke-width="1.5" /><rect y="18" width="164" height="260" fill="url(#wpEquipmentShell)" stroke="var(--wp-border)" stroke-width="1.5" /><ellipse cx="82" cy="278" rx="82" ry="18" fill="var(--wp-equipment-edge)" stroke="var(--wp-border)" stroke-width="1.5" /><rect x="12" y="42" width="5" height="212" rx="2.5" fill="url(#wpTemperatureRail)"/><path d="M28 108H145M28 190H145" stroke="var(--wp-border)" opacity=".35"/><text class="hd" x="82" y="-12" text-anchor="middle">Warmwasser</text><text id="textTankTempWWUp" class="md" x="82" y="85" text-anchor="middle" /><text id="textTankTempWWMiddle" class="md" x="82" y="162" text-anchor="middle" /><text id="textTankTempWWDown" class="md" x="82" y="240" text-anchor="middle" /></g></g>
+
+<g id="gSolar"><rect class="pn" x="1260" y="590" width="265" height="320" rx="10" /><text class="hd" x="1280" y="620">Solar</text><path class="sol" d="M1064 790H1185V680H1260M1260 820H1185V835H1064" /><g transform="translate(1325 650) skewX(-12)"><rect width="145" height="100" fill="#0b4b88" stroke="#e8eef0" stroke-width="3" /><path d="M25 0v100M50 0v100M75 0v100M100 0v100M125 0v100M0 25h145M0 50h145M0 75h145" stroke="#6ea8d2" /></g><g id="gSolarPumpIcon"><circle cx="1185" cy="755" r="23" fill="var(--wp-button)" stroke="var(--wp-icon)" stroke-width="2.5" /><g transform="translate(1185 755)"><circle r="15" fill="none" stroke="var(--wp-icon)" stroke-width="1.5" opacity=".82" /><g id="solarPumpRotor" class="hk-pump-rotor" fill="var(--wp-icon)"><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(120)" /><path d="M-2-13C7-12 12-7 12-1C7-4 2-4-2-3C0-7 0-10-2-13Z" transform="rotate(240)" /><circle r="4.5" /></g></g></g><rect class="bt" x="1280" y="805" width="220" height="75" rx="7" /><text class="sm" x="1295" y="832">Kollektor</text><text id="textThermalSolarPanelTemp" class="sm" x="1295" y="858" /><text class="sm" x="1410" y="832">Pumpe</text><text id="textThermalSolarPumpSpeed" class="sm" x="1420" y="858" /></g>
+
+<g id="gFooter">
+ <rect class="pn" x="28" y="930" width="1542" height="50" rx="8" />
+ <text id="textFooterAdditional000" class="sm" /><text id="textFooterAdditional001" class="sm" /><text id="textFooterAdditional002" class="sm" /><text id="textFooterAdditional003" class="sm" /><text id="textFooterAdditional004" class="sm" /><text id="textFooterAdditional005" class="sm" /><text id="textFooterAdditional006" class="sm" /><text id="textFooterAdditional007" class="sm" /><text id="textFooterAdditional008" class="sm" /><text id="textFooterAdditional009" class="sm" /><text id="textFooterAdditional010" class="sm" /><text id="textFooterAdditional011" class="sm" /></g>
+</svg>

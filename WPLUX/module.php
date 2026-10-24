@@ -1,10 +1,12 @@
 <?php
 
 require_once __DIR__ . '/ModbusSHI.php';
+require_once __DIR__ . '/Visualization.php';
 
 class Luxtronik extends IPSModuleStrict
 {
     use LuxtronikModbusSHI;
+    use LuxtronikVisualization;
 
     private const SOCKET_TIMEOUT = 5.0;
     private const MAX_RESPONSE_VALUES = 65536;
@@ -50,6 +52,7 @@ class Luxtronik extends IPSModuleStrict
 
         // Timer für Aktualisierung registrieren
         $this->RegisterTimer('UpdateTimer', 0, 'WPLUX_Update(' . $this->InstanceID . ');');  
+        $this->CreateVisualization();
     }
 
     public function Migrate(string $JSONData): string
@@ -127,9 +130,11 @@ class Luxtronik extends IPSModuleStrict
     {
          //Never delete this line!
         parent::ApplyChanges();
+        $this->RefreshVisualization(true);
 
         if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
             $this->ApplyChangesModbus();
+            $this->RefreshVisualization(true);
             return;
         }
 
@@ -917,6 +922,10 @@ class Luxtronik extends IPSModuleStrict
 
     public function RequestAction(string $Ident, mixed $Value): void 
     {
+        if (in_array($Ident, ['SetControlMode', 'SetNumericControl', 'SetBinaryControl'], true)) {
+            $this->HandleVisualizationAction($Ident, $Value);
+            return;
+        }
         if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
             throw new RuntimeException('Modbus/SHI-Testbetrieb ist ausschließlich lesend. Steuerung und Timer sind deaktiviert.');
         }
@@ -1198,7 +1207,7 @@ class Luxtronik extends IPSModuleStrict
             ]
         ];
 
-        return json_encode($this->AddModbusForm($form));
+        return json_encode($this->AddVisualizationForm($this->AddModbusForm($form)));
     }
 
     public function Update(): void
@@ -1228,7 +1237,7 @@ class Luxtronik extends IPSModuleStrict
         $enabledIds = [];
         foreach ($idListe as $row) {
             $id = (int)($row['id'] ?? 0);
-            $enabled = (bool)($row['enabled'] ?? false);
+            $enabled = (bool)($row['enabled'] ?? false) || (bool)($row['visualizationFooter'] ?? false);
 
             if ($id > 0 && $enabled) {
                 $enabledIds[$id] = true;

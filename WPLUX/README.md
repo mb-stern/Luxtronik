@@ -102,6 +102,10 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 4.9 (24.10.2026)
+- Wärmepumpengrafik als HTML-SDK-Vollansicht integriert.
+- Schlanke Komponenten-Konfiguration mit automatischen Idents; Fußzeile per Checkbox in der ID-Liste.
+
 Version 4.8 (19.10.2026) – SHI-Testversion
 - Optionaler Modbus-/SHI-Lesebetrieb; Java bleibt Standard.
 - Vorhandene Idents bleiben erhalten. [Hinweise für Tester](SHI-TEST.md).

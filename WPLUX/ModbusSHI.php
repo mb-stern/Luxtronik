@@ -70,7 +70,7 @@ trait LuxtronikModbusSHI
         $rows = json_decode($this->ReadPropertyString('IDListe'), true);
         $selected = [];
         foreach (is_array($rows) ? $rows : [] as $row) {
-            if (is_array($row) && !empty($row['enabled'])) {
+            if (is_array($row) && (!empty($row['enabled']) || !empty($row['visualizationFooter']))) {
                 $selected[(int)($row['id'] ?? 0)] = true;
             }
         }
