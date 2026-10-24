@@ -15,10 +15,13 @@ werden wie bisher in der Modulkonfiguration aktiviert.
 Der zusätzliche Bereich **HTML-SDK / Visualisierung** bleibt bewusst schlank:
 
 - Komponenten-Checkboxen für Puffer, Warmwasserspeicher und Solarthermie.
-- Checkboxen für einen direkten Heizkreis und Mischkreis 1–3; bis zu drei Kreise
-  lassen sich gleichzeitig darstellen. Die Auswahl bestimmt automatisch die
-  zugehörigen internen Idents. Bei mehr als drei gewählten Kreisen erscheint ein
-  Hinweis, statt einen vierten Kreis als dargestellt auszugeben.
+- Checkboxen für die drei Heizkreisplätze der ursprünglichen Grafik.
+- Mischkreis 1 erscheint standardmäßig mit Ist/Soll und Ventilsymbol nahe der
+  Wärmepumpe. Weitere Mischerdaten erscheinen automatisch bei vorhandenen Idents;
+  dafür gibt es keine Konfigurationsschalter.
+- Bis zu drei optionale Raumtemperaturen mit frei wählbarer Bezeichnung
+  (leer = Variablenname). Ein Einzelwert wird größer dargestellt. Auf Wunsch
+  wird das Variablensymbol verwendet, sonst ein Haus.
 - Die Anzahl der vorhandenen Heizstäbe.
 - **Drei optionale Fremdvariablen**, jeweils nur Bezeichnung und Variablenauswahl.
   Sie erscheinen als frei benannte Werte in der Fußzeile.
@@ -28,23 +31,35 @@ interne Heizkreiswerte. Ein umfassendes Zuordnungsformular, Zuordnungsdiagnosen,
 Tabellen, ein Importbutton und ein manueller Modus entfallen.
 
 Die Warmwasserbereitung bleibt ein eigener Speicher-/Ladekreis und belegt keinen
-der drei Heiz-/Mischkreisplätze. Vom Luxtronik-Regler gelieferte Mischkreiswerte
+der drei Heizkreisplätze. Vom Luxtronik-Regler gelieferte Mischkreiswerte
 sind interne Werte, auch wenn Mischer und Pumpen außerhalb des Wärmepumpengehäuses
 montiert sind. Fremdvariablen stammen beispielsweise von separaten Symcon-Zählern.
 
-Ein direkter Heizkreis nutzt die Idents des Wärmepumpenkreises. Die Mischkreise
-nutzen jeweils `Mischkreis_1_Vorlauftemperatur`,
-`Mischkreis_2_Vorlauftemperatur` bzw. `Mischkreis_3_Vorlauftemperatur`.
-Bei einem ausgewählten Mischkreis zeigt die Grafik ein Dreiwege-Mischventil mit
-Beimischleitung vom zugehörigen Rücklauf vor Pumpe und Heizfläche. Beim direkten
-Heizkreis entfällt es. Das Ventilsymbol ist schematisch und gibt keine gemessene
-Ventilstellung vor. Die Heizfläche steht stellvertretend für die angeschlossenen
-Verbraucher, etwa mehrere Fußbodenheizungs-Schleifen mit gemeinsamem Vorlauf.
-Fehlende Rücklauffühler werden nicht vom Wärmepumpen-Rücklauf übernommen; die
-betreffenden Felder bleiben leer. Mischer-Auf/Zu wird nicht als Pumpensignal
-interpretiert. Der Wärmepumpen-Rücklauf im allgemeinen Infobereich bleibt davon
-unabhängig erhalten. Die benötigten internen Messpunkte müssen wie bisher in
-der vorhandenen ID-Liste aktiv sein.
+Heizkreis 1 nutzt wie im Quellprojekt die Idents des Wärmepumpenkreises.
+Weitere Heizkreisplätze behalten ausdrücklich konfigurierte Quellen. Ohne
+bestätigte Zuordnung bleiben ihre Temperaturfelder leer; Mischkreiswerte werden
+ihnen nicht automatisch zugewiesen. Die Heizfläche steht stellvertretend für
+angeschlossene Verbraucher, etwa mehrere Fußbodenheizungs-Schleifen.
+
+Die separaten Mischerdaten nutzen `Mischkreis_N_Vorlauftemperatur`,
+`Mischkreis_N_Vorlauf_Soll_Temperatur`, `Ausgang_Mischkreis_N_Auf` und
+`Ausgang_Mischkreis_N_Zu` (N = 1–3). Auf/Zu zeigt die Ansteuerung des Motors,
+keine gemessene Ventilposition: beide Ausgänge aus bedeutet keine Bewegung.
+Fehlende Signale erscheinen als „—“; fehlende Temperaturfelder bleiben leer.
+Das Warmwasser-Umschaltventil sitzt näher am Gerät. Die benötigten internen
+Messpunkte müssen wie bisher in der vorhandenen ID-Liste aktiv sein.
+
+**COP und JAZ** erscheinen direkt unter dem Heizgerätebild, sobald die eigenen
+Instanzvariablen `copfaktor` und `jazfaktor` vorhanden sind. Die Grafik übernimmt
+deren berechnete Werte und Live-Änderungen; Berechnung und Zählerkonfiguration
+bleiben im bestehenden Luxtronik-Modul.
+
+Ohne ausdrücklich gewählte Raumquelle bleibt die bisherige interne
+Raumtemperaturanbindung bestehen. Symcon-Symbole werden über das dokumentierte
+HTML-SDK-Skript `/icons.js` eingebunden. Nicht zuordenbare ältere Symbole erhalten
+ein Haus als Ersatz; das besondere Symbol `Transparent` blendet das Symbol aus.
+Vorhandene Kreisauswahlen aus Version 4.9 behalten bei der Migration ihre Anzahl
+sichtbarer Heizkreisplätze. Frühere Mischkreisschalter werden nicht mehr benötigt.
 
 ## Interne Werte in der Fußzeile
 
@@ -119,5 +134,7 @@ python3 tests/browser.py
 PHP-Prüfungen nutzen eine Symcon-Nachbildung und lokale Protokollsimulatoren.
 Die optionalen Browsertests benötigen Playwright und Chromium. Sie prüfen Desktop
 und Mobilansicht, Live-Aktualisierung, Speicherfühler, Bedienpopups, die dynamische
-Fußzeile und das simulierte LUX-Bedienfeld. Eine echte Symcon-Instanz mit Wärmepumpe
+Fußzeile, Raumquellen, Mischerdaten, COP/JAZ und das simulierte LUX-Bedienfeld.
+Die echte Symbolbibliothek wird von Symcon bereitgestellt; lokal werden Bindung
+und sichere Symbolklassen geprüft. Eine echte Symcon-Instanz mit Wärmepumpe
 wurde in dieser Cloud-Umgebung nicht verwendet.

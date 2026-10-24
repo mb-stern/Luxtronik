@@ -77,6 +77,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
     Path(artifacts, 'luxtronik-test.html').write_text(
         '<meta charset="utf-8"><h1>Lokale Webinterface-Testseite</h1>',
         encoding='utf-8')
+    Path(artifacts, 'icons.js').write_text('// Symcon provides the real icon library at runtime.\n')
     handler = functools.partial(QuietHandler, directory=artifacts)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -446,63 +447,94 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert not errors,errors
                 print(json.dumps({'viewport':width,**result,'updates':'PASS'}))
                 page.close()
-            def check_mixer_geometry(page, index):
-                geometry=page.evaluate("""(n)=>{
-                    const hk=document.querySelector('#gHK'+n);
-                    const mixer=hk.querySelector('#gHKMixer'+n);
-                    const branch=mixer.querySelector('path.cold');
-                    const pump=hk.querySelector('#gHKPumpIcon'+n+' > circle');
-                    const emitter=hk.querySelector(':scope > rect');
-                    const ret=hk.querySelector(':scope > path.cold');
-                    const screen=(el,x,y)=>{const p=new DOMPoint(x,y).matrixTransform(el.getScreenCTM());return {x:p.x,y:p.y};};
-                    const point=(el,length)=>{const p=el.getPointAtLength(length);return screen(el,p.x,p.y);};
-                    return {
-                        mixer:screen(mixer,0,0),pump:screen(pump,pump.cx.baseVal.value,pump.cy.baseVal.value),
-                        emitter:screen(emitter,emitter.x.baseVal.value,emitter.y.baseVal.value),
-                        branchStart:point(branch,0),branchEnd:point(branch,branch.getTotalLength()),
-                        returnStart:point(ret,0),returnEnd:point(ret,ret.getTotalLength())
-                    };
-                }""",index)
-                assert geometry['mixer']['x']<geometry['pump']['x']<geometry['emitter']['x'],geometry
-                assert abs(geometry['mixer']['y']-geometry['pump']['y'])<0.1,geometry
-                assert abs(geometry['branchStart']['y']-geometry['returnStart']['y'])<0.1,geometry
-                assert geometry['returnEnd']['x']<geometry['branchStart']['x']<geometry['returnStart']['x'],geometry
-                assert abs(geometry['branchEnd']['x']-geometry['mixer']['x'])<0.1,geometry
-                assert geometry['branchStart']['y']>geometry['branchEnd']['y']>geometry['mixer']['y'],geometry
-
-            # Component-only configuration resolves three native mixed circuits automatically.
+            # Three original heating places remain separate from the native mixer telemetry.
             for width in [1200,390]:
                 mixed=browser.new_page(viewport={'width':width,'height':850})
+                errors=[]
+                mixed.on('pageerror',lambda e: errors.append(str(e)))
                 mixed.goto(f'http://127.0.0.1:{server.server_port}/mixed-circuits.html')
                 assert mixed.locator('#wp-error').text_content()==''
                 for index in [1,2,3]:
-                    suffix='' if index==1 else str(index)
-                    assert mixed.locator('#textHeatingCircuitName'+str(index)).text_content()=='Mischkreis '+str(index)
-                    assert str(25+index*5) in mixed.locator('#textSupplyTemperatureHeating'+suffix).text_content()
-                    assert mixed.locator('#textRefluxTemperatureHeating'+suffix).text_content()==''
-                    assert mixed.locator('#textRefluxTemperatureHeating'+suffix).evaluate('e=>getComputedStyle(e).display')=='none'
+                    assert mixed.locator('#textHeatingCircuitName'+str(index)).text_content()=='HK'+str(index)
+                    assert str(25+index*5) in mixed.locator('#textMixerActual'+str(index)).text_content()
+                    assert str(15+index*5) in mixed.locator('#textMixerTarget'+str(index)).text_content()
+                    assert mixed.locator('#textMixerOpen'+str(index)).text_content()==('Auf: Ein' if index==1 else 'Auf: Aus')
+                    assert mixed.locator('#textMixerClose'+str(index)).text_content()==('Zu: Ein' if index==3 else 'Zu: Aus')
+                assert '50' in mixed.locator('#textSupplyTemperatureHeating').text_content()
+                assert mixed.locator('#textSupplyTemperatureHeating2').text_content()==''
+                assert mixed.locator('#textRefluxTemperatureHeating3').text_content()==''
                 assert '40' in mixed.locator('#textReturnTemperatureActualValue').text_content()
-                assert mixed.locator('[id^="gHKMixer"]').count()==3
-                for index in [1,2,3]: check_mixer_geometry(mixed,index)
-                screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
-                if screenshot_dir:
-                    mixed.screenshot(path=str(Path(screenshot_dir)/f'mixed-{width}.png'))
+                assert mixed.locator('[id^="gHKMixer"]').count()==0
+                assert mixed.locator('[id^="pathHKMixingReturn"]').count()==0
+                assert mixed.locator('#textComputedCOP').text_content()=='4.25'
+                assert mixed.locator('#textComputedJAZ').text_content()=='3.75'
+                geometry=mixed.evaluate("""()=>{
+                    const box=(id)=>{const b=document.querySelector('#'+id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom};};
+                    return Object.fromEntries(['gMixerReadings','gHeatingManifold','heatPumpPanel','switchValve','gHPUnitCabinet','gEfficiency','gRefrigerantCircuit'].map(id=>[id,box(id)]));
+                }""")
+                assert geometry['gMixerReadings']['right']<geometry['gHeatingManifold']['x'],geometry
+                assert geometry['gMixerReadings']['bottom']<geometry['gRefrigerantCircuit']['y'],geometry
+                assert geometry['switchValve']['x']>geometry['heatPumpPanel']['x'],geometry
+                assert geometry['switchValve']['right']<geometry['heatPumpPanel']['right'],geometry
+                assert geometry['gEfficiency']['y']>geometry['gHPUnitCabinet']['bottom'],geometry
+                assert mixed.locator('#gPrimaryMixerValve > g').count()==1
                 original=mixed.evaluate("""()=>{
                     const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
                     return JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
                 }""")
-                single=json.loads(json.dumps(original))
-                single['config'].update(heatingCircuitType2='off',heatingCircuitType3='off')
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',single)
-                assert mixed.locator('[id^="gHKMixer"]').count()==1
-                check_mixer_geometry(mixed,1)
-                single['config']['heatingCircuitMixed1']=False
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',single)
-                assert mixed.locator('[id^="gHKMixer"]').count()==0
-                assert mixed.locator('[id^="pathHKMixingReturn"]').count()==0
+                # Missing relays are unknown; both inactive relays mean neither direction is driven.
+                updated=json.loads(json.dumps(original))
+                updated['data'].pop('mixerOpen1')
+                updated['data']['computedCOP'].update(value=0,formatted='0.00')
+                updated['data']['computedJAZ'].update(value=4.1,formatted='4.10')
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
+                assert mixed.locator('#textMixerOpen1').text_content()=='Auf: —'
+                assert mixed.locator('#textComputedCOP').text_content()=='0.00'
+                assert mixed.locator('#textComputedJAZ').text_content()=='4.10'
+                # A sole third heating place still has a connected distributor.
+                updated['config'].update(heatingCircuitType1='off',heatingCircuitType2='off')
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
+                assert mixed.locator('#gHeatingManifold').evaluate('e=>getComputedStyle(e).display')!='none'
+                assert mixed.locator('#gNoBuffer > path.cold').get_attribute('d').startswith('M1105 535')
+                updated['config']['tankHP']=True
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
+                assert mixed.locator('#gBuffer > path.cold').first.get_attribute('d')=='M900 440H720V835H675'
+                assert mixed.locator('#gBuffer > path.cold').last.get_attribute('d')=='M1105 535H1085V440H1070'
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',original)
-                assert mixed.locator('[id^="gHKMixer"]').count()==3
+                screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
+                if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'mixed-{width}.png'))
+                assert not errors,errors
                 mixed.close()
+
+            # Selected room count controls the layout and scales a sole reading up.
+            for width in [1200,390]:
+                font_sizes=[]
+                for count in [1,2,3]:
+                    rooms=browser.new_page(viewport={'width':width,'height':850})
+                    errors=[]
+                    rooms.on('pageerror',lambda e: errors.append(str(e)))
+                    rooms.goto(f'http://127.0.0.1:{server.server_port}/rooms-{count}.html')
+                    assert rooms.locator('#gRoomTemperatures > g').count()==count
+                    assert rooms.locator('#indoorDefaultIcon').evaluate('e=>getComputedStyle(e).display')=='none'
+                    assert rooms.locator('#textRoomTemperature1').text_content()=='21.0 °C'
+                    assert rooms.locator('#gRoomTemperature1 i').get_attribute('class')=='fa-light fa-temperature-half'
+                    if count==1: assert rooms.locator('#textIndoorTemperatureLabel').text_content()=='Wohnzimmer'
+                    if count>=2:
+                        assert 'Bad' in rooms.locator('#gRoomTemperature2').text_content()
+                        assert rooms.locator('#gRoomTemperature2 i').get_attribute('class')=='fa-light fa-bath'
+                    if count==3: assert rooms.locator('#gRoomTemperature3 > path').count()==1
+                    font_sizes.append(rooms.locator('#textRoomTemperature1').evaluate('e=>parseFloat(getComputedStyle(e).fontSize)'))
+                    # Room rows stay in the indoor half of the information card.
+                    boxes=rooms.locator('#gRoomTemperatures > g').evaluate_all('(es)=>es.map(e=>{const b=e.getBoundingClientRect();return {y:b.y,bottom:b.bottom,right:b.right};})')
+                    divider=rooms.locator('#info > line').first.bounding_box()
+                    for box in boxes: assert box['right']<divider['x'],(boxes,divider)
+                    for a,b in zip(boxes,boxes[1:]): assert a['bottom']<=b['y']+1,boxes
+                    screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
+                    if screenshot_dir: rooms.screenshot(path=str(Path(screenshot_dir)/f'rooms-{count}-{width}.png'))
+                    assert not errors,errors
+                    rooms.close()
+                assert font_sizes[0]>font_sizes[1]>=font_sizes[2],font_sizes
+            print(json.dumps({'heating_places':'PASS','mixer_telemetry':'PASS','indoor_1_2_3':'PASS','cop_jaz':'PASS'}))
 
             # Integration of PHP's direct Ident resolver and actual VM_UPDATE payload.
             live_update=json.loads(Path(artifacts,'live-ident-update.json').read_text())
@@ -602,7 +634,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
             # HTTPS Symcon must offer a separate tab instead of a blocked ws connection.
             secure=browser.new_page()
             secure.route('https://symcon.test/**', lambda route: route.fulfill(
-                content_type='text/html', body=Path(artifacts,'configured.html').read_text()))
+                content_type='application/javascript' if route.request.url.endswith('/icons.js') else 'text/html',
+                body='' if route.request.url.endswith('/icons.js') else Path(artifacts,'configured.html').read_text()))
             secure.goto('https://symcon.test/configured.html')
             secure.evaluate('(url)=>window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:url}})',web_url)
             secure.locator('#gSettings').dispatch_event('click')

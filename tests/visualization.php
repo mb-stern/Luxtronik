@@ -47,10 +47,12 @@ function configuredVisualization(): Luxtronik
     $external = new Luxtronik();
     foreach ($module->properties as $property => $default) {
         if (!is_int($default) || $default !== 0 || isset($base[$property]) || isset($map[$property])
-            || str_contains($property, 'Threshold') || str_contains($property, 'Count')) continue;
+            || str_starts_with($property, 'VisualizationRoomVariable') || str_contains($property, 'Threshold') || str_contains($property, 'Count')) continue;
         $id = visualizationVariable($external, $property, 25.5);
         $module->properties[$property] = $id;
     }
+    $module->properties['VisualizationHeatingCircuit2'] = true;
+    $module->properties['VisualizationHeatingCircuit3'] = true;
     $module->properties['HeaterRodCount'] = 3;
     $module->properties['ThermalSolarAvailable'] = true;
     $module->properties['HeatingCircuitType2'] = 'radiator';
@@ -83,8 +85,11 @@ $tests['visualization settings expose only external additions and layout; footer
     $panel = array_values(array_filter($form['elements'], fn($e) => ($e['caption'] ?? '') === 'HTML-SDK / Visualisierung'));
     check(count($panel) === 1, 'HTML-SDK settings missing');
     $sdkFields = fields($panel[0]);
+    foreach (['VisualizationMixedCircuit1', 'VisualizationMixedCircuit2', 'VisualizationMixedCircuit3', 'VisualizationDirectCircuit'] as $removed) {
+        check(!isset($sdkFields[$removed]), 'Obsolete mixer configuration retained');
+    }
     $pickers = array_filter($sdkFields, fn($e) => ($e['type'] ?? '') === 'SelectVariable');
-    check(array_keys($pickers) === ['AdditionalValue000', 'AdditionalValue001', 'AdditionalValue002'], 'HTML-SDK configuration is not limited to three free external values');
+    check(array_keys($pickers) === ['VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3', 'AdditionalValue000', 'AdditionalValue001', 'AdditionalValue002'], 'Unexpected assignment controls beyond three rooms and three free external values');
     foreach (['LuxtronikInstanceID', 'ManualConfiguration', 'OperatingStatusVariable', 'OutdoorTemperature', 'CompressorValue', 'ExpansionValveOpening'] as $property) {
         check(!isset($fields[$property]), 'Unwanted assignment UI: ' . $property);
     }
@@ -247,37 +252,132 @@ $tests['graphic is full-view only and labels and payload are safely embedded'] =
     $form = json_decode($module->GetConfigurationForm(), true, 512, JSON_THROW_ON_ERROR);
     check(isset(fields($form)['IDListe']), 'Native configuration lost');
 };
-$tests['component checkboxes bind three mixed circuits without individual assignments'] = static function (): void {
+$tests['three heating places and mixer readings remain independent and use existing Idents'] = static function (): void {
+    check(count(invoke(new Luxtronik(), 'BuildCardConfig')['mixers']) === 1, 'Mixer 1 not shown by default');
     $module = mixedCircuitVisualization();
     $payload = visualizationPayload($module);
     for ($i = 1; $i <= 3; ++$i) {
-        $suffix = $i === 1 ? '' : (string)$i;
-        check($payload['config']['heatingCircuitName' . $i] === 'Mischkreis ' . $i, 'Mixed circuit name guessed');
-        check($payload['config']['heatingCircuitMixed' . $i] === true, 'Mixed circuit has no hydraulic mixer descriptor');
-        check($payload['data']['supplyTemperatureHeating' . $suffix]['value'] === 25.0 + $i * 5, 'Wrong mixed-circuit Ident');
-        check($payload['config']['refluxTemperatureHeating' . $suffix] === '', 'Invented mixed-circuit return');
+        check($payload['config']['heatingCircuitName' . $i] === 'HK' . $i, 'Heating place replaced by mixer');
+        check($payload['config']['heatingCircuitMixed' . $i] === false, 'Mixer inserted at heating place');
+        check($payload['data']['mixerActual' . $i]['value'] === 25.0 + $i * 5, 'Wrong mixed-circuit actual Ident');
+        check($payload['data']['mixerTarget' . $i]['value'] === 15.0 + $i * 5, 'Wrong mixed-circuit target Ident');
     }
-    check($payload['data']['heatPumpReturnTemperature']['value'] === 40.0, 'Heat pump return lost without direct circuit');
-    check(!isset($payload['data']['heatingCircuitPumpRunning']), 'Mixer Auf/Zu misused as pump signal');
-    check($payload['data']['heatingCircuitPumpRunning2']['value'] === true, 'Mixed-circuit pump not resolved');
-    $module->properties['VisualizationDirectCircuit'] = true;
-    check(invoke($module, 'BuildCardConfig')['circuitWarning'] !== '', 'Four circuits silently accepted');
+    check(count($payload['config']['mixers']) === 3, 'Mixer readings incomplete');
+    check($payload['data']['supplyTemperatureHeating']['value'] === 50.0, 'HK1 no longer uses original map');
+    check($payload['data']['heatPumpReturnTemperature']['value'] === 40.0, 'Heat pump return lost');
+    check(!isset($payload['data']['supplyTemperatureHeating2']), 'Invented HK2 temperature');
+    check(!isset($payload['data']['refluxTemperatureHeating3']), 'Invented HK3 return');
+    check($payload['data']['mixerOpen1']['value'] === true && $payload['data']['mixerClose1']['value'] === false, 'Relay signals conflated');
+    check($payload['data']['mixerOpen2']['value'] === false && $payload['data']['mixerClose2']['value'] === false, 'Idle signals changed');
+    $module->properties['VisualizationHeatingCircuit1'] = false;
+    check(invoke($module, 'BuildCardConfig')['heatingCircuitType1'] === 'off', 'Disabled HK1 shown');
+    check(count(invoke($module, 'BuildCardConfig')['mixers']) === 3, 'HK toggle removes independent mixers');
 };
+
+$tests['old circuit settings migrate once while preserving configuration and attributes'] = static function (): void {
+    $module = new Luxtronik();
+    $old = ['configuration' => ['VisualizationDirectCircuit' => false, 'VisualizationMixedCircuit1' => true,
+        'VisualizationMixedCircuit3' => true, 'IDListe' => '[{"id":15,"enabled":true,"visualizationFooter":true}]',
+        'AdditionalValue000' => 12345], 'attributes' => ['start_value_out' => 99]];
+    $migrated = json_decode($module->Migrate(json_encode($old)), true);
+    check($migrated['configuration']['VisualizationHeatingCircuit1'] && $migrated['configuration']['VisualizationHeatingCircuit2']
+        && !$migrated['configuration']['VisualizationHeatingCircuit3'], 'Visible place count lost');
+    foreach ($old['configuration'] as $key => $value) check($migrated['configuration'][$key] === $value, 'Existing setting lost');
+    check($migrated['attributes'] === $old['attributes'], 'Attributes changed');
+    check($module->Migrate(json_encode($migrated)) === '', 'Migration not idempotent');
+};
+
+$tests['three named room sources keep duplicate IDs zero values and safe variable icons'] = static function (): void {
+    $module = roomVisualization(3);
+    $payload = visualizationPayload($module);
+    check(count($payload['config']['roomTemperatures']) === 3, 'Missing room sources');
+    check($payload['config']['roomTemperatures'][0]['label'] === 'Wohnzimmer', 'Variable name fallback missing');
+    check($payload['config']['roomTemperatures'][1]['label'] === 'Bad', 'Explicit room name ignored');
+    check($payload['config']['roomTemperatures'][0]['icon'] === 'fa-light fa-temperature-half', 'Variable icon ignored');
+    check($payload['config']['roomTemperatures'][1]['icon'] === 'fa-light fa-bath', 'Profile icon ignored');
+    check($payload['config']['roomTemperatures'][2]['icon'] === '', 'Unsafe icon accepted');
+    $module->properties['VisualizationRoomVariable3'] = $module->properties['VisualizationRoomVariable1'];
+    $GLOBALS['testVariables'][$module->properties['VisualizationRoomVariable1']]['value'] = 0.0;
+    check(count(invoke($module, 'BuildCardConfig')['roomTemperatures']) === 3, 'Repeated source suppressed');
+    check(invoke($module, 'BuildVisualizationData')['roomTemperature3']['value'] === 0.0, 'Zero reading dropped');
+    $module->GetVisualizationTile();
+    $id = $module->properties['VisualizationRoomVariable1'];
+    check(isset($module->messages[$id][VM_UPDATE]), 'Room source not subscribed');
+    $GLOBALS['testVariables'][$id]['value'] = 21.5;
+    $module->MessageSink(1, $id, VM_UPDATE, []);
+    check(end($module->updates)['data']['roomTemperature1']['value'] === 21.5, 'Room live update missing');
+    unset($GLOBALS['testVariables'][$id]);
+    $module->MessageSink(2, $id, VM_DELETE, []);
+    check(count(end($module->updates)['config']['roomTemperatures']) === 1, 'Deleted rooms retained');
+};
+
+$tests['COP and JAZ are read directly from their existing own Idents and stay live'] = static function (): void {
+    $module = new Luxtronik();
+    $foreign = new Luxtronik();
+    visualizationVariable($foreign, 'copfaktor', 99.0);
+    check(invoke($module, 'BuildCardConfig')['computedCOP'] === '', 'Foreign COP adopted');
+    $cop = visualizationVariable($module, 'copfaktor', 4.25);
+    $jaz = visualizationVariable($module, 'jazfaktor', 3.75);
+    $module->GetVisualizationTile();
+    check(isset($module->messages[$cop][VM_UPDATE], $module->messages[$jaz][VM_UPDATE]), 'Efficiency values not subscribed');
+    $GLOBALS['testVariables'][$cop]['value'] = 0.0;
+    $module->MessageSink(1, $cop, VM_UPDATE, []);
+    $payload = end($module->updates);
+    check($payload['data']['computedCOP']['variableId'] === $cop && (float)$payload['data']['computedCOP']['value'] === 0.0, 'COP recomputed or zero dropped');
+    check($payload['data']['computedJAZ']['variableId'] === $jaz && $payload['data']['computedJAZ']['value'] === 3.75, 'JAZ changed');
+};
+
+$tests['saving existing meter selections immediately publishes newly created COP and JAZ'] = static function (): void {
+    $module = new Luxtronik();
+    $external = new Luxtronik();
+    $module->properties['kwin'] = visualizationVariable($external, 'Power', 2.0);
+    $module->properties['kwhin'] = visualizationVariable($external, 'Energy', 100.0);
+    $module->ApplyChanges(); // Unconfigured device IP: local configuration only.
+    $cop = $module->GetIDForIdent('copfaktor');
+    $jaz = $module->GetIDForIdent('jazfaktor');
+    $payload = end($module->updates);
+    check($payload['data']['computedCOP']['variableId'] === $cop && $payload['data']['computedJAZ']['variableId'] === $jaz, 'ApplyChanges published before efficiency variables existed');
+    check($payload['config']['computedCOP'] !== '' && $payload['config']['computedJAZ'] !== '', 'Efficiency display not enabled');
+    invoke($module, 'calc_cop', 'cop', 8.0);
+    $module->MessageSink(1, $cop, VM_UPDATE, []);
+    check(end($module->updates)['data']['computedCOP']['value'] == 4.0, 'Native COP calculation not displayed');
+    $module->properties['kwin'] = 0;
+    $module->ApplyChanges();
+    check(end($module->updates)['config']['computedCOP'] === '' && end($module->updates)['config']['computedJAZ'] !== '', 'Removed COP selection retained or JAZ removed');
+};
+
+function roomVisualization(int $count): Luxtronik
+{
+    $module = mixedCircuitVisualization();
+    $external = new Luxtronik();
+    for ($i = 1; $i <= $count; ++$i) {
+        $id = visualizationVariable($external, 'Room' . $i, 20.0 + $i, $i === 2 ? 'RoomTemperature' : '~Temperature');
+        $GLOBALS['testVariables'][$id]['name'] = ['Wohnzimmer', 'Badezimmer', 'Schlafzimmer'][$i - 1];
+        $GLOBALS['testVariables'][$id]['formatted'] = (20 + $i) . '.0 °C';
+        $GLOBALS['testVariables'][$id]['icon'] = ['Temperature', '', '</script><script>bad()</script>'][$i - 1];
+        $module->properties['VisualizationRoomVariable' . $i] = $id;
+        if ($i === 2) $module->properties['VisualizationRoomLabel2'] = 'Bad';
+    }
+    $GLOBALS['testProfiles']['RoomTemperature'] = ['Icon' => 'Bath', 'Suffix' => ' °C'];
+    return $module;
+}
 
 function mixedCircuitVisualization(): Luxtronik
 {
     $module = new Luxtronik();
-    $module->properties['VisualizationDirectCircuit'] = false;
     for ($i = 1; $i <= 3; ++$i) {
-        $module->properties['VisualizationMixedCircuit' . $i] = true;
+        $module->properties['VisualizationHeatingCircuit' . $i] = true;
         $id = visualizationVariable($module, 'Mischkreis_' . $i . '_Vorlauftemperatur', 25.0 + $i * 5, '~Temperature');
         $GLOBALS['testVariables'][$id]['formatted'] = (25 + $i * 5) . '.0 °C';
+        $id = visualizationVariable($module, 'Mischkreis_' . $i . '_Vorlauf_Soll_Temperatur', 15.0 + $i * 5, '~Temperature');
+        $GLOBALS['testVariables'][$id]['formatted'] = (15 + $i * 5) . '.0 °C';
+        visualizationVariable($module, 'Ausgang_Mischkreis_' . $i . '_Auf', $i === 1);
+        visualizationVariable($module, 'Ausgang_Mischkreis_' . $i . '_Zu', $i === 3);
     }
     visualizationVariable($module, 'Ruecklauftemperatur_Heizkreis', 40.0, '~Temperature');
     visualizationVariable($module, 'Vorlauftemperatur_Heizkreis', 50.0, '~Temperature');
-    visualizationVariable($module, 'Ausgang_Mischkreis_1_Auf', true);
-    visualizationVariable($module, 'Ausgang_Mischkreis_1_Zu', false);
-    visualizationVariable($module, 'Ausgang_Pumpe_Mischkreis_2', true);
+    visualizationVariable($module, 'copfaktor', 4.25);
+    visualizationVariable($module, 'jazfaktor', 3.75);
     return $module;
 }
 
@@ -296,6 +396,7 @@ if ($dir!==false && $dir!=='') {
     file_put_contents($dir.'/configured.html','<meta charset="utf-8">'.$module->GetVisualizationTile());
     file_put_contents($dir.'/visualization.html','<meta charset="utf-8">'.(new Luxtronik())->GetVisualizationTile());
     file_put_contents($dir.'/mixed-circuits.html','<meta charset="utf-8">'.mixedCircuitVisualization()->GetVisualizationTile());
+    for ($count = 1; $count <= 3; ++$count) file_put_contents($dir.'/rooms-'.$count.'.html', '<meta charset="utf-8">'.roomVisualization($count)->GetVisualizationTile());
     $id=$module->GetIDForIdent('Verdichterdrehzahl');
     $GLOBALS['testVariables'][$id]['value']=3000;
     $GLOBALS['testVariables'][$id]['formatted']='3000 rpm';

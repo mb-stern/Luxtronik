@@ -40,6 +40,16 @@ trait LuxtronikVisualization
         'ThermalSolarPanelTemp' => ['Fuehler_Solarkollektor']
     ];
 
+    private const VISUALIZATION_EXTRA_IDENT_MAP = [
+        'MixerActual1' => ['Mischkreis_1_Vorlauftemperatur'], 'MixerTarget1' => ['Mischkreis_1_Vorlauf_Soll_Temperatur'],
+        'MixerOpen1' => ['Ausgang_Mischkreis_1_Auf'], 'MixerClose1' => ['Ausgang_Mischkreis_1_Zu'],
+        'MixerActual2' => ['Mischkreis_2_Vorlauftemperatur'], 'MixerTarget2' => ['Mischkreis_2_Vorlauf_Soll_Temperatur'],
+        'MixerOpen2' => ['Ausgang_Mischkreis_2_Auf'], 'MixerClose2' => ['Ausgang_Mischkreis_2_Zu'],
+        'MixerActual3' => ['Mischkreis_3_Vorlauftemperatur'], 'MixerTarget3' => ['Mischkreis_3_Vorlauf_Soll_Temperatur'],
+        'MixerOpen3' => ['Ausgang_Mischkreis_3_Auf'], 'MixerClose3' => ['Ausgang_Mischkreis_3_Zu'],
+        'ComputedCOP' => ['copfaktor'], 'ComputedJAZ' => ['jazfaktor']
+    ];
+
     private function CreateVisualization(): void
     {
 
@@ -50,6 +60,12 @@ trait LuxtronikVisualization
         $this->RegisterPropertyBoolean('VisualizationMixedCircuit2', false);
         $this->RegisterPropertyBoolean('VisualizationMixedCircuit3', false);
         $this->RegisterPropertyInteger('HeatPumpReturnTemperature', 0);
+        for ($i = 1; $i <= 3; ++$i) {
+            $this->RegisterPropertyBoolean('VisualizationHeatingCircuit' . $i, $i === 1);
+            $this->RegisterPropertyInteger('VisualizationRoomVariable' . $i, 0);
+            $this->RegisterPropertyString('VisualizationRoomLabel' . $i, '');
+        }
+        $this->RegisterPropertyBoolean('VisualizationRoomIcons', true);
 
         // Zentrale Status- und Steuerungszuordnung
         $this->RegisterPropertyInteger('OperatingStatusVariable', 0);
@@ -556,6 +572,7 @@ trait LuxtronikVisualization
     </div>
 </dialog>
 
+<script src="/icons.js"></script>
 <script>
 {$appJs}
 </script>
@@ -677,16 +694,30 @@ HTML;
             'additionalLabel009'          => $this->ReadPropertyString('AdditionalLabel009'),
             'additionalValue009'          => $this->DataKey('AdditionalValue009', 'additionalValue009'),
         ];
-        $circuits = $this->GetVisualizationCircuits();
         for ($i = 1; $i <= 3; ++$i) {
-            $circuit = $circuits[$i - 1] ?? null;
+            $present = $this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $i);
             $type = $this->ReadPropertyString('HeatingCircuitType' . $i);
-            $config['heatingCircuitType' . $i] = $circuit === null ? 'off' : ($type === 'radiator' ? 'radiator' : 'underfloor');
-            $config['heatingCircuitMixed' . $i] = $circuit !== null && str_starts_with($circuit['source'], 'mixed');
-            $name = $this->ReadPropertyString('HeatingCircuitName' . $i);
-            $config['heatingCircuitName' . $i] = $circuit === null ? '' : ($name === 'HK' . $i ? $circuit['name'] : $name);
+            $config['heatingCircuitType' . $i] = !$present ? 'off' : ($type === 'radiator' ? 'radiator' : 'underfloor');
+            $config['heatingCircuitName' . $i] = $this->ReadPropertyString('HeatingCircuitName' . $i);
+            $config['heatingCircuitMixed' . $i] = false;
         }
-        $config['circuitWarning'] = count($circuits) > 3 ? 'Die Grafik zeigt maximal drei Kreise. Bitte höchstens drei Heiz-/Mischkreise auswählen.' : '';
+        $config['mixers'] = [];
+        for ($i = 1; $i <= 3; ++$i) {
+            // Mixer 1 is always shown. Further mixer telemetry appears when available.
+            if ($i > 1 && $this->GetVisualizationVariableID('MixerActual' . $i) === 0
+                && $this->GetVisualizationVariableID('MixerTarget' . $i) === 0
+                && $this->GetVisualizationVariableID('MixerOpen' . $i) === 0
+                && $this->GetVisualizationVariableID('MixerClose' . $i) === 0) continue;
+            $config['mixers'][] = ['number' => $i,
+                'actual' => $this->DataKey('MixerActual' . $i, 'mixerActual' . $i),
+                'target' => $this->DataKey('MixerTarget' . $i, 'mixerTarget' . $i),
+                'open' => $this->DataKey('MixerOpen' . $i, 'mixerOpen' . $i),
+                'close' => $this->DataKey('MixerClose' . $i, 'mixerClose' . $i)];
+        }
+        $config['roomTemperatures'] = $this->GetVisualizationRoomSources();
+        $config['computedCOP'] = $this->DataKey('ComputedCOP', 'computedCOP');
+        $config['computedJAZ'] = $this->DataKey('ComputedJAZ', 'computedJAZ');
+        $config['circuitWarning'] = '';
         return $config;
     }
 
@@ -802,6 +833,14 @@ HTML;
             );
         }
 
+        foreach (self::VISUALIZATION_EXTRA_IDENT_MAP as $property => $idents) {
+            $key = lcfirst($property);
+            $this->AddVariableData($data, $key, $property, str_starts_with($property, 'MixerOpen') || str_starts_with($property, 'MixerClose'));
+        }
+        foreach ($this->GetVisualizationRoomSources() as $entry) {
+            $id = $entry['variableId'];
+            $data[$entry['key']] = ['variableId' => $id, 'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
+        }
         foreach ($this->GetVisualizationFooter() as $entry) {
             $id = $entry['variableId'];
             $data[$entry['key']] = ['variableId' => $id, 'value' => GetValue($id),
@@ -5765,12 +5804,13 @@ window.SymconHeatPump = {
             // 1 HK: kein Verteiler. Roter Vorlauf direkt zum HK1;
             // blauer Rücklauf wie im freigegebenen V33-Beispiel bis zur Hauptrücklaufleitung.
             // 2/3 HK: Verteiler sichtbar und nur so lang wie benötigt.
-            show('#gHeatingManifold', heatingCircuitCount > 1);
+            const useManifold = heating && (heatingCircuitCount > 1 || !hk1);
+            show('#gHeatingManifold', useManifold);
 
             const hk1Supply = svg.querySelector('#pathHK1Supply');
             const hk1Return = svg.querySelector('#pathHK1Return');
 
-            if (heatingCircuitCount === 1) {
+            if (!useManifold) {
                 if (hk1Supply) {
                     hk1Supply.setAttribute('d', 'M1070 245H1260');
                 }
@@ -5788,81 +5828,26 @@ window.SymconHeatPump = {
 
             const hkPumpIcon1 = svg.querySelector('#gHKPumpIcon1');
             if (hkPumpIcon1) {
-                hkPumpIcon1.setAttribute('transform', heatingCircuitCount === 1 ? 'translate(-30 0)' : '');
+                hkPumpIcon1.setAttribute('transform', !useManifold ? 'translate(-30 0)' : '');
             }
             const hkPumpText1 = svg.querySelector('#textHeatingPump1');
             if (hkPumpText1) {
-                hkPumpText1.setAttribute('x', heatingCircuitCount === 1 ? '1165' : '1195');
+                hkPumpText1.setAttribute('x', !useManifold ? '1165' : '1195');
             }
 
-            // Each mixed circuit has its own three-way valve upstream of its
-            // pump/emitter and a branch from that circuit's return. The symbol
-            // is schematic; no valve position is inferred from Auf/Zu signals.
-            for (let n = 1; n <= 3; n++) {
-                const circuit = svg.querySelector('#gHK' + n);
-                if (!circuit) continue;
-                let mixer = circuit.querySelector('#gHKMixer' + n);
-                const enabled = [hk1, hk2, hk3][n - 1] && !!cfg['heatingCircuitMixed' + n];
-                if (!enabled) {
-                    if (mixer) mixer.remove();
-                    continue;
-                }
-                if (!mixer) {
-                    const ns = 'http://www.w3.org/2000/svg';
-                    mixer = document.createElementNS(ns, 'g');
-                    mixer.id = 'gHKMixer' + n;
-                    const title = document.createElementNS(ns, 'title');
-                    title.textContent = 'Dreiwege-Mischventil mit Rücklaufbeimischung (schematisch)';
-                    mixer.appendChild(title);
-                    const branch = document.createElementNS(ns, 'path');
-                    branch.id = 'pathHKMixingReturn' + n;
-                    branch.setAttribute('class', 'cold');
-                    branch.setAttribute('d', 'M0 50V12');
-                    mixer.appendChild(branch);
-                    const junction = document.createElementNS(ns, 'circle');
-                    junction.setAttribute('cy', '50');
-                    junction.setAttribute('r', '4');
-                    junction.setAttribute('fill', '#35a6ff');
-                    mixer.appendChild(junction);
-                    const symbol = document.createElementNS(ns, 'circle');
-                    symbol.setAttribute('r', '12');
-                    symbol.setAttribute('fill', 'var(--wp-button)');
-                    symbol.setAttribute('stroke', 'var(--wp-icon)');
-                    symbol.setAttribute('stroke-width', '2');
-                    mixer.appendChild(symbol);
-                    const ports = document.createElementNS(ns, 'path');
-                    ports.setAttribute('d', 'M-10-5L0 0L-10 5Z M10-5L0 0L10 5Z M-5 10L0 0L5 10Z');
-                    ports.setAttribute('fill', 'none');
-                    ports.setAttribute('stroke', 'var(--wp-icon)');
-                    ports.setAttribute('stroke-width', '1.3');
-                    mixer.appendChild(ports);
-                    circuit.insertBefore(mixer, svg.querySelector('#gHKPumpIcon' + n));
-                }
-                const x = n === 1 && heatingCircuitCount === 1 ? 1120 : 1152;
-                mixer.setAttribute('transform', 'translate(' + x + ' ' + (245 + (n - 1) * 120) + ')');
-            }
-
+            const lastCircuit = hk3 ? 3 : (hk2 ? 2 : 1);
             const manifoldBody = svg.querySelector('#heatingManifoldBody');
             if (manifoldBody) {
-                if (heatingCircuitCount === 2) {
-                    manifoldBody.setAttribute('y', '220');
-                    manifoldBody.setAttribute('height', '215');
-                } else if (heatingCircuitCount >= 3) {
-                    manifoldBody.setAttribute('y', '220');
-                    manifoldBody.setAttribute('height', '335');
-                }
-
-            // Gemeinsamen blauen Rücklauf bei mehreren Heizkreisen exakt am
-            // letzten aktiven Heizkreis in den Verteiler führen.
-            const bufferColdPath = svg.querySelector('#gBuffer > path.cold');
-            const noBufferColdPath = svg.querySelector('#gNoBuffer > path.cold');
-            const manifoldReturnY = heatingCircuitCount === 2 ? 415 : (heatingCircuitCount >= 3 ? 535 : 440);
-            [bufferColdPath, noBufferColdPath].forEach((path) => {
-                if (!path || heatingCircuitCount <= 1) return;
-                const d = path.getAttribute('d') || '';
-                path.setAttribute('d', d.replace(/M1105\s+440/, 'M1105 ' + manifoldReturnY));
-            });
+                manifoldBody.setAttribute('y', '220');
+                manifoldBody.setAttribute('height', String(95 + (lastCircuit - 1) * 120));
             }
+            const manifoldReturnY = useManifold ? 295 + (lastCircuit - 1) * 120 : 440;
+            ['#gBuffer > path.cold:last-child', '#gNoBuffer > path.cold'].forEach((selector) => {
+                const path = svg.querySelector(selector);
+                if (path) path.setAttribute('d', selector.includes('gBuffer')
+                    ? 'M1105 ' + manifoldReturnY + (manifoldReturnY === 440 ? 'H1070' : 'H1085V440H1070')
+                    : 'M1105 ' + manifoldReturnY + 'H720V835H675');
+            });
 
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
             show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
@@ -5920,6 +5905,115 @@ window.SymconHeatPump = {
                 indoorKey = cfg.ambientTemperatureReduced;
             }
             setText('#textIndoorTemperatureValue', formatted(indoorKey));
+
+            // Room sources are explicit external additions; all other readings use own Idents.
+            const ns = 'http://www.w3.org/2000/svg';
+            const node = (parent, tag, attrs, text) => {
+                const el = document.createElementNS(ns, tag);
+                Object.entries(attrs || {}).forEach(([key, value]) => el.setAttribute(key, String(value)));
+                if (text !== undefined) el.textContent = text;
+                parent.appendChild(el);
+                return el;
+            };
+            const group = (id, parent) => {
+                let el = svg.querySelector('#' + id);
+                if (!el) el = node(parent, 'g', {id});
+                el.replaceChildren();
+                return el;
+            };
+            const fittedText = (parent, attrs, text, width) => {
+                const el = node(parent, 'text', attrs, text);
+                if (el.getComputedTextLength() > width) {
+                    el.setAttribute('textLength', width);
+                    el.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+                }
+                return el;
+            };
+            const rooms = Array.isArray(cfg.roomTemperatures) ? cfg.roomTemperatures.slice(0, 3) : [];
+            const roomGroup = group('gRoomTemperatures', svg.querySelector('#info'));
+            show('#textIndoorTemperatureValue', rooms.length === 0);
+            show('#indoorDefaultIcon', rooms.length === 0);
+            const roomHeading = svg.querySelector('#textIndoorTemperatureLabel');
+            if (roomHeading) roomHeading.textContent = rooms.length === 1 ? (rooms[0].label || 'Innentemperatur') : 'Innentemperatur';
+            if (roomHeading) {
+                roomHeading.removeAttribute('textLength');
+                roomHeading.removeAttribute('lengthAdjust');
+                if (roomHeading.getComputedTextLength() > 250) {
+                    roomHeading.setAttribute('textLength', '250');
+                    roomHeading.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+                }
+            }
+            rooms.forEach((room, index) => {
+                const single = rooms.length === 1;
+                const size = single ? 48 : (rooms.length === 2 ? 27 : 19);
+                const y = single ? 350 : 338 + index * (rooms.length === 2 ? 40 : 25);
+                const row = node(roomGroup, 'g', {id: 'gRoomTemperature' + (index + 1)});
+                if (room.icon !== 'none') {
+                    if (room.icon && /^fa-(light|regular|solid|brands|kit) fa-[a-z0-9-]+$/.test(room.icon)) {
+                        const icon = node(row, 'foreignObject', {x: 59, y, width: size + 5, height: size + 2});
+                        const body = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+                        body.style.cssText = 'color:var(--wp-icon);font-size:' + size + 'px;line-height:1.1;text-align:center';
+                        const i = document.createElementNS('http://www.w3.org/1999/xhtml', 'i');
+                        i.setAttribute('class', room.icon);
+                        i.setAttribute('aria-hidden', 'true');
+                        body.appendChild(i);
+                        icon.appendChild(body);
+                    } else {
+                        node(row, 'path', {class:'w', d:'M2 22L24 2L46 22M9 16V43H39V16',
+                            transform:'translate(59 ' + y + ') scale(' + size / 48 + ')'});
+                    }
+                }
+                if (!single) fittedText(row, {class:'sm', x:96, y:y + size * .8}, room.label || 'Raum', 108);
+                fittedText(row, {id:'textRoomTemperature' + (index + 1), class:'md', x:single ? 135 : 305,
+                    y:single ? 393 : y + size * .8, 'text-anchor':single ? 'start' : 'end',
+                    style:'font-size:' + (single ? 38 : rooms.length === 2 ? 24 : 18) + 'px'},
+                    formatted(room.key), single ? 175 : 94);
+            });
+
+            // Mixer telemetry sits at the heat pump, before the heating distributor.
+            // Auf/Zu are independent relay signals, not valve position measurements.
+            const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0, 3) : [];
+            const mixerGroup = group('gMixerReadings', svg.querySelector('#heatPump'));
+            const relay = (key) => raw(key) === null || raw(key) === undefined ? '—' : (binary(key) ? 'Ein' : 'Aus');
+            const mixerSymbol = (parent, mixer, x, y, radius) => {
+                const symbol = node(parent, 'g', {transform:'translate(' + x + ' ' + y + ')'});
+                node(symbol, 'title', {}, 'Mischer ' + mixer.number + ': Auf ' + relay(mixer.open) + ', Zu ' + relay(mixer.close) + '. Keine Positionsrückmeldung.');
+                node(symbol, 'circle', {r:radius, fill:'var(--wp-button)', stroke:'var(--wp-icon)', 'stroke-width':2});
+                node(symbol, 'path', {d:'M-5-10L0 0L5-10Z M-5 10L0 0L5 10Z M-10-5L0 0L-10 5Z',
+                    fill:'none', stroke:'var(--wp-icon)', 'stroke-width':1.5});
+                return symbol;
+            };
+            mixers.forEach((mixer, index) => {
+                const card = node(mixerGroup, 'g', {id:'gMixerReading' + mixer.number, transform:'translate(' + (43 + index * 208) + ' 453)'});
+                node(card, 'rect', {class:'pn', width:200, height:56, rx:5});
+                node(card, 'text', {class:'sm', x:8, y:16, style:'font-weight:bold;font-size:15px'}, 'Mischkreis ' + mixer.number);
+                if (mixer.number > 1) mixerSymbol(card, mixer, 182, 13, 10);
+                fittedText(card, {id:'textMixerActual' + mixer.number, class:'sm', x:8, y:34, style:'font-size:14px'},
+                    formatted(mixer.actual) ? 'Ist ' + formatted(mixer.actual) : '', 116);
+                fittedText(card, {id:'textMixerTarget' + mixer.number, class:'sm', x:8, y:50, style:'font-size:14px'},
+                    formatted(mixer.target) ? 'Soll ' + formatted(mixer.target) : '', 116);
+                node(card, 'text', {id:'textMixerOpen' + mixer.number, class:'sm', x:128, y:33, style:'font-size:13px'}, 'Auf: ' + relay(mixer.open));
+                node(card, 'text', {id:'textMixerClose' + mixer.number, class:'sm', x:128, y:49, style:'font-size:13px'}, 'Zu: ' + relay(mixer.close));
+            });
+            const mixerValve = group('gPrimaryMixerValve', svg.querySelector('#main'));
+            if (mixers.length && heating) {
+                node(mixerValve, 'path', {class:'cold', d:'M720 565H750V524'});
+                mixerSymbol(mixerValve, mixers[0], 750, 510, 14);
+                node(mixerValve, 'text', {class:'sm', x:773, y:515, style:'font-size:13px'}, 'Mischer 1');
+            }
+            const status = svg.querySelector('#textHPStatus');
+            if (status) {
+                status.setAttribute('x', mixers.length ? '250' : '55');
+                status.setAttribute('y', mixers.length ? '898' : '480');
+                status.style.fontSize = mixers.length ? '20px' : '';
+            }
+            const efficiency = group('gEfficiency', svg.querySelector('#heatPump'));
+            [[cfg.computedCOP, 'COP'], [cfg.computedJAZ, 'JAZ']].filter(([key]) => formatted(key) !== '').forEach(([key, label], index) => {
+                node(efficiency, 'text', {class:'sm', x:60, y:865 + index * 28}, label);
+                fittedText(efficiency, {id:'textComputed' + label, class:'md', x:225, y:865 + index * 28,
+                    'text-anchor':'end', style:'font-size:23px'}, formatted(key), 105);
+            });
+
             setText('#textSupplyTemperatureValue', formatted(cfg.supplyTemperature));
             const returnValue = svg.querySelector('#textReturnTemperatureValue');
             if (returnValue) {
@@ -6267,9 +6361,9 @@ window.SymconHeatPump = {
                 ['#main path.hot, #main path.cold', compressorActive],
                 ['#gBuffer > path.hot, #gBuffer > path.cold', chargingActive || heatingActive],
                 ['#gNoBuffer path.hot, #gNoBuffer path.cold', heatingActive],
-                ['#gHK1 > path.hot, #gHK1 > path.cold, #gHKMixer1 > path.cold', binary(cfg.heatingCircuitPumpRunning)],
-                ['#gHK2 > path.hot, #gHK2 > path.cold, #gHKMixer2 > path.cold', binary(cfg.heatingCircuitPumpRunning2)],
-                ['#gHK3 > path.hot, #gHK3 > path.cold, #gHKMixer3 > path.cold', binary(cfg.heatingCircuitPumpRunning3)],
+                ['#gHK1 > path.hot, #gHK1 > path.cold', binary(cfg.heatingCircuitPumpRunning)],
+                ['#gHK2 > path.hot, #gHK2 > path.cold', binary(cfg.heatingCircuitPumpRunning2)],
+                ['#gHK3 > path.hot, #gHK3 > path.cold', binary(cfg.heatingCircuitPumpRunning3)],
                 ['#gDHW > path.hot, #gDHW > path.cold', chargingActive && binary(cfg.wwHeatingValve)],
                 ['#gSolar path.sol', solarActive]
             ];
@@ -6797,19 +6891,17 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function GetVisualizationVariableID(string $property): int
     {
-        $idents = self::LUXTRONIK_IDENT_MAP[$property] ?? [];
+        $idents = self::VISUALIZATION_EXTRA_IDENT_MAP[$property] ?? self::LUXTRONIK_IDENT_MAP[$property] ?? [];
         if ($property === 'HeatPumpReturnTemperature') $idents = ['Ruecklauftemperatur_Heizkreis'];
-        if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)) {
-            $circuit = $this->GetVisualizationCircuits()[(int)$match[2] - 1] ?? null;
-            if ($circuit === null || (int)$match[2] > 3) return 0;
-            $idents = $this->GetCircuitIdents($circuit['source'], $match[1]);
-        }
+        if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
+            && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return 0;
         foreach ($idents as $ident) {
             $id = @$this->GetIDForIdent($ident);
             if ($id !== false && IPS_VariableExists($id)) {
                 return $id;
             }
         }
+        if (isset(self::VISUALIZATION_EXTRA_IDENT_MAP[$property])) return 0;
         $configured = $this->ReadPropertyInteger($property);
         return $configured > 0 && IPS_VariableExists($configured) ? $configured : 0;
     }
@@ -7003,16 +7095,10 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 ['type' => 'CheckBox', 'name' => 'TankWW', 'caption' => 'Warmwasserspeicher'],
                 ['type' => 'CheckBox', 'name' => 'ThermalSolarAvailable', 'caption' => 'Solarthermie']
             ]],
-            ['type' => 'Label', 'caption' => 'Heiz-/Mischkreise – bis zu drei gleichzeitig; fehlende Messwerte bleiben leer.'],
-            ['type' => 'RowLayout', 'items' => [
-                ['type' => 'CheckBox', 'name' => 'VisualizationDirectCircuit', 'caption' => 'Direkter Heizkreis'],
-                ['type' => 'CheckBox', 'name' => 'VisualizationMixedCircuit1', 'caption' => 'Mischkreis 1']
-            ]],
-            ['type' => 'RowLayout', 'items' => [
-                ['type' => 'CheckBox', 'name' => 'VisualizationMixedCircuit2', 'caption' => 'Mischkreis 2'],
-                ['type' => 'CheckBox', 'name' => 'VisualizationMixedCircuit3', 'caption' => 'Mischkreis 3']
-            ]],
-            ['type' => 'Label', 'caption' => 'Bitte höchstens drei Heiz-/Mischkreise auswählen.', 'visible' => count($this->GetVisualizationCircuits()) > 3],
+            ['type' => 'RowLayout', 'items' => array_map(static fn(int $i): array =>
+                ['type' => 'CheckBox', 'name' => 'VisualizationHeatingCircuit' . $i, 'caption' => 'Heizkreis ' . $i], range(1, 3))],
+            ['type' => 'Label', 'caption' => 'Mischkreis 1 wird immer angezeigt, weitere automatisch bei vorhandenen Werten. COP/JAZ erscheinen über die bestehende Zählerkonfiguration unter dem Heizgerät.'],
+            ['type' => 'ExpansionPanel', 'caption' => 'Bis zu drei Innentemperaturen', 'items' => $this->VisualizationRoomFields()],
             ['type' => 'Select', 'name' => 'HeaterRodCount', 'caption' => 'Anzahl Heizstäbe',
                 'options' => array_map(static fn(int $i): array => ['caption' => (string)$i, 'value' => $i], range(0, 3))],
             ['type' => 'ExpansionPanel', 'caption' => 'Drei optionale Fremdvariablen – frei benennbar', 'items' => $this->VisualizationExternalFooterFields()]
@@ -7021,35 +7107,62 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         return $form;
     }
 
-    private function GetVisualizationCircuits(): array
+    private function MigrateVisualizationSettings(array &$data): bool
     {
-        $circuits = [];
-        if ($this->ReadPropertyBoolean('VisualizationDirectCircuit')) $circuits[] = ['source' => 'direct', 'name' => 'Heizkreis direkt'];
-        for ($i = 1; $i <= 3; ++$i) {
-            if ($this->ReadPropertyBoolean('VisualizationMixedCircuit' . $i)) $circuits[] = ['source' => 'mixed' . $i, 'name' => 'Mischkreis ' . $i];
-        }
-        return $circuits;
+        if (!isset($data['configuration']) || !is_array($data['configuration'])) return false;
+        $config = &$data['configuration'];
+        if (array_key_exists('VisualizationHeatingCircuit1', $config)
+            || !array_key_exists('VisualizationDirectCircuit', $config)) return false;
+        // Retain the number of displayed places from 4.9/Build 1. Old mixer flags
+        // remain stored; mixer telemetry is now discovered automatically.
+        $count = !empty($config['VisualizationDirectCircuit']) ? 1 : 0;
+        for ($i = 1; $i <= 3; ++$i) $count += !empty($config['VisualizationMixedCircuit' . $i]) ? 1 : 0;
+        for ($i = 1; $i <= 3; ++$i) $config['VisualizationHeatingCircuit' . $i] = $i <= min(3, $count);
+        return true;
     }
 
-    private function GetCircuitIdents(string $source, string $field): array
+    private function GetVisualizationRoomSources(): array
     {
-        if ($source === 'direct') {
-            return match ($field) {
-                'SupplyTemperatureHeating' => ['Vorlauftemperatur_Heizkreis'],
-                'RefluxTemperatureHeating' => ['Ruecklauftemperatur_Heizkreis'],
-                'HeatingCircuitPumpRunning' => ['Ausgang_Heizungsumwaelzpumpe'],
-                'HeatingCircuitPumpValue' => ['Steuersignal_Umwaelzpumpe'], default => []
-            };
+        $sources = [];
+        for ($i = 1; $i <= 3; ++$i) {
+            $id = $this->ReadPropertyInteger('VisualizationRoomVariable' . $i);
+            if ($id <= 0 || !IPS_VariableExists($id)) continue;
+            $label = trim($this->ReadPropertyString('VisualizationRoomLabel' . $i));
+            $icon = '';
+            if ($this->ReadPropertyBoolean('VisualizationRoomIcons')) {
+                $icon = (string)(IPS_GetObject($id)['ObjectIcon'] ?? '');
+                if ($icon === '') {
+                    $profile = $this->GetVariableProfileName($id);
+                    if ($profile !== '' && IPS_VariableProfileExists($profile)) $icon = (string)(IPS_GetVariableProfile($profile)['Icon'] ?? '');
+                }
+            }
+            $sources[] = ['key' => 'roomTemperature' . $i, 'variableId' => $id,
+                'label' => $label === '' ? IPS_GetName($id) : $label,
+                'icon' => $this->VisualizationIconClass($icon)];
         }
-        $number = (int)substr($source, -1);
-        return match ($field) {
-            'SupplyTemperatureHeating' => ['Mischkreis_' . $number . '_Vorlauftemperatur'],
-            // Auf/Zu is a valve command, not a pump signal or a return sensor.
-            'HeatingCircuitPumpRunning' => match ($number) {
-                2 => ['Ausgang_Pumpe_Mischkreis_2'], 3 => ['Pumpe_Mischkreis_3'], default => []
-            },
-            default => []
-        };
+        return $sources;
+    }
+
+    private function VisualizationIconClass(string $icon): string
+    {
+        if ($icon === 'Transparent') return 'none';
+        $legacy = ['Temperature' => 'temperature-half', 'House' => 'house', 'Home' => 'house', 'Bed' => 'bed', 'Bath' => 'bath'];
+        if (isset($legacy[$icon])) return 'fa-light fa-' . $legacy[$icon];
+        if (preg_match('/^[a-z][a-z0-9-]*$/D', $icon)) return 'fa-light fa-' . preg_replace('/^fa-/', '', $icon);
+        if (preg_match('/^fa-(light|regular|solid|brands|kit) fa-[a-z0-9-]+$/D', $icon)) return $icon;
+        return ''; // Unavailable/legacy icons fall back to a house, never arbitrary HTML.
+    }
+
+    private function VisualizationRoomFields(): array
+    {
+        $fields = [['type' => 'CheckBox', 'name' => 'VisualizationRoomIcons', 'caption' => 'Variablensymbole verwenden (sonst Haus)']];
+        for ($i = 1; $i <= 3; ++$i) {
+            $fields[] = ['type' => 'RowLayout', 'items' => [
+                ['type' => 'ValidationTextBox', 'name' => 'VisualizationRoomLabel' . $i, 'caption' => 'Raum ' . $i . ' (leer = Variablenname)'],
+                $this->VariableSelect('Temperatur ' . $i, 'VisualizationRoomVariable' . $i)
+            ]];
+        }
+        return $fields;
     }
 
     private function VisualizationExternalFooterFields(): array

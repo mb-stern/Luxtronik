@@ -27,7 +27,7 @@ function IPS_SetVariableProfileAssociation(string $name, float $value, string $t
 function IPS_GetVariableProfile(string $name): array { return $GLOBALS['testProfiles'][$name]; }
 function IPS_GetKernelRunlevel(): int { return KR_READY; }
 function IPS_GetName(int $id): string { return $GLOBALS['testVariables'][$id]['name'] ?? ''; }
-function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '']; }
+function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '']; }
 function IPS_GetParent(int $id): int { return $GLOBALS['testVariables'][$id]['instance'] ?? 0; }
 function GetValueFormatted(int $id): string {
     $variable = $GLOBALS['testVariables'][$id];

@@ -102,6 +102,10 @@ Beispiel:
 
 ### 8. Versionen
 
+Version 4.10 (24.10.2026)
+- Drei Raumtemperaturen mit automatischer Größe; COP/JAZ direkt unter dem Gerät.
+- Drei Heizkreisplätze; Mischerdaten separat an der Wärmepumpe, Umschaltventil näher am Gerät.
+
 Version 4.9 Build 1 (24.10.2026)
 - Mischventil mit Rücklaufbeimischung vor Pumpe und Heizfläche ergänzt.
 

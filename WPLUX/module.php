@@ -62,16 +62,18 @@ class Luxtronik extends IPSModuleStrict
 
         // Alte Persistenz dekodieren
         $data = json_decode($JSONData, true);
-        if (!is_array($data) || !isset($data['configuration']['IDListe'])) {
+        if (!is_array($data)) return '';
+        $visualizationChanged = $this->MigrateVisualizationSettings($data);
+        if (!isset($data['configuration']['IDListe'])) {
             // Nichts zu tun
-            return '';
+            return $visualizationChanged ? json_encode($data) : '';
         }
 
         // IDListe ist als JSON-String gespeichert
         $raw = json_decode($data['configuration']['IDListe'], true);
         if (!is_array($raw) || empty($raw)) {
             // Nichts Sinnvolles drin
-            return '';
+            return $visualizationChanged ? json_encode($data) : '';
         }
 
         // Prüfen: schon neues Format? (id + enabled)
@@ -84,7 +86,7 @@ class Luxtronik extends IPSModuleStrict
         }
         if ($alreadyNew) {
             // Schon migriert -> nichts ändern
-            return '';
+            return $visualizationChanged ? json_encode($data) : '';
         }
 
         // --- Migration: alte IDs -> [{enabled, id}] ---
@@ -114,7 +116,7 @@ class Luxtronik extends IPSModuleStrict
 
         if (empty($new)) {
             // Keine brauchbaren IDs gefunden -> nichts ändern
-            return '';
+            return $visualizationChanged ? json_encode($data) : '';
         }
 
         // Sortieren wie vorher
@@ -918,6 +920,8 @@ class Luxtronik extends IPSModuleStrict
                 $this->UnregisterVariable($id);
             }
         }
+        // Rebind after configuration-created values (including COP/JAZ) exist.
+        $this->RefreshVisualization(true);
     }
 
     public function RequestAction(string $Ident, mixed $Value): void 
