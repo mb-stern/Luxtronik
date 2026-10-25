@@ -117,6 +117,8 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Warmwasserspeicher mittig zum Gerät mit symmetrischen Anschlüssen und kurzem Zirkulationsabgang ohne breitere Kachel; Temperatur/Leistung gleich groß und zentriert, Sollwert nur oben. Summierte Heizstableistung aus W/kW-Messwerten mit Blitz und Bedienbutton.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
 - Obere Bedienleiste gemäß aktivierten Steuervariablen, einschließlich Schwimmbad und Raumtemperatur-Soll; dynamische Anordnung und Breite. Raum-Sollwert mit eigenem Temperaturprofil.
+- LUX-Bedienfeld zweizeilig; Pumpendrehung nach Prozent-Ansteuerung und Wasserflussanimation mit variabler Geschwindigkeit nach l/h bzw. vorhandener Pumpen-Ansteuerung.
+- Optionaler Wettercode aus einer externen Variable (OpenWeather, z. B. 10d/01n) ersetzt die feste Sonne durch ein lokales Wettersymbol mit Tag-/Nacht-Darstellung.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

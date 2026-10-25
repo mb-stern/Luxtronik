@@ -92,6 +92,7 @@ trait LuxtronikVisualization
             $this->RegisterPropertyString('VisualizationHeaterOffValue' . $i, '');
         }
         $this->RegisterPropertyBoolean('VisualizationRoomIcons', true);
+        $this->RegisterPropertyInteger('VisualizationWeatherCode', 0);
         $this->RegisterPropertyBoolean('VisualizationCirculation', false);
         $this->RegisterPropertyString('VisualizationSolarTarget', 'hotwater');
 
@@ -801,6 +802,10 @@ HTML;
             else $total += $power['watts'];
         }
         if ($selected) $data['heaterRodTotalPower'] = ['value' => $complete ? $total : null, 'unit' => 'W', 'binary' => false];
+        $weatherID = $this->ReadPropertyInteger('VisualizationWeatherCode');
+        if ($weatherID > 0 && IPS_VariableExists($weatherID)) {
+            $data['weatherIcon'] = ['variableId'=>$weatherID, 'value'=>GetValue($weatherID), 'formatted'=>GetValueFormatted($weatherID)];
+        }
         foreach ($this->GetVisualizationRoomSources() as $entry) {
             $id = $entry['variableId'];
             $data[$entry['key']] = ['variableId' => $id, 'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
@@ -2701,8 +2706,8 @@ window.SymconHeatPump = {
             show('#gSettings', !!getLuxtronikWebURL());
             if (settings) {
                 const texts = settings.querySelectorAll('text');
-                if (texts[0]) texts[0].textContent = 'LUX Bedienfeld';
-                if (texts[1]) texts[1].textContent = '';
+                if (texts[0]) texts[0].textContent = 'LUX';
+                if (texts[1]) texts[1].textContent = 'Bedienfeld';
                 settings.style.cursor = 'pointer';
                 settings.setAttribute('role', 'button');
                 settings.setAttribute('tabindex', '0');
@@ -2741,6 +2746,13 @@ window.SymconHeatPump = {
             const raw = (key) => {
                 if (!key || !data[key]) return null;
                 return data[key].value;
+            };
+
+            const measuredNumber = (key) => {
+                const value = raw(key);
+                const number = typeof value === 'number' ? value
+                    : typeof value === 'string' && value.trim() !== '' ? Number(value.replace(',', '.')) : NaN;
+                return Number.isFinite(number) ? number : null;
             };
 
             const binary = (key) => {
@@ -2897,6 +2909,51 @@ window.SymconHeatPump = {
                 }
                 return el;
             };
+
+            // Decode OpenWeather icon codes locally; no remote image request is needed.
+            const weather = group('gOutdoorWeatherIcon', svg.querySelector('#info'));
+            weather.setAttribute('transform', 'translate(55 195)');
+            const weatherCode = [raw('weatherIcon'), data.weatherIcon?.formatted]
+                .map(value => String(value ?? '').trim().toLowerCase())
+                .find(value => /^(01|02|03|04|09|10|11|13|50)[dn]$/.test(value)) || '';
+            const weatherType = weatherCode.slice(0,2);
+            const night = weatherCode.endsWith('n');
+            const weatherNames = {'01':'Klar','02':'Leicht bewölkt','03':'Bewölkt','04':'Bedeckt',
+                '09':'Regenschauer','10':'Regen','11':'Gewitter','13':'Schnee','50':'Nebel'};
+            const weatherLabel = weatherCode ? weatherNames[weatherType] + ' (' + (night ? 'Nacht' : 'Tag') + ', ' + weatherCode + ')'
+                : 'Standardsymbol Außentemperatur';
+            weather.setAttribute('role','img');
+            weather.setAttribute('aria-label',weatherLabel);
+            weather.setAttribute('data-weather-code',weatherCode);
+            node(weather,'title',{},weatherLabel);
+            const skySymbol = (parent, isNight) => {
+                if (isNight) {
+                    node(parent,'path',{d:'M60 14A36 36 0 1 0 85 72A32 32 0 0 1 60 14Z',fill:'#c8d8ef'});
+                } else {
+                    node(parent,'circle',{cx:50,cy:50,r:19,fill:'#ffc51b'});
+                    node(parent,'path',{d:'M50 19V7M50 81V93M19 50H7M81 50H93M28 28L19 19M72 72L81 81M28 72L19 81M72 28L81 19',
+                        fill:'none',stroke:'#ffc51b','stroke-width':3});
+                }
+            };
+            if (!weatherCode || weatherType === '01') skySymbol(weather,night);
+            else {
+                if (weatherType === '02' || weatherType === '10') {
+                    skySymbol(node(weather,'g',{transform:'translate(-3 -3) scale(.72)'}),night);
+                }
+                node(weather,'path',{d:'M25 70C8 70 8 46 25 44C27 23 60 20 68 42C92 39 104 70 80 70Z',
+                    fill:weatherType === '04' ? '#7a8999' : '#aebdcb',stroke:'var(--wp-icon)','stroke-width':1.5});
+                if (weatherType === '09' || weatherType === '10') {
+                    node(weather,'path',{d:'M30 79L24 90M53 79L47 90M76 79L70 90',
+                        fill:'none',stroke:'#499ce8','stroke-width':4,'stroke-linecap':'round'});
+                } else if (weatherType === '11') {
+                    node(weather,'path',{d:'M47 66H63L52 78H61L38 94L44 80H34Z',fill:'#ffc51b'});
+                } else if (weatherType === '13') {
+                    [28,51,74].forEach(x => node(weather,'path',{d:'M'+x+' 77V91M'+(x-6)+' 80L'+(x+6)+' 88M'+(x-6)+' 88L'+(x+6)+' 80',
+                        fill:'none',stroke:'#73bbf1','stroke-width':2,'stroke-linecap':'round'}));
+                } else if (weatherType === '50') {
+                    node(weather,'path',{d:'M16 76H87M25 85H78M14 94H73',fill:'none',stroke:'var(--wp-icon)','stroke-width':3,'stroke-linecap':'round'});
+                }
+            }
 
             // Optional hydraulic components.
             const hk1 = previewAll || (!!cfg.heatingCircuitType1 && cfg.heatingCircuitType1 !== 'off');
@@ -3061,6 +3118,19 @@ window.SymconHeatPump = {
                 const mixer = mixers.find(item => (item.circuit || item.number) === n);
                 return mixer ? mixer.pump : cfg[n === 1 ? 'heatingCircuitPumpRunning' : 'heatingCircuitPumpRunning' + n];
             };
+            const circuitPumpValue = n => {
+                const mixer = mixers.find(item => (item.circuit || item.number) === n);
+                return mixer ? (mixer.number === 1 ? cfg.heatingCircuitPumpValue : '')
+                    : cfg[n === 1 ? 'heatingCircuitPumpValue' : 'heatingCircuitPumpValue' + n];
+            };
+            const pumpState = (runningKey, percentageKey) => {
+                const relayValue = raw(runningKey);
+                const relayKnown = relayValue !== null && relayValue !== undefined && relayValue !== '';
+                const percentage = measuredNumber(percentageKey);
+                const percent = percentage !== null && percentage >= 0 ? Math.min(100, percentage) : null;
+                const active = (!relayKnown || binary(runningKey)) && (percent !== null ? percent > 0 : binary(runningKey));
+                return {active, percent};
+            };
             const relay = (key) => raw(key) === null || raw(key) === undefined ? '—' : (binary(key) ? 'Ein' : 'Aus');
             const mixerSymbol = (parent, mixer, x, y, radius) => {
                 const known = raw(mixer.open) !== null && raw(mixer.open) !== undefined && raw(mixer.close) !== null && raw(mixer.close) !== undefined;
@@ -3189,15 +3259,13 @@ window.SymconHeatPump = {
             setText('#textHeatingCircuitName3', cfg.heatingCircuitName3 || 'HK3');
 
             [
-                [1, cfg.supplyTemperatureHeating, cfg.heatingCircuitPumpValue],
-                [2, cfg.supplyTemperatureHeating2, cfg.heatingCircuitPumpValue2],
-                [3, cfg.supplyTemperatureHeating3, cfg.heatingCircuitPumpValue3]
-            ].forEach(([n, supply, pumpValueItem]) => {
+                [1, cfg.supplyTemperatureHeating],
+                [2, cfg.supplyTemperatureHeating2],
+                [3, cfg.supplyTemperatureHeating3]
+            ].forEach(([n, supply]) => {
                 const mixer = mixers.find(item => (item.circuit || item.number) === n);
-                if (mixer) {
-                    supply = mixer.actual;
-                    pumpValueItem = mixer.number === 1 ? cfg.heatingCircuitPumpValue : '';
-                }
+                if (mixer) supply = mixer.actual;
+                const pumpValueItem = circuitPumpValue(n);
                 const supplySelector = n === 1 ? '#textSupplyTemperatureHeating' : '#textSupplyTemperatureHeating' + n;
                 const value = svg.querySelector(supplySelector);
                 const name = svg.querySelector('#textHeatingCircuitName' + n);
@@ -3457,25 +3525,13 @@ window.SymconHeatPump = {
                 );
             }
 
-            // Heizkreispumpen: der neue Rotor dreht sichtbar, sobald die konfigurierte
-            // Pumpenvariable einen positiven Wert liefert. Bei Prozent-/Drehzahlwerten
-            // wird die Animationsgeschwindigkeit mit dem Messwert skaliert.
-            [
-                [1, circuitPump(1)],
-                [2, circuitPump(2)],
-                [3, circuitPump(3)]
-            ].forEach(([n, key]) => {
+            // Command percentage controls schematic speed; an explicit off relay stops it.
+            const pumpStates = [1,2,3].map(n => pumpState(circuitPump(n), circuitPumpValue(n)));
+            pumpStates.forEach((state, index) => {
+                const n = index + 1;
                 const rotor = svg.querySelector('#hkPumpRotor' + n);
                 if (!rotor) return;
-                const value = raw(key);
-                let speed = 0;
-                if (typeof value === 'boolean') {
-                    speed = value ? 50 : 0;
-                } else {
-                    const parsed = Number(String(value ?? '').replace(',', '.'));
-                    if (Number.isFinite(parsed) && parsed > 0) speed = parsed;
-                    else if (binary(key)) speed = 50;
-                }
+                const speed = state.active ? (state.percent ?? 50) : 0;
                 const duration = speed > 0
                     ? Math.max(0.55, Math.min(2.8, 3.0 - Math.min(speed, 100) * 0.0245))
                     : 0;
@@ -3483,8 +3539,7 @@ window.SymconHeatPump = {
                 rotor.style.setProperty('transform-origin', '0px 0px', 'important');
                 rotor.style.setProperty(
                     'animation',
-                    duration > 0 ? 'symcon-modern-rotate ' + duration.toFixed(2) + 's linear infinite' : 'none',
-                    'important'
+                    duration > 0 ? 'symcon-modern-rotate ' + duration.toFixed(2) + 's linear infinite' : 'none'
                 );
             });
 
@@ -3547,27 +3602,37 @@ window.SymconHeatPump = {
             svg.setAttribute('viewBox','15 0 ' + contentRight + ' 925');
 
             // Live flow overlays use actual running variables; no idle animation.
-            const heatingActive = [1,2,3].some(n => [hk1,hk2,hk3][n - 1] && binary(circuitPump(n)));
+            const heatingActive = pumpStates.some((state,index) => [hk1,hk2,hk3][index] && state.active);
             const chargingActive = binary(cfg.storageChargingPumpRunning);
-            const measuredFlow = raw(cfg.heatingFlow);
-            const hasMeasuredFlow = typeof measuredFlow === 'number' && Number.isFinite(measuredFlow) && measuredFlow >= 0;
-            const primaryWaterActive = hasMeasuredFlow ? measuredFlow > 0 : compressorActive;
+            const measuredFlow = measuredNumber(cfg.heatingFlow);
+            const hasMeasuredFlow = measuredFlow !== null && measuredFlow >= 0;
+            const primaryPump = pumpState(cfg.heatingCircuitPumpRunning, cfg.heatingCircuitPumpValue);
+            const primaryRelay = raw(cfg.heatingCircuitPumpRunning);
+            const hasPrimaryPump = primaryPump.percent !== null || (primaryRelay !== null && primaryRelay !== undefined && primaryRelay !== '');
+            const primaryWaterActive = hasMeasuredFlow ? measuredFlow > 0 : hasPrimaryPump ? primaryPump.active : compressorActive;
+            // Visual scale only: 600 l/h or 50% uses 2.8 s; never derive a displayed l/h value.
+            const flowDuration = (value, reference) => value > 0 ? Math.max(0.6, Math.min(8, 2.8 * reference / value)) : 2.8;
+            const primaryFlowDuration = hasMeasuredFlow ? flowDuration(measuredFlow, 600)
+                : primaryPump.percent !== null ? flowDuration(primaryPump.percent, 50) : 2.8;
+            const circuitFlowDurations = pumpStates.map(state => state.percent !== null ? flowDuration(state.percent, 50) : 2.8);
+            const activeCircuitDurations = circuitFlowDurations.filter((_,index) => [hk1,hk2,hk3][index] && pumpStates[index].active);
+            const headerFlowDuration = activeCircuitDurations.length ? Math.min(...activeCircuitDurations) : 2.8;
             const solarActive = Number(raw(cfg.thermalSolarPumpSpeed)) > 0 || binary(cfg.thermalSolarPump);
             const solarRotor = svg.querySelector('#solarPumpRotor');
             if (solarRotor) solarRotor.style.setProperty('animation', solarActive ? 'symcon-modern-rotate 1.4s linear infinite' : 'none', 'important');
             const flows = [
                 ['#gRefrigerantCircuit path.hot, #gRefrigerantCircuit path.cold', compressorActive],
-                ['#main path.hot, #main path.cold', primaryWaterActive],
-                ['#gBuffer > path.hot, #gBuffer > path.cold', heatingActive],
-                ['#gNoBuffer path.hot, #gNoBuffer path.cold', heatingActive],
-                ['#gHeatingHeaders path.hot, #gHeatingHeaders path.cold', heatingActive],
-                ['#gHK1 > path.hot, #gHK1 > path.cold, #pathHKMixingReturn1', binary(circuitPump(1))],
-                ['#gHK2 > path.hot, #gHK2 > path.cold, #pathHKMixingReturn2', binary(circuitPump(2))],
-                ['#gHK3 > path.hot, #gHK3 > path.cold, #pathHKMixingReturn3', binary(circuitPump(3))],
-                ['#gDHW > path.hot, #gDHW > path.cold', chargingActive && binary(cfg.wwHeatingValve)],
+                ['#main path.hot, #main path.cold', primaryWaterActive, primaryFlowDuration],
+                ['#gBuffer > path.hot, #gBuffer > path.cold', heatingActive, headerFlowDuration],
+                ['#gNoBuffer path.hot, #gNoBuffer path.cold', heatingActive, headerFlowDuration],
+                ['#gHeatingHeaders path.hot, #gHeatingHeaders path.cold', heatingActive, headerFlowDuration],
+                ['#gHK1 > path.hot, #gHK1 > path.cold, #pathHKMixingReturn1', pumpStates[0].active, circuitFlowDurations[0]],
+                ['#gHK2 > path.hot, #gHK2 > path.cold, #pathHKMixingReturn2', pumpStates[1].active, circuitFlowDurations[1]],
+                ['#gHK3 > path.hot, #gHK3 > path.cold, #pathHKMixingReturn3', pumpStates[2].active, circuitFlowDurations[2]],
+                ['#gDHW > path.hot, #gDHW > path.cold', chargingActive && binary(cfg.wwHeatingValve), primaryFlowDuration],
                 ['#gSolar path.sol', solarActive]
             ];
-            flows.forEach(([selector, active]) => {
+            flows.forEach(([selector, active, duration = 2.8]) => {
                 svg.querySelectorAll(selector).forEach((path) => {
                     if (!active) {
                         if (path.__wpLiveFlow) path.__wpLiveFlow.remove();
@@ -3578,6 +3643,7 @@ window.SymconHeatPump = {
                         || document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     overlay.setAttribute('d', path.getAttribute('d') || '');
                     overlay.setAttribute('class', 'wp-live-flow');
+                    overlay.style.setProperty('--wp-flow-duration', duration.toFixed(2) + 's');
                     if (path.hasAttribute('transform')) overlay.setAttribute('transform', path.getAttribute('transform'));
                     if (!overlay.isConnected) path.after(overlay);
                     path.__wpLiveFlow = overlay;
@@ -3750,6 +3816,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     {
         if ($this->ReadPropertyString('CommunicationMode') === 'modbus' && $property === 'MixerPump1') return ['SHI_Pumpe_Mischkreis_1'];
         if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
+            && !in_array($property, ['HeatingCircuitPumpRunning1','HeatingCircuitPumpValue1'], true)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return [];
         if (preg_match('/^SupplyTemperatureHeating([1-3])$/D', $property, $match)) {
             $circuit = (int)$match[1];
@@ -3767,6 +3834,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             if ($id > 0 && IPS_VariableExists($id)) return $id;
         }
         if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
+            && !in_array($property, ['HeatingCircuitPumpRunning1','HeatingCircuitPumpValue1'], true)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return 0;
         $idents = $this->GetVisualizationIdents($property);
         foreach ($idents as $ident) {
@@ -4112,6 +4180,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     {
         $items = [
             ['type' => 'Label', 'caption' => 'Komponenten auswählen; die Grafik erhält ihre internen Messwerte automatisch, unabhängig von der ID-Liste.'],
+            $this->VariableSelect('Wettercode (OpenWeather, z. B. 10d; optional)', 'VisualizationWeatherCode'),
             ['type' => 'RowLayout', 'items' => [
                 ['type' => 'CheckBox', 'name' => 'TankHP', 'caption' => 'Pufferspeicher'],
                 ['type' => 'CheckBox', 'name' => 'TankWW', 'caption' => 'Warmwasserspeicher'],
@@ -4232,6 +4301,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             }
         }
         if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
+            && !in_array($property, ['HeatingCircuitPumpRunning1','HeatingCircuitPumpValue1'], true)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return null;
         if ($this->ReadPropertyString('CommunicationMode') === 'modbus' && !in_array($property, ['ComputedCOP','ComputedJAZ'], true)) {
             foreach ($this->GetVisualizationIdents($property) as $ident) {

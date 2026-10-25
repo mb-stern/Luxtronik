@@ -115,6 +115,32 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
                     return JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
                 }''')
+                # OpenWeather codes replace the original sun without remote images.
+                assert page.locator('#gOutdoorWeatherIcon').count()==1
+                assert page.locator('#gOutdoorWeatherIcon circle').count()==1
+                for kind in ['01','02','03','04','09','10','11','13','50']:
+                    for phase in ['d','n']:
+                        code=kind+phase
+                        weather_data=json.loads(json.dumps(payload['data']))
+                        weather_data['weatherIcon']={'value':code,'formatted':code}
+                        page.evaluate('(data)=>window.handleMessage({type:"update",data})',weather_data)
+                        icon=page.locator('#gOutdoorWeatherIcon')
+                        assert icon.get_attribute('data-weather-code')==code
+                        assert ('Nacht' if phase=='n' else 'Tag') in icon.get_attribute('aria-label')
+                        assert icon.locator('image,foreignObject,script').count()==0
+                        bounds=icon.evaluate('e=>{const b=e.getBBox();return {x:b.x,y:b.y,right:b.x+b.width,bottom:b.y+b.height};}')
+                        assert bounds['x']>=0 and bounds['right']<=100 and bounds['y']>=0 and bounds['bottom']<=100,bounds
+                        if code=='01n': assert icon.locator('circle').count()==0
+                        if code=='10d': assert 'Regen' in icon.get_attribute('aria-label')
+                # Raw codes and profile association captions are supported, including raw zero.
+                for value,formatted,expected in [(' 10D ','','10d'),(0,'01n','01n'),('invalid','',''),('<img src=x onerror=alert(1)>','','')]:
+                    weather_data['weatherIcon']={'value':value,'formatted':formatted}
+                    page.evaluate('(data)=>window.handleMessage({type:"update",data})',weather_data)
+                    assert page.locator('#gOutdoorWeatherIcon').get_attribute('data-weather-code')==expected
+                    assert page.locator('#gOutdoorWeatherIcon image,#gOutdoorWeatherIcon foreignObject').count()==0
+                page.evaluate('(data)=>window.handleMessage({type:"update",data})',payload['data'])
+                assert page.locator('#gOutdoorWeatherIcon').get_attribute('data-weather-code')==''
+                assert page.locator('#gOutdoorWeatherIcon circle').count()==1
                 assert page.locator('#wp-view-toggle,#wp-compact-view').count()==0
                 assert page.locator('#gHeatingManifold').count()==0
                 assert 'Verteiler' not in page.locator('#wp-card svg').text_content()
@@ -162,7 +188,13 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 web_payload['config']['luxtronikWebInterfaceURL']=web_url
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',web_payload)
                 assert page.locator('#gSettings').is_visible()
-                assert page.locator('#gSettings text').first.text_content()=='LUX Bedienfeld'
+                assert page.locator('#gSettings text').all_text_contents()==['LUX','Bedienfeld']
+                lux_layout=page.locator('#gSettings').evaluate('''e=>{
+                    const texts=[...e.querySelectorAll('text')];
+                    return {width:Number(e.querySelector('rect').getAttribute('width')),
+                        x:texts.map(t=>Number(t.getAttribute('x'))), y:texts.map(t=>Number(t.getAttribute('y')))};
+                }''')
+                assert lux_layout['width']<=190 and lux_layout['x']==[18,18] and lux_layout['y']==[45,78],lux_layout
                 assert not luxtronik.connections
                 page.locator('#gSettings').dispatch_event('click')
                 assert page.locator('#wp-luxtronik-dialog').is_visible()
@@ -460,6 +492,50 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert compressor_reading(0,configure_speed=False,configure_running=False)['name']=='none'
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
 
+                # Pump command and measured l/h have independent schematic speed scales.
+                def pump_reading(percent, flow=600, running=True, target=1):
+                    sample=json.loads(json.dumps(payload))
+                    pump_key=sample['config']['heatingCircuitPumpValue']
+                    sample['data'][pump_key]={'value':percent,'formatted':f'{percent} %'}
+                    sample['data'][sample['config']['heatingCircuitPumpRunning']]['value']=running
+                    for mixer in sample['config']['mixers']:
+                        if mixer['number']==1:
+                            mixer['circuit']=target
+                            sample['data'][mixer['pump']]['value']=running
+                        elif target==2 and mixer['circuit']==2:
+                            mixer['circuit']=1
+                    sample['config']['heatingFlow']='testFlowSpeed'
+                    sample['data']['testFlowSpeed']={'value':flow,'formatted':f'{flow} l/h'}
+                    page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
+                    return page.locator(f'#hkPumpRotor{target}').evaluate('''e=>({
+                        name:getComputedStyle(e).animationName,duration:parseFloat(getComputedStyle(e).animationDuration)})''')
+
+                assert pump_reading(25)=={'name':'symcon-modern-rotate','duration':2.39}
+                slow_flow=page.locator('#gHK1 > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')
+                assert slow_flow==5.6
+                assert pump_reading(75)=={'name':'symcon-modern-rotate','duration':1.16}
+                assert page.locator('#gHK1 > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')<slow_flow
+                # The primary flow follows its actual measurement, independently of %.
+                assert page.locator('#main > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')==2.8
+                pump_reading(25,flow=300)
+                assert page.locator('#main > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')==5.6
+                pump_reading(25,flow=1200)
+                assert page.locator('#main > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')==1.4
+                assert pump_reading(0)['name']=='none'
+                assert page.locator('#gHK1 > .wp-live-flow').count()==0
+                assert pump_reading(75,running=False)['name']=='none'
+                assert page.locator('#gHK1 > .wp-live-flow').count()==0
+                for missing in [None,'','unavailable',False,-1]:
+                    rotor=pump_reading(missing)
+                    assert rotor['name']=='symcon-modern-rotate' and 1.7<rotor['duration']<1.8,(missing,rotor)
+                assert pump_reading('75,0',flow=None)['duration']==1.16
+                assert page.locator('#main > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')==1.87
+                pump_reading(75,flow=0)
+                assert page.locator('#main > .wp-live-flow').count()==0
+                assert pump_reading(25,target=2)['duration']==2.39
+                assert pump_reading(75,target=2)['duration']==1.16
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
+
                 # Primary heating water still flows through the condenser when the compressor stops.
                 hydraulic=json.loads(json.dumps(payload))
                 for key in ['compressorValue','compressorRunning']:
@@ -499,6 +575,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 page.emulate_media(reduced_motion='reduce')
                 assert page.locator('.wp-live-flow').first.evaluate("e=>getComputedStyle(e).animationName")=='none'
                 assert page.locator('#pathCompressor').evaluate("e=>getComputedStyle(e).animationName")=='none'
+                assert page.locator('#hkPumpRotor1').evaluate("e=>getComputedStyle(e).animationName")=='none'
                 idle=json.loads(json.dumps(payload))
                 for key in ['compressorValue','compressorRunning','storageChargingPumpRunning','heatingFlow',
                             'heatingCircuitPumpRunning','heatingCircuitPumpRunning2',

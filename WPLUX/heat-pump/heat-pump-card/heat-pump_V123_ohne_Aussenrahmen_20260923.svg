@@ -31,7 +31,7 @@ text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:
 .bt{transition:stroke .2s ease,fill .2s ease}
 .bt:hover{stroke:#499ce8 !important}
 .wp-equipment-outline{stroke:var(--wp-border);stroke-width:1.5}
-.wp-live-flow{fill:none;stroke:#f2f8ff;stroke-width:2;stroke-dasharray:2 18;stroke-linecap:round;opacity:.8;pointer-events:none;animation:wp-flow 2.8s linear infinite}
+.wp-live-flow{fill:none;stroke:#f2f8ff;stroke-width:2;stroke-dasharray:2 18;stroke-linecap:round;opacity:.8;pointer-events:none;animation:wp-flow var(--wp-flow-duration,2.8s) linear infinite}
 @keyframes wp-flow{to{stroke-dashoffset:-40}}
 @media(prefers-reduced-motion:reduce){
  .wp-live-flow{animation:none;opacity:.45}
@@ -60,7 +60,7 @@ text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:
  <g transform="translate(482 25)" id="gHPStatusHeating"><rect class="bt" width="190" height="105" rx="10" /><text class="hd" x="18" y="49">Heizung</text><text id="textControlHeating" class="md" x="18" y="80">Auto</text></g>
  <g transform="translate(684 25)" id="gHPStatusCooling"><rect class="bt" width="165" height="105" rx="10" /><text class="hd" x="18" y="49">Kühlen</text><text id="textControlCooling" class="md" x="18" y="80">Aus</text></g>
  <g id="gHPStatusPool" display="none"><rect class="bt" width="205" height="105" rx="10" /><text class="hd" x="18" y="49">Schwimmbad</text><text id="textControlPool" class="md" x="18" y="80">—</text></g>
- <g transform="translate(1210 25)" id="gSettings"><rect class="bt" width="360" height="105" rx="10" /><text class="hd" x="22" y="62">Einstellungen</text><text x="320" y="68" font-size="38">›</text></g>
+ <g transform="translate(1210 25)" id="gSettings"><rect class="bt" width="170" height="105" rx="10" /><text class="hd" x="18" y="45">LUX</text><text class="md" x="18" y="78">Bedienfeld</text></g>
 </g>
 <g id="gSymconWarmWaterSetpoint" transform="translate(1000 25)" display="none">
  <rect class="bt" width="205" height="105" rx="10" />
@@ -84,7 +84,7 @@ text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:
  <text id="textHeaterButtonState" class="md" x="18" y="78">—</text>
 </g>
 <g id="info"><rect class="pn" x="28" y="145" width="650" height="285" rx="10" /><line class="thin" x1="335" y1="165" x2="335" y2="410" />
- <text class="lb" x="55" y="185">Aussentemperatur</text><circle cx="105" cy="245" r="19" fill="#ffc51b" /><g stroke="#ffc51b" stroke-width="3"><path d="M105 214v-12M105 276v12M74 245H62M136 245h12M83 223l-9-9M127 267l9 9M127 223l9-9M83 267l-9 9" /></g><text id="textOutdoorTemperatureValue" class="bg" x="165" y="263" /><line class="thin" x1="55" y1="292" x2="305" y2="292" /><text id="textIndoorTemperatureLabel" class="lb" x="55" y="330">Innentemperatur</text><path id="indoorDefaultIcon" class="w" d="M65 382l38-35 38 35M76 373v35h54v-35" /><text id="textIndoorTemperatureValue" class="bg" x="165" y="394" />
+ <text class="lb" x="55" y="185">Aussentemperatur</text><g id="gOutdoorWeatherIcon"><circle cx="105" cy="245" r="19" fill="#ffc51b" /><g stroke="#ffc51b" stroke-width="3"><path d="M105 214v-12M105 276v12M74 245H62M136 245h12M83 223l-9-9M127 267l9 9M127 223l9-9M83 267l-9 9" /></g></g><text id="textOutdoorTemperatureValue" class="bg" x="165" y="263" /><line class="thin" x1="55" y1="292" x2="305" y2="292" /><text id="textIndoorTemperatureLabel" class="lb" x="55" y="330">Innentemperatur</text><path id="indoorDefaultIcon" class="w" d="M65 382l38-35 38 35M76 373v35h54v-35" /><text id="textIndoorTemperatureValue" class="bg" x="165" y="394" />
  <line class="thin" x1="365" y1="210" x2="650" y2="210" /><line class="thin" x1="365" y1="273" x2="650" y2="273" /><text id="textHeatingPowerLabel" class="lb" x="365" y="315">Heizleistung</text><text id="textPowerValue" class="md" x="495" y="315" /><line class="thin" x1="365" y1="340" x2="650" y2="340" /><text class="lb" x="365" y="385">Eingangsleistung</text>
 
 

@@ -48,7 +48,7 @@ function configuredVisualization(): Luxtronik
     $external = new Luxtronik();
     foreach ($module->properties as $property => $default) {
         if (!is_int($default) || $default !== 0 || isset($base[$property]) || isset($map[$property])
-            || str_starts_with($property, 'VisualizationRoomVariable') || str_starts_with($property, 'VisualizationHeaterSwitch') || str_contains($property, 'Threshold') || str_contains($property, 'Count')) continue;
+            || $property === 'VisualizationWeatherCode' || str_starts_with($property, 'VisualizationRoomVariable') || str_starts_with($property, 'VisualizationHeaterSwitch') || str_contains($property, 'Threshold') || str_contains($property, 'Count')) continue;
         $id = visualizationVariable($external, $property, 25.5);
         $module->properties[$property] = $id;
     }
@@ -98,7 +98,7 @@ $tests['visualization settings expose only external additions and layout without
         check(!isset($sdkFields[$removed]), 'Obsolete mixer configuration retained');
     }
     $pickers = array_filter($sdkFields, fn($e) => ($e['type'] ?? '') === 'SelectVariable');
-    check(array_keys($pickers) === ['HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3'], 'Removed power or pump pickers retained');
+    check(array_keys($pickers) === ['VisualizationWeatherCode', 'HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3'], 'Incorrect external variable pickers');
     check(!str_contains(json_encode($sdkFields),'Mischerdaten stehen beim Ventil'),'Obsolete hint retained');
     $solarRow=array_values(array_filter($panel[0]['items'],fn($item)=>($item['type']??'')==='RowLayout' && isset(fields($item)['ThermalSolarAvailable'])));
     check(count($solarRow)===1 && isset(fields($solarRow[0])['VisualizationSolarTarget']),'Solar destination separated from its switch');
@@ -997,6 +997,40 @@ $tests['room setpoint uses native Java readback with room limits and supports th
         $profile = IPS_GetVariableProfile('WPLUX.Rset');
         check((float)$profile['MinValue']===0.0 && (float)$profile['MaxValue']===35.0, 'Room profile incorrect');
     });
+};
+
+$tests['HUP percentage remains available when mixer one belongs to a different visible branch'] = static function (): void {
+    $module = new Luxtronik();
+    $module->properties['VisualizationHeatingCircuit1'] = false;
+    $module->properties['VisualizationHeatingCircuit2'] = true;
+    $module->properties['VisualizationHeatingCircuitMixer2'] = 1;
+    invoke($module,'StoreVisualizationPoints',[41=>true,183=>75.0]);
+    $payload = visualizationPayload($module);
+    check($payload['config']['heatingCircuitPumpValue']==='heatingCircuitPumpValue'
+        && $payload['data']['heatingCircuitPumpValue']['value']===75.0, 'HUP command wrongly tied to slot one');
+    check($module->GetIDForIdent('Steuersignal_Umwaelzpumpe')===false, 'Animation source creates an object');
+};
+
+$tests['external OpenWeather codes remain live in Java and Modbus without native variables'] = static function (): void {
+    foreach (['java','modbus'] as $mode) {
+        $module = new Luxtronik();
+        $module->properties['CommunicationMode'] = $mode;
+        $external = new Luxtronik();
+        invoke($external,'RegisterVariableString','WeatherIcon','Weather icon','');
+        $id = $external->GetIDForIdent('WeatherIcon');
+        $GLOBALS['testVariables'][$id]['value'] = '10d';
+        $module->properties['VisualizationWeatherCode'] = $id;
+        $module->GetVisualizationTile();
+        $data = invoke($module,'BuildVisualizationData');
+        check($data['weatherIcon']['value']==='10d' && $data['weatherIcon']['variableId']===$id, 'Weather source missing: '.$mode);
+        check(isset($module->messages[$id][VM_UPDATE]), 'Weather source not watched: '.$mode);
+        $GLOBALS['testVariables'][$id]['value'] = '01n';
+        $module->MessageSink(1,$id,VM_UPDATE,[]);
+        check(end($module->updates)['data']['weatherIcon']['value']==='01n', 'Weather code update ignored');
+        $module->properties['VisualizationWeatherCode'] = 0;
+        $module->GetVisualizationTile();
+        check(!isset(invoke($module,'BuildVisualizationData')['weatherIcon']) && !isset($module->messages[$id][VM_UPDATE]), 'Deselected weather source retained');
+    }
 };
 
 $failed=0;
