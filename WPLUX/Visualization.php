@@ -3592,8 +3592,8 @@ window.SymconHeatPump = {
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:780, y:waterReturnY - waterLineGap - 44,
-                    'text-anchor':'end', 'dominant-baseline':'text-after-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:waterReturnY - waterLineGap - 44,
+                    'text-anchor':'start', 'dominant-baseline':'text-after-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 100);
             }
             // Common WP temperatures belong before the DHW/heating split, in every operating mode.
