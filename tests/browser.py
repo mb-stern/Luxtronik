@@ -1060,7 +1060,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 row['data']['rowJAZ']={'value':3.3,'formatted':'3.3'}
                 faults.evaluate('(p)=>window.handleMessage({config:p.config,data:p.data})',row)
                 faults.evaluate('(history)=>window.handleMessage({controls:{faultHistory:history}})',history)
-                assert faults.locator('#textFaultHistory').text_content()=='Fehler: 2'
+                assert faults.locator('#textFaultHistory').text_content()=='Fehler:2'
                 assert faults.locator('#gEfficiency #buttonFaultHistory').count()==1
                 assert faults.locator('#textHPStatus').get_attribute('y')=='185'
                 assert faults.locator('#textFaultHistory').get_attribute('y')==faults.locator('#textComputedCOP').get_attribute('y')==faults.locator('#textComputedJAZ').get_attribute('y')

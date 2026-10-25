@@ -3309,12 +3309,27 @@ window.SymconHeatPump = {
 
             // The information panel keeps its size; operating data replaces VL/RL.
             const info = svg.querySelector('#info');
+            const infoLeft = 345;
+            const infoWidth = 305;
+            const infoFontFamily = getComputedStyle(svg.querySelector('#textHeatingPowerLabel')).fontFamily;
+            const infoTypography = el => {
+                el.style.setProperty('font-family',infoFontFamily,'important');
+                el.style.setProperty('font-size','24px','important');
+                el.style.setProperty('font-weight','400','important');
+                el.style.setProperty('font-style','normal','important');
+                el.removeAttribute('textLength');
+                el.removeAttribute('lengthAdjust');
+            };
+            [...info.children].filter(el=>el.localName==='text' && Number(el.getAttribute('x'))>=365).forEach(el=>{
+                infoTypography(el);
+                if(Number(el.getAttribute('x'))===365) el.setAttribute('x',String(infoLeft));
+            });
             const status = svg.querySelector('#textHPStatus');
             if (status) {
                 info.appendChild(status);
-                status.setAttribute('x', '365');
+                status.setAttribute('x', String(infoLeft));
                 status.setAttribute('y', '185');
-                status.style.fontSize = '28px';
+                infoTypography(status);
             }
             const history = currentControls.faultHistory;
             if(document.getElementById('wp-fault-dialog').open) renderFaultHistory();
@@ -3329,29 +3344,30 @@ window.SymconHeatPump = {
                 [[heading,labelStyle],[value,valueStyle]].forEach(([el,reference])=>{
                     ['font-size','font-family','font-weight'].forEach(name=>el.style.setProperty(name,reference.getPropertyValue(name),'important'));
                 });
-                value.setAttribute('x',String(heading.getComputedTextLength()+5));
+                const headingBounds=heading.getBBox(),valueBounds=value.getBBox();
+                value.setAttribute('x',String(headingBounds.x+headingBounds.width+2-valueBounds.x));
                 row.push(pair);
             });
             const faults=group('gFaultHistory',efficiency);efficiency.appendChild(faults);
             if(history && history.available) {
                 const button=node(faults,'g',{id:'buttonFaultHistory',role:'button',tabindex:0,'aria-label':'Fehlerspeicher anzeigen',style:'cursor:pointer'});
-                const text=node(button,'text',{id:'textFaultHistory',class:'sm',x:0,y:248,style:'text-decoration:underline'},'Fehler: '+history.entries.length);
-                text.style.fontSize=labelStyle.fontSize;
+                const text=node(button,'text',{id:'textFaultHistory',class:'sm',x:0,y:248,style:'text-decoration:underline'},'Fehler:'+history.entries.length);
+                infoTypography(text);
                 button.addEventListener('click',openFaultHistory);
                 button.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ') openFaultHistory(event);});
                 row.push(faults);
             }
-            const widths=row.map(el=>el.getBBox().width);
-            const gap=12;
-            const scale=Math.min(1,(285-gap*(row.length-1))/widths.reduce((sum,width)=>sum+width,0));
-            let rowX=365;
+            const bounds=row.map(el=>el.getBBox());
+            const widths=bounds.map(box=>box.width);
+            const gap=Math.min(12,Math.max(2,(infoWidth-widths.reduce((sum,width)=>sum+width,0))/Math.max(1,row.length-1)));
+            let rowX=infoLeft;
             row.forEach((el,index)=>{
-                el.setAttribute('transform','translate('+rowX+' 0) scale('+scale+' 1)');
-                rowX+=widths[index]*scale+gap;
+                el.setAttribute('transform','translate('+(rowX-bounds[index].x)+' 0)');
+                rowX+=widths[index]+gap;
             });
             const inputPower = group('gInputPower', info);
             const inputWatts = data[cfg.inputPower]?.watts;
-            fittedText(inputPower, {id:'textInputPower', class:'md', x:650, y:385, 'text-anchor':'end'}, powerText(inputWatts), 100);
+            infoTypography(node(inputPower, 'text', {id:'textInputPower', class:'md', x:650, y:385, 'text-anchor':'end'}, powerText(inputWatts)));
             node(inputPower, 'title', {}, data[cfg.inputPower]?.sourceLabel || 'Keine gültige Eingangsleistung verfügbar');
             const heatOutput = svg.querySelector('#textPowerValue');
             if (heatOutput) {
@@ -3550,9 +3566,11 @@ window.SymconHeatPump = {
             if (status) {
                 status.removeAttribute('textLength');
                 status.removeAttribute('lengthAdjust');
-                if (status.getComputedTextLength() > 285) {
-                    status.setAttribute('textLength', '285');
-                    status.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+                const fullStatus=status.textContent;
+                status.setAttribute('aria-label',fullStatus);
+                let visibleStatus=fullStatus;
+                while(status.getComputedTextLength()>infoWidth && visibleStatus.length>1) {
+                    visibleStatus=visibleStatus.slice(0,-1);status.textContent=visibleStatus+'…';
                 }
             }
             const waterLineGap = 12;
