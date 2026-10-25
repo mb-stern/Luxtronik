@@ -119,6 +119,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Obere Bedienleiste gemäß aktivierten Steuervariablen, einschließlich Schwimmbad und Raumtemperatur-Soll; dynamische Anordnung und Breite. Raum-Sollwert mit eigenem Temperaturprofil.
 - LUX-Bedienfeld zweizeilig; Pumpendrehung nach Prozent-Ansteuerung und Wasserflussanimation mit variabler Geschwindigkeit nach l/h bzw. vorhandener Pumpen-Ansteuerung.
 - Optionaler Wettercode aus einer externen Variable (OpenWeather, z. B. 10d/01n) ersetzt die feste Sonne durch ein lokales Wettersymbol mit Tag-/Nacht-Darstellung.
+- EEV-Lesediagnose mit `WPLUX_GetEEVDiagnosticData($id, 3003)` für Parameter bzw. unverändert mit 3004 für Berechnungswerte; bekannte Zugangsdatenfelder im Parameterexport ausgeblendet.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

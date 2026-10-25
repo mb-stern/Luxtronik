@@ -4325,18 +4325,29 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
     }
 
-    /** On-demand read-only capture for identifying undocumented controller values. */
-    public function GetEEVDiagnosticData(): string
+    /** On-demand raw capture; 3003 reads parameters, 3004 reads calculated measurements. */
+    public function GetEEVDiagnosticData(int $Command = 3004): string
     {
+        if (!in_array($Command, [3003,3004], true)) throw new InvalidArgumentException('Für diese Lesediagnose sind nur 3003 und 3004 zulässig. 3002 ist ein Schreibbefehl.');
         if (!$this->ReadPropertyBoolean('InstanceStatus')) throw new RuntimeException('Die Instanz ist deaktiviert.');
         if ($this->ReadPropertyString('CommunicationMode') !== 'java') throw new RuntimeException('Diese Diagnose benötigt den Java-Betrieb.');
-        $values = $this->ReadData(3004);
+        $values = $this->ReadData($Command);
         if ($values === null) throw new RuntimeException('Keine vollständige Java-Antwort erhalten.');
         $rows = [];
+        $parameterNames = [1=>'Anpassung_Temp',3=>'Mode_Heizung',4=>'Mode_WW',105=>'Anpassung_WW',
+            108=>'Mode_Kuehlung',119=>'Mode_Schwimmbad',1148=>'Anpassung_RBE'];
+        // Known password/access fields are not needed to identify EEV measurements.
+        $privateParameters = [106,107,755,756,757,758,759,760];
         foreach ($values as $id => $value) {
-            $rows[] = ['id'=>$id,'ident'=>self::DATA_POINT_CONFIG[$id]['name'] ?? ('ID_' . $id),'raw'=>$value];
+            if ($Command === 3003 && in_array($id, $privateParameters, true)) {
+                $rows[] = ['id'=>$id,'ident'=>'Zugangsdaten_ausgeblendet','raw'=>null,'redacted'=>true];
+                continue;
+            }
+            $ident = $Command === 3004 ? (self::DATA_POINT_CONFIG[$id]['name'] ?? ('ID_' . $id))
+                : ($parameterNames[$id] ?? ('Parameter_' . $id));
+            $rows[] = ['id'=>$id,'ident'=>$ident,'raw'=>$value];
         }
-        return json_encode(['command'=>3004,'count'=>count($rows),'values'=>$rows], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+        return json_encode(['command'=>$Command,'count'=>count($rows),'values'=>$rows], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
     }
 
     private function GetVisualizationRequiredPointIDs(): array

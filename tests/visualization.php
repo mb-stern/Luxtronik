@@ -730,6 +730,29 @@ $tests['EEV diagnostics are explicitly invoked read-only and preserve all raw in
     try {$module->GetEEVDiagnosticData();throw new LogicException('SHI diagnostic connected with Java');}catch(RuntimeException $expected){}
 };
 
+$tests['EEV parameter diagnostic reads 3003 without confusing calculation IDs or exposing passwords'] = static function (): void {
+    $values = array_fill(0,1150,0);
+    foreach ([1=>4294967281,14=>173,105=>500,106=>456789,107=>456789,238=>1000,755=>456789,760=>456789,1148=>215] as $id=>$value) $values[$id]=$value;
+    withServer([[pack('N*',3003,0),frame(3003,$values)]],static function (Luxtronik $module) use ($values): void {
+        $json = $module->GetEEVDiagnosticData(3003);
+        $result = json_decode($json,true,512,JSON_THROW_ON_ERROR);
+        check($result['command']===3003 && $result['count']===1150, 'Wrong parameter command or count');
+        check($result['values'][14]===['id'=>14,'ident'=>'Parameter_14','raw'=>173], 'Parameter mislabeled as a calculation');
+        check($result['values'][1]['ident']==='Anpassung_Temp' && $result['values'][1]['raw']===4294967281, 'Parameter raw value converted');
+        check($result['values'][1148]['ident']==='Anpassung_RBE' && $result['values'][1148]['raw']===215, 'Known control parameter mislabeled');
+        foreach ([106,107,755,756,757,758,759,760] as $id) check($result['values'][$id]['raw']===null && $result['values'][$id]['redacted'], 'Password field exposed');
+        check(!str_contains($json,'456789'), 'Password leaked in diagnostic JSON');
+        check($module->writes===0 && array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[], 'Diagnostic changes instance variables');
+    });
+    withoutConnection(static function (Luxtronik $module): void {
+        foreach ([3002,3005,0] as $command) {
+            try { $module->GetEEVDiagnosticData($command); }
+            catch (InvalidArgumentException $expected) { continue; }
+            throw new RuntimeException('Non-read command accepted by diagnostic');
+        }
+    });
+};
+
 
 
 $tests['each graphic field has exactly one fixed Ident and never chooses another nonzero value'] = static function (): void {
