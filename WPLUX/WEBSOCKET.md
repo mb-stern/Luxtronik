@@ -86,6 +86,11 @@ Simulator geprüft. Die EEV-Namen und das XML-Format sind durch einen echten
 Reglerbericht bestätigt. Die vollständige Feldabdeckung muss der Lesetest auf dem
 konkreten Gerät ermitteln.
 
+Der erste vollständige Gerätebericht umfasst 104 Einträge; der
+[Abgleich mit bestehenden Idents und Schreibaktionen](WEBSOCKET-ABGLEICH.md)
+unterscheidet bereits zugeordnete Werte, weitere eindeutige Entsprechungen,
+zusätzliche Felder und noch offene Zuordnungen.
+
 Protokollbeschreibung: [LoxWiki: Websockets-Webinterface ab FW 3.81](https://loxwiki.atlassian.net/wiki/spaces/LOX/pages/1533935938/Websockets+Webinterface+ab+FW+3.81).
 Sie beschreibt auch `SET` und `SAVE`; je nach Firmware ist für das Schreiben eine
 andere Kennung erforderlich (`id` bzw. `set_id`). Das ist noch kein bestätigter

@@ -311,13 +311,14 @@ $tests['engineering units negative temperatures pressure duplicates durations an
     $snapshot=['groups'=>[
         ['name'=>'Temperaturen','fields'=>[['id'=>'outdoor','name'=>'Außentemperatur','raw'=>'-2,5°C'],['id'=>'superheat','name'=>'Überhitzung','raw'=>'0.0 K']]],
         ['name'=>'Eingänge','fields'=>[['id'=>'hp-switch','name'=>'HD','raw'=>'Aus'],['id'=>'hp-pressure','name'=>'HD','raw'=>'8.88 bar']]],
-        ['name'=>'Ablaufzeiten','fields'=>[['id'=>'runtime','name'=>'WP Seit','raw'=>'01:02:03']]],
+        ['name'=>'Ablaufzeiten','fields'=>[['id'=>'runtime','name'=>'WP Seit','raw'=>'01:02:03'],['id'=>'zwe-release','name'=>'Freig. ZWE','raw'=>'01:00:00']]],
         ['name'=>'Wärmemenge','fields'=>[['id'=>'energy','name'=>'Heizung','raw'=>'1234.5 kWh']]],
     ]];
     $values=invoke($module,'MapWebSnapshot',$snapshot);
     check($values['Aussentemperatur']['value']===-2.5 && $values['Ueberhitzung']['value']===0.0,'Temperature units or zero converted twice');
     check($values['Eingang_Hochdruck_Kaeltekreis']['value']===false && $values['Hochdruck']['value']===8.88,'HD switch and pressure confused');
     check($values['Waermepumpe_laeuft_seit']['value']==='1h 2m','Duration does not match native representation');
+    check(!isset($values['Waermepumpentyp']),'ZWE release timer incorrectly reused the heat pump type Ident');
     check($values['Waermemengenzaehler_Heizung']['value']===1234.5,'Energy scaled twice');
 };
 

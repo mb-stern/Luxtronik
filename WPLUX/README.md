@@ -124,6 +124,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - EEV-Diagnose als direkt sichtbarer Button im LUX-Fenster; Dialogtexte bleiben auch bei transparentem Kartenhintergrund in hellen und dunklen Themes lesbar.
 - WebSocket als zusätzliche Messquelle und als auswählbare Hauptquelle; Java bleibt Standard. Informationsseiten werden per Name entdeckt, Quellen in der ID-Liste angezeigt, fehlende Werte ergänzt und gültige Nullen beibehalten. Vorhandene Bedienaktionen im WebSocket-Messmodus laufen über Java.
 - EEV Heizen/Kühlen aus bestätigten Webinterface-Feldern intern am Expansionsventil, ohne angelegte Messvariablen; optionale Variablen über die ID-Liste. Vollständiger WebSocket-Lesetest zählt alle angebotenen Informationsfelder. [Details](WEBSOCKET.md).
+- WebSocket-Zuordnung für „Freig. ZWE“ korrigiert: Die Wartezeit darf den bestehenden Wärmepumpentyp (Java-ID 78) nicht überschreiben.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

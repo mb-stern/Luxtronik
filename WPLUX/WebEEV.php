@@ -249,7 +249,7 @@ trait LuxtronikWebEEV
         64=>['Betriebsstunden','Betriebsstunden Heiz.','h'],65=>['Betriebsstunden','Betriebsstunden WW','h'],66=>['Betriebsstunden','Betriebsstunden Kuehl.','h'],
         67=>['Ablaufzeiten','WP Seit','duration'],68=>['Ablaufzeiten','ZWE1 seit','duration'],70=>['Ablaufzeiten','Netzeinschaltv.','duration'],
         71=>['Ablaufzeiten','SSP-Zeit','duration'],73=>['Ablaufzeiten','VD-Stand','duration'],74=>['Ablaufzeiten','HRM-Zeit','duration'],
-        75=>['Ablaufzeiten','HRW-Zeit','duration'],76=>['Ablaufzeiten','TDI seit','duration'],77=>['Ablaufzeiten','Sperre WW','duration'],78=>['Ablaufzeiten','Freig. ZWE','duration'],
+        75=>['Ablaufzeiten','HRW-Zeit','duration'],76=>['Ablaufzeiten','TDI seit','duration'],77=>['Ablaufzeiten','Sperre WW','duration'],
         151=>['Wärmemenge','Heizung','kWh'],152=>['Wärmemenge','Warmwasser','kWh'],154=>['Wärmemenge','Gesamt','kWh'],
         156=>['Ausgänge','AO 1','V'],157=>['Ausgänge','AO 2','V'],
         176=>['Temperaturen','Ansaug VD','°C'],178=>['Temperaturen','Überhitzung','K'],179=>['Temperaturen','Überhitzung Soll','K'],
