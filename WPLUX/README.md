@@ -105,8 +105,8 @@ Beispiel:
 Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Optionales Modbus/SHI mit allen 129 dokumentierten Lesepunkten und 41 Schreibfunktionen samt Rückleseprüfung; Java bleibt Standard.
 - Vorhandene Idents bleiben erhalten. [Hinweise für Tester](SHI-TEST.md).
-- Checkboxliste mit Schnittstellenübersicht: Java, Modbus und WebSocket; Variablennamen bleiben unverändert. Für WebSocket zusätzlich Status der letzten Geräteabfrage; Firmwarehinweis ab 3.81 und sichtbare Verbindungsfehler.
-- Fehlende Modbus-Messwerte optional lesend über Java ergänzen; gültige Modbus-Werte haben Vorrang, Datenquelle im Debug sichtbar.
+- Checkboxliste mit Schnittstellenübersicht: Java, Modbus und WebSocket; Variablennamen bleiben unverändert. Spalte „Aktuelle Quelle“ statt WebSocket-Status; Firmwarehinweis ab 3.81 und sichtbare Verbindungsfehler.
+- Messwerte bevorzugt über Java, fehlende benötigte Werte automatisch über WebSocket bzw. Modbus ergänzen; Schreibweg separat wählbar, tatsächliche Datenquelle in Liste und Debug sichtbar.
 - Bereinigte HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration vor der ID-Liste ohne Fußzeile.
 - Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
 - Puffer vor den konfigurierbaren Mischern 1–3; frei benennbare Heizkreisabgänge mit Mischkreis-Vorlauf; gemeinsamer VL/RL/RL-Soll direkt an den Geräteanschlüssen, mit geraden Steigleitungen und versetztem Boiler-Ventil.
@@ -120,12 +120,14 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - LUX-Bedienfeld zweizeilig; Pumpendrehung nach Prozent-Ansteuerung und Wasserflussanimation mit variabler Geschwindigkeit nach l/h bzw. vorhandener Pumpen-Ansteuerung.
 - Optionaler Wettercode aus einer externen Variable (OpenWeather, z. B. 10d/01n) ersetzt die feste Sonne durch ein lokales Wettersymbol mit Tag-/Nacht-Darstellung.
 - EEV-Lesediagnose mit `WPLUX_GetEEVDiagnosticData($id, 3003)` für Parameter bzw. unverändert mit 3004 für Berechnungswerte; bekannte Zugangsdatenfelder im Parameterexport ausgeblendet.
-- Manueller EEV-Lesetest unter LUX-Bedienfeld → EEV-Diagnose: liest Informationen/Ausgänge über WebSocket und gibt Namen, Feldkennungen und Prozentwerte als kopierbares Ergebnis aus; keine automatische Übernahme oder Regleränderung.
-- EEV-Diagnose als direkt sichtbarer Button im LUX-Fenster; Dialogtexte bleiben auch bei transparentem Kartenhintergrund in hellen und dunklen Themes lesbar.
-- WebSocket als automatische Ergänzung und Reserve; Java bleibt Standard, Java/Modbus bestimmen den Schreibweg. Nur benötigte fehlende Werte und deren Informationsseiten werden abgefragt; gültige Nullen bleiben erhalten. Optionale lesende Modbus-Ergänzung auch im Java-Betrieb.
+- Vollständige WebSocket-Diagnose in der Instanzkonfiguration mit JSON-Download; in der Visu bleibt nur das LUX-Gerätedisplay. Bestandsabfrage beim ersten Kontakt und danach täglich, normale Abfragen nur für benötigte fehlende Werte.
+- LUX-Dialogtexte bleiben auch bei transparentem Kartenhintergrund in hellen und dunklen Themes lesbar.
+- WebSocket als automatische Ergänzung und Reserve; Java bleibt Standard, Java bleibt auch bei gewähltem Modbus-Schreibweg die bevorzugte Lesequelle. Nur benötigte fehlende Werte und deren Informationsseiten werden abgefragt; gültige Nullen bleiben erhalten. Automatische lesende Ergänzungen ohne separate Schalter. Nur zusätzliche Modbus-Messwerte in der normalen Liste; Konfigurations- und Steuerpunkte erweitert einblendbar.
 - EEV Heizen/Kühlen aus bestätigten Webinterface-Feldern intern am Expansionsventil, ohne angelegte Messvariablen; optionale Variablen über die ID-Liste. Vollständiger WebSocket-Lesetest zählt alle angebotenen Informationsfelder. [Details](WEBSOCKET.md).
 - WebSocket-Zuordnung für „Freig. ZWE“ korrigiert: Die Wartezeit darf den bestehenden Wärmepumpentyp (Java-ID 78) nicht überschreiben.
 - 14 zusätzliche WebSocket-Messwerte mit IDs 400006–400019 unten in der Checkboxliste; Objektposition entspricht der ID. Bestehende Idents und Objekt-IDs bleiben erhalten. Automatischer Ersatz bei Java-Ausfall und Rückkehr zu Java nach Erholung; sechs Betriebsstundenzähler mit bestätigten Regler-Beschriftungen zugeordnet.
+- Fehlerspeicher bevorzugt über WebSocket: bestehende Fehlercode-/Zeitstempel-IDs, zusätzliche Sammelvariable 400020 und Historie mit Datum, Code und Meldung im Statusfeld der Grafik.
+- API-Abgleich des Solepumpen-/Ventilator-Ausgangs auf Java-ID 43; alte Zusatz-Idents bleiben für gespeicherte Auswahlen erhalten.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

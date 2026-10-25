@@ -25,6 +25,7 @@ trait LuxtronikModbusSHI
     {
         return [
             23 => ['input:10106', null], 267 => ['holding:10060', null],
+            43 => ['input:10350', null],
             44 => ['input:10000', 1], 45 => ['input:10000', 2],
             48 => ['input:10000', 4], 50 => ['input:10000', 16]
         ];
@@ -35,6 +36,7 @@ trait LuxtronikModbusSHI
         $result = [];
         foreach ($this->SHICatalog() as $key => $point) $result[$point['selection']] = $point + ['key' => $key];
         $catalog = $this->SHICatalog();
+        $result[110350]['aliasOf']=43;
         foreach ($this->SHIDerivedPoints() as $id => [$key, $mask]) {
             $native = self::DATA_POINT_CONFIG[$id];
             $result[$id] = array_replace($catalog[$key], ['key'=>$key, 'selection'=>$id, 'legacy'=>$id,
@@ -110,7 +112,7 @@ trait LuxtronikModbusSHI
             if ($this->SharedNumericControlEnabled($ident) && @$this->GetIDForIdent($ident)===false) $this->RegisterVariableFloat($ident,$label,$profile);
         }
         $this->SetTimerInterval('UpdateTimer',$this->ReadPropertyInteger('UpdateInterval')*1000);
-        $this->UpdateModbus();
+        $this->Update();
     }
 
     private function ReadSHIPoint(LuxtronikModbusTCP $client, array $point): int|float|bool|null
@@ -134,18 +136,24 @@ trait LuxtronikModbusSHI
         return $this->GetCachedVisualizationPoint($ident)!==null;
     }
 
-    /** Optional read-only Modbus fallback in Java mode; never enables SHI write actions. */
+    /** Java and WebSocket remain preferred; Modbus supplies additional needed values. */
     private function UpdateModbusSupplement(): void
     {
-        if(!$this->ReadPropertyBoolean('InstanceStatus') || !$this->ReadPropertyBoolean('ModbusReadSupplement')
-            || $this->ReadPropertyString('CommunicationMode')==='modbus') return;
-        $needed=$this->HybridMeasurementIDs();
+        if(!$this->ReadPropertyBoolean('InstanceStatus')) return;
+        $writes=$this->ReadPropertyString('CommunicationMode')==='modbus';
+        $needed=$this->HybridMeasurementIDs()+$this->GetVisualizationExtraPointIDs();
         foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
+        if($writes) foreach(['Anpassung_Temp'=>310002,'Anpassung_WW'=>310006,'Anpassung_RBE'=>310060] as $ident=>$id)
+            if($this->SharedNumericControlEnabled($ident)) $needed[$id]=true;
         $requested=[];
+        $catalog=$this->SHICatalog();
         foreach($this->SHISelections() as $id=>$point) {
-            if(!isset($needed[$id]) || !empty($point['shared']) || $this->JavaHasMeasurement($point['ident'])) continue;
-            $requested[$point['key']]=$this->SHICatalog()[$point['key']];
+            if(!isset($needed[$id]) || (!empty($point['shared']) && !$writes) || $this->JavaHasMeasurement($point['ident']) || $this->GetWebEEVPoint($point['ident'])!==null) continue;
+            $requested[$point['key']]=$catalog[$point['key']];
         }
+        $written=json_decode($this->GetBuffer('SHIWrittenKeys'),true)??[];
+        if($writes && ($written['source']??'')===$this->VisualizationSourceKey()) foreach($written['keys'] as $key)
+            if(isset($catalog[$key])) $requested[$key]=$catalog[$key];
         $keys=array_keys($requested);
         $source=$this->VisualizationSourceKey();
         $previous=$this->SHICache();
@@ -194,15 +202,24 @@ trait LuxtronikModbusSHI
         $selected=[];
         foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if(!empty($row['enabled'])) $selected[(int)$row['id']]=true;
         foreach($this->SHISelections() as $id=>$point) {
-            if($this->JavaHasMeasurement($point['ident']) || !empty($point['shared'])) continue;
+            $writes=$this->ReadPropertyString('CommunicationMode')==='modbus';
+            if($this->JavaHasMeasurement($point['ident']) || $this->GetWebEEVPoint($point['ident'])!==null || (!empty($point['shared']) && !$writes)) continue;
             $value=$this->GetSHIVisualizationPoint($point['ident']);
             if($value===null) continue;
             $this->SendDebug('Datenquelle',$point['ident'].': Modbus ('.$point['key'].'): '.$value['formatted'],0);
-            if(!isset($selected[$id])) continue;
+            if(!isset($selected[$id]) && !( !empty($point['shared']) && $this->SharedNumericControlEnabled($point['ident']))) continue;
             $this->EnsureSHIVariable($point);
             $this->SetValueIfChanged($point['ident'],$value['value']);
-            if($point['bank']==='holding') $this->DisableAction($point['ident']);
+            if($point['bank']==='holding') {
+                if($writes) $this->EnableAction($point['ident']);
+                else $this->DisableAction($point['ident']);
+            }
         }
+        $power=$this->GetHybridVisualizationPoint('Waermeleistung');
+        if($power!==null) $this->calc_cop('cop',(float)$power['value']);
+        $heat=$this->GetHybridVisualizationPoint('Waermemengenzaehler_Heizung');
+        $water=$this->GetHybridVisualizationPoint('Waermemengenzaehler_Brauchwasser');
+        if($heat!==null && $water!==null) $this->calc_jaz('jaz',(float)$heat['value']+(float)$water['value']);
     }
 
     private function UpdateModbus(): void
@@ -321,9 +338,7 @@ trait LuxtronikModbusSHI
 
     private function GetHybridVisualizationPoint(string $ident): ?array
     {
-        $point=$this->GetSHIVisualizationPoint($ident);
-        if ($point!==null) return $point;
-        return $this->ReadPropertyBoolean('ModbusJavaSupplement')?$this->GetCachedVisualizationPoint($ident):null;
+        return $this->GetCachedVisualizationPoint($ident)??$this->GetWebEEVPoint($ident)??$this->GetSHIVisualizationPoint($ident);
     }
 
     private function TraceHybridSources(): void
@@ -334,7 +349,7 @@ trait LuxtronikModbusSHI
         foreach ($idents as $ident=>$_) {
             $point=$this->GetHybridVisualizationPoint($ident);
             $description=$point===null?'keine aktuelle Quelle; vorhandener Objektwert bleibt unverändert'
-                :$point['source'].' ('.($point['source']==='Modbus'?$point['protocolRegister']:'3004, ID '.$point['protocolId']).'): '.$point['formatted'];
+                :$point['source'].' ('.match($point['source']) {'Modbus'=>$point['protocolRegister'],'WebSocket'=>$point['webId'],default=>'3004, ID '.$point['protocolId']}.'): '.$point['formatted'];
             $this->SendDebug('Datenquelle',$ident.': '.$description,0);
         }
     }
@@ -464,11 +479,12 @@ trait LuxtronikModbusSHI
                 'source'=>$current?'Modbus':null];
         }
         $java=[];
-        if ($this->ReadPropertyBoolean('ModbusJavaSupplement')) foreach ($this->VisualizationCachedPoints() as $ident=>$entry) {
+        foreach ($this->VisualizationCachedPoints() as $ident=>$entry) {
             $java[]=['ident'=>$ident,'id'=>$entry['id'],'value'=>$entry['value'],'source'=>'Java'];
         }
         return json_encode(['updatedAt'=>$cache['updatedAt']??null,'stale'=>$cache['stale']??true,'values'=>$values,
-            'javaSupplementEnabled'=>$this->ReadPropertyBoolean('ModbusJavaSupplement'),'javaSupplement'=>$java],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+            'javaSupplementEnabled'=>true,'javaSupplement'=>$java,'measurementPriority'=>['Java','WebSocket','Modbus/SHI'],
+            'writeSource'=>$this->ReadPropertyString('CommunicationMode')==='modbus'?'Modbus/SHI':'Java'],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
     }
 
     private function SHIWriteDefinition(string $ident): array
@@ -557,6 +573,10 @@ trait LuxtronikModbusSHI
             $cache['stale']=$cache['stale']??true;
             $cache['points']=array_replace($cache['points']??[],$confirmed);
             $this->SetBuffer('SHICache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+            $writtenKeys=json_decode($this->GetBuffer('SHIWrittenKeys'),true)??[];
+            $keys=($writtenKeys['source']??'')===$this->VisualizationSourceKey()?($writtenKeys['keys']??[]):[];
+            $this->SetBuffer('SHIWrittenKeys',json_encode(['source'=>$this->VisualizationSourceKey(),
+                'keys'=>array_values(array_unique([...$keys,...array_keys($confirmed)]))],JSON_THROW_ON_ERROR));
             $this->PublishSHIValues();
             $this->SendDebug('Datenquelle',$point['ident'].': Schreiben über Modbus (holding:'.$point['address'].') bestätigt: '.$this->SHIFormatted($point,$Value),0);
             return true;
@@ -579,17 +599,17 @@ trait LuxtronikModbusSHI
     private function AddModbusForm(array $form): array
     {
         $modbus=$this->ReadPropertyString('CommunicationMode')==='modbus';
-        array_splice($form['elements'],1,0,[['type'=>'Select','name'=>'CommunicationMode','caption'=>'Kommunikation',
-            'options'=>[['caption'=>'Java (Standard)','value'=>'java'],['caption'=>'Modbus TCP / SHI (Testversion)','value'=>'modbus']]]]);
         $panel=['type'=>'ExpansionPanel','caption'=>'Modbus TCP / SHI','items'=>[
-            ['type'=>'Label','caption'=>'Luxtronik 2.1 ab V3.90.1 mit aktivem SHI. Gleiche IP-Adresse; Java-Einstellungen bleiben erhalten.'],
+            ['type'=>'Label','caption'=>'Luxtronik 2.1 ab V3.90.1 mit aktivem SHI. Messwerte werden bevorzugt über Java gelesen und automatisch ergänzt.'],
+            ['type'=>'CheckBox','name'=>'ModbusWrites','caption'=>'Schreibbefehle über Modbus/SHI senden','value'=>$modbus,
+                'onChange'=>'IPS_SetProperty($id, "CommunicationMode", $ModbusWrites ? "modbus" : "java");'],
             ['type'=>'NumberSpinner','name'=>'ModbusPort','caption'=>'Modbus-Port'],
             ['type'=>'NumberSpinner','name'=>'ModbusUnitID','caption'=>'Modbus-Geräteadresse (Unit-ID)'],
             ['type'=>'NumberSpinner','name'=>'ModbusTimeout','caption'=>'Modbus-Timeout (Millisekunden, 100–5000)'],
-            ['type'=>'CheckBox','name'=>'ModbusJavaSupplement','caption'=>'Fehlende Messwerte ergänzend über Java lesen'],
-            ['type'=>'CheckBox','name'=>'ModbusReadSupplement','caption'=>'Im Java-Betrieb fehlende benötigte Messwerte zusätzlich über Modbus lesen'],
-            ['type'=>'Label','caption'=>'Die Auswahl Java / Modbus bestimmt den Schreibweg. Ergänzende Leseabfragen führen keine Schreibbefehle aus. Im Java-Betrieb hat Java Vorrang; im Modbus-Betrieb hat Modbus Vorrang.'],
-            ['type'=>'Label','caption'=>'Im Modbus-Betrieb werden alle dokumentierten Werte intern gelesen; die Ergänzung im Java-Betrieb liest nur fehlende benötigte Werte. Zusätzliche Objekte und Bedienpunkte über die ID-Liste auswählen. Keine automatischen Schreibvorgaben.']]];
+            ['type'=>'ExpansionPanel','caption'=>'Erweiterte Modbus-Datenpunkte','items'=>[
+                ['type'=>'CheckBox','name'=>'ShowAdvancedModbusPoints','caption'=>'Konfigurations- und Steuerwerte zusätzlich in der ID-Liste anzeigen'],
+                ['type'=>'Label','caption'=>'Die normale Liste zeigt Java-Werte und zusätzliche Messwerte. Bereits ausgewählte erweiterte Einträge bleiben sichtbar. Alle Modbus-Adressen sind dokumentiert; ähnlich benannte Zustände, Grenzen und externe Vorgaben sind nicht immer derselbe Wert.']]]
+        ]];
         $index=count($form['elements']);
         foreach ($form['elements'] as $i=>$element) if (($element['name']??'')==='IDListe') {$index=$i;break;}
         array_splice($form['elements'],$index,0,[$panel]);
@@ -606,13 +626,16 @@ trait LuxtronikModbusSHI
                     $row['interface']=$mapping===null?'Java':'Java + Modbus';
                 }
                 unset($row);
-                foreach ($selections as $id=>$point) if ($id>=100000) $element['values'][]=[
+                // These are actual additional measurements; configuration and external control points are advanced.
+                $measurements=[110201,110310,110312,110314,110316,110318,110326,110351,110360,110361];
+                foreach ($selections as $id=>$point) if ($id>=100000 && (empty($point['aliasOf']) || !empty($saved[$id]['enabled'])) && ($this->ReadPropertyBoolean('ShowAdvancedModbusPoints')
+                    || in_array($id,$measurements,true) || !empty($saved[$id]['enabled']))) $element['values'][]=[
                     'enabled'=>(bool)($saved[$id]['enabled']??false),'id'=>$id,'name'=>$point['label'],'interface'=>!empty($point['shared'])?'Java + Modbus':'Modbus'];
             }
             if (!$modbus) continue;
             if (($element['name']??'')==='Port') {
-                $element['visible']=$this->ReadPropertyBoolean('ModbusJavaSupplement');
-                $element['caption']='Java-Port für ergänzende Messwerte (8888 oder 8889)';
+                $element['visible']=true;
+                $element['caption']='Java-Port (8888 oder 8889)';
             }
             if (($element['caption']??'')==='Timer / Zusatzfunktionen') {
                 foreach ($element['items'] as &$field) {
@@ -623,7 +646,7 @@ trait LuxtronikModbusSHI
             }
         }
         unset($element);
-        if ($modbus) array_unshift($form['elements'],['type'=>'Label','caption'=>'SHI-Testversion: Modbus liefert seine verfügbaren Werte; bei aktivierter Java-Ergänzung kommen fehlende Messwerte lesend über Java. Schreibbefehle bleiben bei Modbus. Java-Betriebsarten und Zeitprogramme sind hier nicht bedienbar.']);
+        if($modbus) array_unshift($form['elements'],['type'=>'Label','caption'=>'Schreibbefehle werden über Modbus/SHI gesendet. Messwerte kommen bevorzugt über Java. Java-Betriebsarten und Zeitprogramme besitzen keinen identischen SHI-Schreibbefehl.']);
         $form['status']=[
             ['code'=>102,'icon'=>'active','caption'=>'Instanz aktiv'],['code'=>104,'icon'=>'inactive','caption'=>'Instanz deaktiviert'],
             ['code'=>201,'icon'=>'error','caption'=>'SHI-Verbindung, Antwort oder Schreibbestätigung fehlerhaft'],

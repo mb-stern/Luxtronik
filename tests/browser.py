@@ -1143,109 +1143,29 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert opened==[],'EEV measurement incorrectly depends on a browser WebSocket'
                 readings.close()
 
-            # Named EEV reads use one explicit diagnostic session; no control command or SDK action.
+            # Diagnostic tools belong to configuration; visualization retains only the LUX display.
             for width in [1200,390]:
-                diagnostic=browser.new_page(viewport={'width':width,'height':850})
-                diagnostic.clock.install()
-                peer=LuxtronikFixture()
-                diagnostic.route_web_socket(re.compile(r'^ws://127\.0\.0\.1:8214/$'),peer.connect)
-                diagnostic.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
-                # Host themes can provide white text together with a transparent card background.
-                diagnostic.evaluate('''()=>{
-                    document.documentElement.style.setProperty('--content-color','#ffffff');
-                    document.documentElement.style.setProperty('--card-background-color','transparent');
-                    document.body.style.background='#ffffff';
-                }''')
-                diagnostic.evaluate('(url)=>window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:url}})',web_url)
-                diagnostic.locator('#gSettings').dispatch_event('click')
-                diagnostic.wait_for_function('!document.querySelector("#wp-luxtronik-controls").disabled')
-                assert diagnostic.locator('#wp-eev-test').is_visible()
-                assert diagnostic.locator('#wp-eev-test').text_content()=='EEV-Diagnose starten'
-                assert not diagnostic.locator('#wp-eev-diagnostic').evaluate('e=>e.open')
-                for scheme in ['light','dark']:
-                    diagnostic.emulate_media(color_scheme=scheme)
-                    colors=diagnostic.locator('#wp-luxtronik-dialog').evaluate('''e=>({
-                        foreground:getComputedStyle(e).color,background:getComputedStyle(e).backgroundColor,
-                        heading:getComputedStyle(document.getElementById('wp-luxtronik-title')).color,
-                        summary:getComputedStyle(document.querySelector('#wp-eev-diagnostic summary')).color})''')
-                    assert colors['foreground']!=colors['background'],colors
-                    assert colors['background'] not in ['transparent','rgba(0, 0, 0, 0)'],colors
-                    assert colors['heading']==colors['foreground'] and colors['summary']==colors['foreground'],colors
-                diagnostic.emulate_media(color_scheme='light')
-                diagnostic.evaluate('()=>{window.testDiagnosticActions=[];window.requestAction=(...args)=>window.testDiagnosticActions.push(args);}')
-
-                def read_eev():
-                    diagnostic.locator('#wp-eev-test').click()
-                    assert diagnostic.locator('#wp-eev-diagnostic').evaluate('e=>e.open')
-                    diagnostic.wait_for_function('!document.querySelector("#wp-eev-copy").disabled')
-                    report=json.loads(diagnostic.locator('#wp-eev-result').input_value())
-                    commands=peer.connections[-1]['commands']
-                    assert commands[:2]==['LOGIN;999999','REFRESH'],commands
-                    assert all(c=='REFRESH' or c.startswith(('LOGIN;','GET;')) for c in commands),commands
-                    assert diagnostic.locator('#wp-luxtronik-controls').evaluate('e=>e.disabled')
-                    assert diagnostic.evaluate('window.testDiagnosticActions')==[],diagnostic.evaluate('window.testDiagnosticActions')
-                    assert '999999' not in json.dumps(report)
-                    return report,commands
-
-                report,commands=read_eev()
-                assert report['ok'] and report['eev']['heating']['value']==34.8 and report['eev']['cooling']['value']==100
-                assert report['capturedAt'] and any(step.get('reply')=='content' for step in report['steps'])
-                assert report['eev']['heating']['id']=='eev-heat-2' and report['missing']==[]
-                assert commands==['LOGIN;999999','REFRESH','GET;info','GET;outputs-2'],commands
-                assert 'EEV Heizen' in report['outputXml']
-                peer.eev_values=('0,0\u00a0%','0.0 %')
-                report,_=read_eev()
-                assert report['eev']['heating']['value']==0 and report['eev']['cooling']['value']==0
-                peer.eev_values=('101 %','—')
-                report,_=read_eev()
-                assert report['eev']['heating']['value'] is None and report['eev']['cooling']['value'] is None
-                assert report['missing']==['heating','cooling']
-                peer.inline_outputs=True
-                report,commands=read_eev()
-                assert report['ok'] and report['eev']['heating']['value']==0 and report['eev']['cooling'] is None
-                assert commands==['LOGIN;999999','REFRESH'],commands
-                peer.inline_outputs=False
-                for xml,error in [
-                    ('<Content><item>','XML'),
-                    ('<!DOCTYPE Content [<!ENTITY x SYSTEM "file:///etc/passwd">]><Content/>','XML'),
-                    ('<Content id="different"/>','anderen Menü'),
-                    ('<Content><item><name>EEV Heizen</name><value>1 %</value></item><item><name>EEV Heizen</name><value>2 %</value></item></Content>','mehrfach'),
-                ]:
-                    peer.output_xml=xml
-                    report,_=read_eev()
-                    assert not report['ok'] and error in report['error'],report
-                peer.output_xml=None
-                peer.information_xml='<Content><item id="bad;command"><name>Ausgänge</name></item></Content>'
-                report,commands=read_eev()
-                assert not report['ok'] and 'Menükennung' in report['error'] and len(commands)==3,report
-                peer.information_xml='<Content><name>Informationen</name></Content>'
-                report,_=read_eev()
-                assert not report['ok'] and 'Ausgänge fehlt' in report['error'],report
-                peer.information_xml=None
-                peer.eev_values=('34.8 %','100.0 %')
-                peer.additional_information=[{'id':'temperature-page','name':'Temperaturen',
-                    'xml':'<Content><item id="flow-temp"><name>Vorlauf</name><value>35.0 °C</value></item><item id="return-temp"><name>Rücklauf</name><value>30.0 °C</value></item></Content>'}]
-                diagnostic.locator('#wp-web-test').click()
-                diagnostic.wait_for_function('!document.querySelector("#wp-eev-copy").disabled')
-                report=json.loads(diagnostic.locator('#wp-eev-result').input_value())
-                assert report['ok'] and report['count']==5 and len(report['groups'])==2,report
-                assert report['groups'][1]['name']=='Temperaturen' and report['groups'][1]['count']==2,report
-                assert report['eev']['heating']['value']==34.8
-                assert 'GET;temperature-page' in peer.connections[-1]['commands']
-                peer.additional_information=[]
-                peer.silent=True
-                diagnostic.locator('#wp-eev-test').click()
-                diagnostic.clock.fast_forward(12001)
-                diagnostic.wait_for_function('!document.querySelector("#wp-eev-copy").disabled')
-                report=json.loads(diagnostic.locator('#wp-eev-result').input_value())
-                assert not report['ok'] and '12 Sekunden' in report['error']
-                diagnostic.locator('#wp-eev-test').click()
-                diagnostic.locator('#wp-luxtronik-close').click()
-                diagnostic.wait_for_timeout(50)
-                assert peer.connections[-1]['closed']
-                assert not any(c.startswith(('MOVE;','SET;','CHANGE;')) for c in peer.commands)
-                diagnostic.close()
-            print(json.dumps({'eev_read_only':'PASS','eev_zero_missing':'PASS','eev_xml_and_timeout':'PASS'}))
+                faults=browser.new_page(viewport={'width':width,'height':850})
+                faults.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
+                assert faults.locator('#wp-eev-test, #wp-web-test, #wp-eev-diagnostic').count()==0
+                history={'available':True,'source':'WebSocket','entries':[
+                    {'date':'16.02.24 14:35:19','code':718,'text':'Max. Aussentemp. (718)'},
+                    {'date':'16.02.24 14:27:33','code':711,'text':'<img src=x onerror="window.faultInjected=true"> (711)'}]}
+                faults.evaluate('(history)=>window.handleMessage({controls:{faultHistory:history}})',history)
+                faults.locator('#buttonFaultHistory').click()
+                assert faults.locator('#wp-fault-dialog').is_visible()
+                assert faults.locator('#wp-fault-list li').count()==2
+                assert 'Code 718' in faults.locator('#wp-fault-list').text_content()
+                assert 'Max. Aussentemp.' in faults.locator('#wp-fault-list').text_content()
+                assert faults.locator('#wp-fault-list img').count()==0
+                assert not faults.evaluate('Boolean(window.faultInjected)')
+                history['entries']=[]
+                faults.evaluate('(history)=>window.handleMessage({controls:{faultHistory:history}})',history)
+                assert 'Keine gespeicherten' in faults.locator('#wp-fault-list').text_content()
+                faults.locator('#wp-fault-close').click()
+                assert not faults.locator('#wp-fault-dialog').is_visible()
+                faults.close()
+            print(json.dumps({'configuration_diagnostics_only':'PASS','fault_history_codes_and_text':'PASS','fault_text_escaping':'PASS'}))
 
             # Exercise inactivity and retry limits without waiting for real timeouts.
             liveness=browser.new_page()

@@ -65,6 +65,7 @@ function configuredVisualization(): Luxtronik
     $GLOBALS['testVariables'][$module->GetIDForIdent('Ruecklauftemperatur_Heizkreis')]['formatted'] = '28.9 °C';
     $GLOBALS['testVariables'][$module->GetIDForIdent('Ruecklauf_Soll_Heizkreis')]['formatted'] = '30.0 °C';
     visualizationVariable($module, 'Flow_Rate', 607.0);
+    visualizationVariable($module, 'SHI_Pumpe_Mischkreis_1', true);
     visualizationVariable($module, 'Warmwasser_Soll_Temperatur', 50.0, '~Temperature');
     $module->properties['kwin']=visualizationVariable($external,'InputPowerForCOP',0.0255);
     for ($i = 1; $i <= 3; ++$i) {
@@ -222,7 +223,7 @@ $tests['graphic rejects forged, foreign, disabled and SHI write actions'] = stat
             $module->properties['CommunicationMode'] = $mode === 'modbus' ? 'modbus' : 'java';
             $module->properties['InstanceStatus'] = $mode !== 'disabled';
             check(!invoke($module, 'BuildControlData')['warmWaterSetpoint']['configured'], 'Read-only action offered');
-            check(invoke($module, 'GetLuxtronikWebInterfaceURL') === '', 'Device panel bypasses read-only mode');
+            check((invoke($module, 'GetLuxtronikWebInterfaceURL')==='')===($mode==='disabled'),'LUX availability incorrectly depends on write transport');
             try { $module->RequestAction('SetNumericControl', ['function'=>'warmWaterSetpoint','value'=>50.5]); } catch (RuntimeException $expected) { continue; }
             throw new RuntimeException('Read-only graphic wrote data');
         }
@@ -726,8 +727,7 @@ $tests['EEV diagnostics are explicitly invoked read-only and preserve all raw in
     });
     $module=new Luxtronik();$module->properties['InstanceStatus']=false;
     try {$module->GetEEVDiagnosticData();throw new LogicException('Inactive diagnostic connected');}catch(RuntimeException $expected){}
-    $module->properties['InstanceStatus']=true;$module->properties['CommunicationMode']='modbus';
-    try {$module->GetEEVDiagnosticData();throw new LogicException('SHI diagnostic connected with Java');}catch(RuntimeException $expected){}
+
 };
 
 $tests['EEV parameter diagnostic reads 3003 without confusing calculation IDs or exposing passwords'] = static function (): void {

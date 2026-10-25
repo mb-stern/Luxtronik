@@ -7,7 +7,7 @@ nicht über Java bereitstellen könnte.
 
 ## Bestehende Variablen mit vergleichbarer Funktion
 
-Diese Idents werden beibehalten. Die aktive Schnittstelle bestimmt den Schreibweg;
+Diese Idents werden beibehalten. Die Auswahl des Schreibwegs bestimmt das Senden;
 Modbus prüft seine eigenen Grenzen und Voraussetzungen. Es werden dafür jetzt keine
 separaten Sollwertvariablen eingeführt.
 
@@ -29,10 +29,9 @@ jeder Modbus-Zugriff intern garantiert ohne Speicherzugriff bleibt. Solche
 Firmwaredetails sind hier nicht belegt. Reine Messwertabfragen ändern keine
 Reglerparameter; Modbus bleibt auch für zusätzliche Messwerte sinnvoll.
 
-Java bleibt Standard. Optional können im Java-Betrieb fehlende benötigte Werte
-lesend über Modbus ergänzt werden. Diese Ergänzung aktiviert keinen Modbus-
-Schreibweg. Die Auswahl Java/Modbus bestimmt weiterhin die Bedienaktionen;
-WebSocket ergänzt lesend und dient bei Java-Ausfall als Reserve.
+Java bleibt die bevorzugte Lesequelle. Fehlende benötigte Werte werden automatisch
+über WebSocket bzw. Modbus ergänzt. Der Schalter „Schreibbefehle über Modbus/SHI
+senden“ ändert nur den Schreibweg. WebSocket bleibt lesende Reserve.
 
 ## Zusätzliche Modbus-Sollwerte ohne bisherige Java-Schreibaktion im Modul
 

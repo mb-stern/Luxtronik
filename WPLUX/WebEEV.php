@@ -245,7 +245,7 @@ trait LuxtronikWebEEV
         26=>['Temperaturen','Solarkollektor','°C'],27=>['Temperaturen','Solarspeicher','°C'],28=>['Temperaturen','Externe Energ.Quelle','°C'],
         29=>['Eingänge','ASD','bool'],31=>['Eingänge','EVU','bool'],32=>['Eingänge','HD','bool'],33=>['Eingänge','MOT','bool'],
         37=>['Ausgänge','AV-Abtauventil','bool'],38=>['Ausgänge','BUP','bool'],39=>['Ausgänge','HUP','bool'],
-        40=>['Ausgänge','Mischer 1 Auf','bool'],41=>['Ausgänge','Mischer 1 Zu','bool'],44=>['Ausgänge','Verdichter 1','bool'],
+        40=>['Ausgänge','Mischer 1 Auf','bool'],41=>['Ausgänge','Mischer 1 Zu','bool'],43=>['Ausgänge','Ventil.-BOSUP','bool'],44=>['Ausgänge','Verdichter 1','bool'],
         46=>['Ausgänge','ZIP','bool'],47=>['Ausgänge','ZUP','bool'],48=>['Ausgänge','ZWE 1','bool'],50=>['Ausgänge','ZWE 3','bool'],
         51=>['Ausgänge','FUP 2','bool'],52=>['Ausgänge','SLP','bool'],140=>['Ausgänge','FUP 3','bool'],
         56=>['Betriebsstunden',['Betriebsstd. VD1','Betriebstund. VD1'],'h'],57=>['Betriebsstunden','Impulse Verdichter 1','count'],
@@ -264,7 +264,7 @@ trait LuxtronikWebEEV
     private const WEB_ONLY_POINTS = [
         400001 => ['ident'=>'EEV_Heizen','label'=>'EEV Heizen','field'=>['Ausgänge','EEV Heizen','%'],'type'=>'float','min'=>0,'max'=>100],
         400002 => ['ident'=>'EEV_Kuehlen','label'=>'EEV Kühlen','field'=>['Ausgänge','EEV Kühlen','%'],'type'=>'float','min'=>0,'max'=>100],
-        400003 => ['ident'=>'Ventil_BOSUP','label'=>'Ventil.-BOSUP','field'=>['Ausgänge','Ventil.-BOSUP','bool'],'type'=>'bool','profile'=>'~Switch'],
+        400003 => ['ident'=>'Ventil_BOSUP','label'=>'Ventil.-BOSUP','field'=>['Ausgänge','Ventil.-BOSUP','bool'],'type'=>'bool','profile'=>'~Switch','aliasOf'=>43],
         400004 => ['ident'=>'Analog_Ausgang_21','label'=>'AO 21','field'=>['Ausgänge','AO 21','V'],'type'=>'float','profile'=>'~Volt'],
         400005 => ['ident'=>'Analog_Ausgang_22','label'=>'AO 22','field'=>['Ausgänge','AO 22','V'],'type'=>'float','profile'=>'~Volt'],
         400006 => ['ident'=>'Freigabe_ZWE_Restzeit','label'=>'Freigabe ZWE Restzeit','field'=>['Ablaufzeiten','Freig. ZWE','duration'],'type'=>'string','profile'=>''],
@@ -280,7 +280,8 @@ trait LuxtronikWebEEV
         400016 => ['ident'=>'Waermemengenzaehler_Zusatzwaermeerzeuger','label'=>'Wärmemenge Zusatzwärmeerzeuger','field'=>['Wärmemenge','Zus. Wärmeerz','kWh'],'type'=>'float','profile'=>'~Electricity'],
         400017 => ['ident'=>'Waermemengenzaehler_Seit_Datum','label'=>'Wärmemenge seit Regler-Startdatum','field'=>['Wärmemenge','seit:','kWh'],'namePattern'=>'/^seit\s*:/iu','type'=>'float','profile'=>'~Electricity'],
         400018 => ['ident'=>'Waermemengenzaehler_Seit_Reset','label'=>'Wärmemenge seit Regler-Reset','field'=>['Wärmemenge','seit Reset:','kWh'],'type'=>'float','profile'=>'~Electricity'],
-        400019 => ['ident'=>'GLT_Art','label'=>'GLT Art','field'=>['GLT','Art','text'],'type'=>'string','profile'=>'']
+        400019 => ['ident'=>'GLT_Art','label'=>'GLT Art','field'=>['GLT','Art','text'],'type'=>'string','profile'=>''],
+        400020 => ['ident'=>'Fehlerspeicher_Meldungen','label'=>'Fehlerspeicher Meldungen','field'=>['Fehlerspeicher','Meldungen','fault'],'type'=>'string','profile'=>'','preferWeb'=>true]
     ];
 
     private function WebFieldKey(string $value): string
@@ -295,6 +296,8 @@ trait LuxtronikWebEEV
         $result[110351]=['ident'=>'SHI_Pumpe_Mischkreis_1','label'=>'Pumpe Mischkreis 1','field'=>['Ausgänge','FUP 1','bool'],'type'=>'bool','profile'=>'~Switch','sharedSHI'=>true];
         foreach(self::WEB_NATIVE_FIELDS as $id=>$field) $result[$id]=['ident'=>self::DATA_POINT_CONFIG[$id]['name'],
             'label'=>self::DATA_POINT_CONFIG[$id]['name'],'field'=>$field,'native'=>$id];
+        foreach(range(95,105) as $id) $result[$id]=['ident'=>self::DATA_POINT_CONFIG[$id]['name'],
+            'label'=>self::DATA_POINT_CONFIG[$id]['name'],'field'=>['Fehlerspeicher','','fault'],'native'=>$id,'preferWeb'=>true];
         return $result;
     }
 
@@ -332,18 +335,75 @@ trait LuxtronikWebEEV
             }
             if(count($matches)===1) $values[$definition['ident']]=$matches[0];
         }
+        return $values+$this->MapWebFaults($snapshot);
+    }
+
+    private function WebFaultRows(array $snapshot): ?array
+    {
+        foreach($snapshot['groups']??[] as $group) {
+            if($this->WebFieldKey($group['name'])!==$this->WebFieldKey('Fehlerspeicher')) continue;
+            $rows=[];
+            foreach($group['fields'] as $field) {
+                if(!preg_match('/^\d{2}\.\d{2}\.\d{2}(?:\d{2})? \d{2}:\d{2}:\d{2}$/D',$field['name'])) continue;
+                $code=preg_match('/\((\d{3,5})\)\s*$/u',$field['raw'],$match)?(int)$match[1]:null;
+                $rows[]=['date'=>$field['name'],'code'=>$code,'text'=>$field['raw'],'webId'=>$field['id']];
+            }
+            return $group['fields']!==[] && $rows===[]?null:array_slice($rows,0,5);
+        }
+        return null;
+    }
+
+    private function MapWebFaults(array $snapshot): array
+    {
+        $rows=$this->WebFaultRows($snapshot);
+        if($rows===null) return [];
+        try {$timezone=new DateTimeZone($this->ReadPropertyString('WebSocketTimezone')?:date_default_timezone_get());}
+        catch(Throwable) {$timezone=null;}
+        $values=[];
+        foreach(range(0,4) as $i) {
+            $row=$rows[$i]??null;
+            if($row===null || $row['code']!==null) $values[self::DATA_POINT_CONFIG[100+$i]['name']]=[
+                'value'=>(string)($row['code']??0),'formatted'=>(string)($row['code']??0),'unit'=>'','webId'=>$row['webId']??''];
+            $timestamp=$row===null?0:null;
+            if($row!==null && $timezone!==null) {
+                $format=strlen($row['date'])===17?'!d.m.y H:i:s':'!d.m.Y H:i:s';
+                $date=DateTimeImmutable::createFromFormat($format,$row['date'],$timezone);
+                $errors=DateTimeImmutable::getLastErrors();
+                if($date!==false && ($errors===false || ($errors['warning_count']===0 && $errors['error_count']===0))) $timestamp=$date->getTimestamp();
+            }
+            if($timestamp!==null) $values[self::DATA_POINT_CONFIG[95+$i]['name']]=[
+                'value'=>$timestamp,'formatted'=>$row['date']??'','unit'=>'','webId'=>$row['webId']??''];
+        }
+        $values['Anzahl_der_Fehler']=['value'=>(string)count($rows),'formatted'=>(string)count($rows),'unit'=>'','webId'=>''];
+        $text=implode("\n",array_map(static fn($row)=>$row['date'].' · '.$row['text'],$rows));
+        $values['Fehlerspeicher_Meldungen']=['value'=>$text,'formatted'=>$text,'unit'=>'','webId'=>''];
         return $values;
+    }
+
+    private function GetFaultHistoryData(): array
+    {
+        if($this->GetWebEEVPoint('Fehlerspeicher_Meldungen')!==null) return ['available'=>true,'source'=>'WebSocket',
+            'entries'=>$this->WebFaultRows($this->WebEEVCache()['discovery']??[])??[]];
+        $rows=[];
+        $available=$this->GetCachedVisualizationPoint('Anzahl_der_Fehler')!==null;
+        foreach(range(0,4) as $i) {
+            $code=$this->GetCachedVisualizationPoint(self::DATA_POINT_CONFIG[100+$i]['name']);
+            $time=$this->GetCachedVisualizationPoint(self::DATA_POINT_CONFIG[95+$i]['name']);
+            if($code===null || (int)$code['value']===0) continue;
+            $rows[]=['date'=>$time!==null && (int)$time['value']>0?date('d.m.y H:i:s',(int)$time['value']):'',
+                'code'=>(int)$code['value'],'text'=>'Fehlercode '.(int)$code['value']];
+        }
+        return ['available'=>$available,'source'=>$available?'Java':null,'entries'=>$rows];
     }
 
     private function WebEEVSourceKey(): string
     {
-        return hash('sha256',json_encode([$this->VisualizationSourceKey(),
-            $this->ReadPropertyBoolean('WebSocketSupplement'),$this->ReadPropertyString('WebSocketPassword')],JSON_THROW_ON_ERROR));
+        return hash('sha256',json_encode([$this->VisualizationSourceKey(),$this->ReadPropertyString('WebSocketPassword'),$this->ReadPropertyString('WebSocketTimezone')],JSON_THROW_ON_ERROR));
     }
 
-    protected function NewWebEEVClient(): LuxtronikWebEEVClient
+    protected function NewWebEEVClient(int $TimeoutMs = 2000): LuxtronikWebEEVClient
     {
-        return new LuxtronikWebEEVClient($this->ReadPropertyString('IPAddress'));
+        return new LuxtronikWebEEVClient($this->ReadPropertyString('IPAddress'),8214,$TimeoutMs);
     }
 
     private function WebEEVCache(): array
@@ -352,12 +412,16 @@ trait LuxtronikWebEEV
         return is_array($cache) && ($cache['source']??'')===$this->WebEEVSourceKey() ? $cache : [];
     }
 
+    private function WebInventory(): array
+    {
+        $inventory=json_decode($this->GetBuffer('WebInventory'),true)??[];
+        return ($inventory['source']??'')===$this->WebEEVSourceKey()?$inventory:[];
+    }
+
     /** Availability is based on the complete Java frame, not only values retained for the graphic. */
     private function WebPrimaryHasValue(array $definition): bool
     {
-        $mode=$this->ReadPropertyString('CommunicationMode');
-        if($mode==='modbus') return $this->GetHybridVisualizationPoint($definition['ident'])!==null;
-        if($this->ReadPropertyBoolean('ModbusReadSupplement') && $this->GetSHIVisualizationPoint($definition['ident'])!==null) return true;
+        if(!empty($definition['preferWeb'])) return false;
         if(!isset($definition['native'])) return false;
         $availability=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
         if(($availability['source']??'')===$this->VisualizationSourceKey())
@@ -368,9 +432,10 @@ trait LuxtronikWebEEV
     /** Only requested objects and graphic readings that the preferred source cannot supply. */
     private function WebRequestedDefinitions(): array
     {
-        $needed=$this->GetVisualizationRequiredPointIDs();
+        $needed=$this->HybridMeasurementIDs()+$this->GetVisualizationExtraPointIDs();
         $needed[400001]=true;
         $needed[400002]=true;
+        $needed[400020]=true;
         foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row)
             if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
         $requested=[];
@@ -381,14 +446,16 @@ trait LuxtronikWebEEV
 
     private function UpdateWebEEV(): void
     {
-        if (!$this->ReadPropertyBoolean('InstanceStatus') || !$this->ReadPropertyBoolean('WebSocketSupplement')
+        if (!$this->ReadPropertyBoolean('InstanceStatus')
             || in_array($this->ReadPropertyString('IPAddress'),['','0.0.0.0','::'],true)) return;
         $source=$this->WebEEVSourceKey();
         $requested=$this->WebRequestedDefinitions();
         $idents=array_keys($requested);
         $pages=array_values(array_unique(array_map(static fn($point)=>$point['field'][0],$requested)));
         $cache=$this->WebEEVCache();
-        if (microtime(true)<($cache['nextAttempt']??0) && (!empty($cache['error']) || ($cache['requestedIdents']??null)===$idents)) {
+        $inventory=$this->WebInventory();
+        $discover=time()>=($inventory['nextAttempt']??0);
+        if (!$discover && microtime(true)<($cache['nextAttempt']??0) && (!empty($cache['error']) || ($cache['requestedIdents']??null)===$idents)) {
             $cache['values']=array_intersect_key($cache['values']??[],$requested);
             $this->SetBuffer('WebEEVCache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
             $this->PublishWebEEV();return;
@@ -399,11 +466,16 @@ trait LuxtronikWebEEV
             $cache=['source'=>$source,'updatedAt'=>time(),'values'=>[],'error'=>null,'requestedIdents'=>$idents];
             try {
                 $values=[];
-                if($requested!==[]) {
+                if($requested!==[] || $discover) {
                     $client=$this->NewWebEEVClient();
-                    $values=$client->read($this->ReadPropertyString('WebSocketPassword'),$pages);
+                    $values=$client->read($this->ReadPropertyString('WebSocketPassword'),$discover?null:$pages);
                     $cache['discovery']=$client->snapshot();
                     $values+=$this->MapWebSnapshot($cache['discovery']);
+                    if($discover && $source===$this->WebEEVSourceKey()) {
+                        $inventory=['source'=>$source,'updatedAt'=>time(),'discovery'=>$cache['discovery'],
+                            'mappedCount'=>count($values),'nextAttempt'=>time()+(!empty($cache['discovery']['complete'])?86400:300)];
+                        $this->SetBuffer('WebInventory',json_encode($inventory,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+                    }
                 } else $cache['discovery']=['count'=>0,'groups'=>[],'errors'=>[],'complete'=>true,'fullScan'=>false,'requestedPages'=>[]];
                 $values=array_intersect_key($values,$requested);
                 $cache['discovery']['mappedCount']=count($values);
@@ -413,6 +485,10 @@ trait LuxtronikWebEEV
             } catch (Throwable $error) {
                 if($error instanceof LuxtronikInstanceUnavailable) throw $error;
                 $cache['error']=$error->getMessage();
+                if($discover && $source===$this->WebEEVSourceKey()) {
+                    $inventory['source']=$source;$inventory['nextAttempt']=time()+300;$inventory['error']=$cache['error'];
+                    $this->SetBuffer('WebInventory',json_encode($inventory,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+                }
             }
             $cache['nextAttempt']=microtime(true)+($cache['error']!==null?120:5);
             if ($source!==$this->WebEEVSourceKey()) return;
@@ -429,7 +505,7 @@ trait LuxtronikWebEEV
 
     private function GetWebEEVPoint(string $ident): ?array
     {
-        if (!$this->ReadPropertyBoolean('WebSocketSupplement') || !$this->ReadPropertyBoolean('InstanceStatus')) return null;
+        if (!$this->ReadPropertyBoolean('InstanceStatus')) return null;
         $cache=$this->WebEEVCache();
         $row=$cache['values'][$ident]??null;
         if ($row===null || time()-($cache['updatedAt']??0)>max(30,2*$this->ReadPropertyInteger('UpdateInterval')+5)) return null;
@@ -480,6 +556,8 @@ trait LuxtronikWebEEV
     {
         $cache=$this->WebEEVCache();
         unset($cache['source']);
+        $inventory=$this->WebInventory();unset($inventory['source']);
+        $cache['inventory']=$inventory;
         return json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION);
     }
 
@@ -488,46 +566,92 @@ trait LuxtronikWebEEV
         return $this->GetWebEEVData();
     }
 
+    /** Explicit full server-side read, independent of the visualization and selected measurement objects. */
+    public function RunWebSocketDiagnostic(): string
+    {
+        $report=['source'=>'WebSocket / Lux_WS','capturedAt'=>gmdate('c'),'ok'=>false];
+        $lock='WPLUX.WebEEV.'.$this->InstanceID;
+        $entered=false;
+        try {
+            if(!$this->ReadPropertyBoolean('InstanceStatus')) throw new RuntimeException('Die Instanz ist deaktiviert.');
+            $entered=IPS_SemaphoreEnter($lock,1);
+            if(!$entered) throw new RuntimeException('Eine WebSocket-Abfrage läuft bereits.');
+            $source=$this->WebEEVSourceKey();
+            $client=$this->NewWebEEVClient(5000);
+            $eev=$client->read($this->ReadPropertyString('WebSocketPassword'));
+            $snapshot=$client->snapshot();
+            $values=$eev+$this->MapWebSnapshot($snapshot);
+            $report+=['count'=>$snapshot['count'],'groups'=>$snapshot['groups'],'errors'=>$snapshot['errors'],
+                'mappedCount'=>count($values),'eev'=>$eev,'deviceTimezone'=>$this->ReadPropertyString('WebSocketTimezone')?:date_default_timezone_get()];
+            $report['ok']=!empty($snapshot['complete']);
+            if($source===$this->WebEEVSourceKey()) $this->SetBuffer('WebInventory',json_encode([
+                'source'=>$source,'updatedAt'=>time(),'discovery'=>$snapshot,'mappedCount'=>count($values),
+                'nextAttempt'=>time()+($report['ok']?86400:300)],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+        } catch(Throwable $error) {
+            if($error instanceof LuxtronikInstanceUnavailable) throw $error;
+            $report['error']=$error->getMessage();
+        } finally {
+            if($entered) IPS_SemaphoreLeave($lock);
+        }
+        $this->UpdateFormField('WebInventoryStatus','caption',isset($report['count'])?'Bestandsabfrage am '.date('d.m.Y H:i:s').($report['ok']?' abgeschlossen.':' teilweise verfügbar; Details im Bericht.'):'Bestandsabfrage: '.($report['error']??'fehlgeschlagen'));
+        return json_encode($report,JSON_THROW_ON_ERROR|JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION);
+    }
+
+    /** Current source, not protocol capability or an old object value. */
+    private function CurrentPointSource(int $id): string
+    {
+        if(!$this->ReadPropertyBoolean('InstanceStatus')) return 'Instanz deaktiviert';
+        $definition=$this->WebDefinitions()[$id]??$this->SHISelections()[$id]??null;
+        $ident=self::DATA_POINT_CONFIG[$id]['name']??$definition['ident']??null;
+        if($ident===null) return 'Keine aktuellen Daten';
+        if(!empty($definition['preferWeb']) && $this->GetWebEEVPoint($ident)!==null) return 'WebSocket';
+        if($this->JavaHasMeasurement($ident)) return 'Java';
+        $controls=json_decode($this->GetBuffer('ControlSources'),true)??[];
+        if($this->ReadPropertyString('CommunicationMode')!=='modbus' && ($controls['source']??'')===$this->VisualizationSourceKey()
+            && isset($controls['idents'][$ident]) && time()-($controls['updatedAt']??0)<=max(30,2*$this->ReadPropertyInteger('UpdateInterval')+5)) return 'Java';
+        if($this->GetWebEEVPoint($ident)!==null) return 'WebSocket';
+        if($this->GetSHIVisualizationPoint($ident)!==null) return 'Modbus/SHI';
+        return 'Keine aktuellen Daten';
+    }
+
     private function AddWebEEVForm(array $form): array
     {
-        $panel=['type'=>'ExpansionPanel','caption'=>'WebSocket / Messwerte','items'=>[
-            ['type'=>'Label','caption'=>'Voraussetzung: Websockets-Webinterface ab Firmware 3.81, Port 8214 (Lux_WS). Umfang abhängig von Firmware und Anlagenkonfiguration.'],
-            ['type'=>'CheckBox','name'=>'WebSocketSupplement','caption'=>'Benötigte fehlende Messwerte zusätzlich über das Webinterface lesen'],
+        $panel=['type'=>'ExpansionPanel','caption'=>'WebSocket-Ergänzung','items'=>[
+            ['type'=>'Label','caption'=>'Ab Firmware 3.81, Port 8214 (Lux_WS). Fehlende benötigte Werte werden automatisch ergänzt, auch bei einem Java-Ausfall.'],
             ['type'=>'PasswordTextBox','name'=>'WebSocketPassword','caption'=>'Webinterface-Passwort'],
-            ['type'=>'Label','caption'=>'Zusätzlich werden nur die Seiten für fehlende Grafikwerte und ausgewählte Variablen gelesen. Gültige Werte der bevorzugten Quelle einschließlich 0 haben Vorrang. Der vollständige Lesetest im LUX-Bedienfeld bleibt separat verfügbar.']
+            ['type'=>'Label','caption'=>'Vollständige Bestandserfassung beim ersten Kontakt und täglich; im normalen Zyklus nur benötigte fehlende Werte. Zusatzvariablen werden nach Auswahl zyklisch gelesen.']
         ]];
         $cache=$this->WebEEVCache();
-        $discovery=$cache['discovery']??[];
-        $panel['items'][]=['type'=>'Label','caption'=>isset($discovery['count'])
-            ? 'Letzte WebSocket-Abfrage: '.$discovery['count'].' Felder auf gelesenen Seiten, '.($discovery['mappedCount']??0).' benötigte Messwerte übernommen. '.(!empty($discovery['complete'])?'Angeforderte Seiten vollständig gelesen.':'Teilabfrage; nicht alle angeforderten Seiten gelesen.')
-            : 'Anzahl der verfügbaren Felder noch nicht ermittelt. LUX-Bedienfeld → Alle WebSocket-Werte testen.'];
-        if(!empty($cache['error'])) $panel['items'][]=['type'=>'Label','caption'=>'WebSocket-Fehler: '.$cache['error']];
-        foreach($discovery['errors']??[] as $error) $panel['items'][]=['type'=>'Label','caption'=>'WebSocket-Teilabfrage: '.$error['name'].': '.$error['error']];
-        $panel['items'][]=['type'=>'Label','caption'=>'Die Spalte „WebSocket: letzte Abfrage“ zeigt tatsächlich gelieferte Messwerte. Ein gelieferter Wert bestätigt keinen verbauten Anlagenteil. Nach einer Abfrage die Konfiguration neu öffnen.'];
-        $definitions=$this->WebDefinitions();
+        $interval=$this->ReadPropertyInteger('UpdateInterval');
+        $panel['items'][]=['type'=>'Label','caption'=>$interval>0?'Abfrage im normalen Aktualisierungszyklus (alle '.$interval.' Sekunden).':'Abfrage bei jeder manuellen Aktualisierung; der Aktualisierungstimer ist ausgeschaltet.'];
+        $panel['items'][]=['type'=>'Label','caption'=>isset($cache['updatedAt'])?'Letzte WebSocket-Abfrage: '.date('d.m.Y H:i:s',$cache['updatedAt']):'Noch keine WebSocket-Abfrage durchgeführt.'];
+        $inventory=$this->WebInventory();
+        $panel['items'][]=['type'=>'Label','name'=>'WebInventoryStatus','caption'=>isset($inventory['updatedAt'])?'Letzte Bestandsabfrage: '.date('d.m.Y H:i:s',$inventory['updatedAt']).(empty($inventory['discovery']['complete'])?' (noch unvollständig)':''):'Die vollständige Bestandserfassung erfolgt beim ersten Kontakt und danach täglich.'];
+        $panel['items'][]=['type'=>'ExpansionPanel','caption'=>'Diagnose','items'=>[
+            ['type'=>'Button','caption'=>'Alle WebSocket-Werte prüfen und Bericht herunterladen','download'=>'luxtronik-websocket-diagnose.json',
+                'onClick'=>'echo "data:application/json;base64," . base64_encode(WPLUX_RunWebSocketDiagnostic($id));'],
+            ['type'=>'ValidationTextBox','name'=>'WebSocketTimezone','caption'=>'Zeitzone des Reglers (leer = Symcon)'],
+            ['type'=>'Label','caption'=>'Die Diagnose liest alle Informationsseiten mit den gespeicherten Zugangsdaten. Fehlerdatum und Zeitstempel verwenden die angegebene Zeitzone, sonst die Symcon-Zeitzone.']]];
+        if(!empty($cache['error'])) $panel['items'][]=['type'=>'Label','caption'=>'WebSocket: '.$cache['error']];
         $index=count($form['elements']);
         $saved=[];
-        foreach (json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) $saved[(int)($row['id']??0)]=!empty($row['enabled']);
-        foreach ($form['elements'] as $i=>&$element) {
-            if (($element['name']??'')!=='IDListe') continue;
+        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) $saved[(int)($row['id']??0)]=!empty($row['enabled']);
+        foreach($form['elements'] as $i=>&$element) {
+            if(($element['name']??'')!=='IDListe') continue;
             $index=$i;
-            foreach($element['columns'] as &$column) if(($column['name']??'')==='interface') $column['width']='230';
-            unset($column);
-            $element['columns'][]=['name'=>'webAvailability','caption'=>'WebSocket: letzte Abfrage','width'=>'220','save'=>false];
-            foreach($element['values'] as &$row) if(isset(self::WEB_NATIVE_FIELDS[(int)$row['id']]) || (int)$row['id']===110351) $row['interface'].=' + WebSocket';
-            unset($row);
-            foreach (self::WEB_ONLY_POINTS as $id=>$point) $element['values'][]=[
-                'enabled'=>$saved[$id]??false,'id'=>$id,'name'=>$point['label'],'interface'=>'WebSocket'];
-            foreach($element['values'] as &$row) {
-                $definition=$definitions[(int)$row['id']]??null;
-                $row['webAvailability']=$definition===null?'Keine WebSocket-Zuordnung'
-                    : ($this->WebPrimaryHasValue($definition)?'Hauptquelle liefert Wert'
-                    : (isset($cache['requestedIdents']) && !in_array($definition['ident'],$cache['requestedIdents'],true)?'Nicht angefordert'
-                    : (!empty($cache['error'])?'Abfrage fehlgeschlagen'
-                    : (!isset($discovery['count'])?'Noch nicht geprüft'
-                    : (array_key_exists($definition['ident'],$cache['values']??[])?'Messwert geliefert'
-                    : (!empty($discovery['complete'])?'Kein Messwert geliefert':'Teilabfrage: kein Messwert'))))));
+            foreach($element['columns'] as &$column) if(($column['name']??'')==='interface') {
+                $column['caption']='Verfügbar über';$column['width']='230px';
             }
+            unset($column);
+            $element['columns'][]=['name'=>'source','caption'=>'Aktuelle Quelle','width'=>'160px','save'=>false];
+            foreach($element['columns'] as &$column) if(isset($column['width']) && ctype_digit((string)$column['width'])) $column['width'].='px';
+            unset($column);
+            $definitions=$this->WebDefinitions();
+            foreach($element['values'] as &$row) if(isset($definitions[(int)$row['id']])) $row['interface'].=' + WebSocket';
+            unset($row);
+            foreach(self::WEB_ONLY_POINTS as $id=>$point) if(empty($point['aliasOf']) || !empty($saved[$id])) $element['values'][]=[
+                'enabled'=>$saved[$id]??false,'id'=>$id,'name'=>$point['label'],'interface'=>'WebSocket'];
+            foreach($element['values'] as &$row) $row['source']=$this->CurrentPointSource((int)$row['id']);
             unset($row);
         }
         unset($element);

@@ -107,7 +107,7 @@ function withEEVPeer(callable $test,array $options=[]): void
 class WebEEVTestModule extends Luxtronik
 {
     public int $webTestPort=8214;
-    protected function NewWebEEVClient(): LuxtronikWebEEVClient {return new LuxtronikWebEEVClient('127.0.0.1',$this->webTestPort,500);}
+    protected function NewWebEEVClient(int $TimeoutMs=2000): LuxtronikWebEEVClient {return new LuxtronikWebEEVClient('127.0.0.1',$this->webTestPort,min(1000,$TimeoutMs));}
 }
 
 $tests=[];
@@ -198,7 +198,7 @@ $tests['expired or disabled WebSocket readings disappear and the list identifies
     $rows=fields($form)['IDListe']['values'];
     $row=array_values(array_filter($rows,static fn($row)=>$row['id']===400001));
     check(count($row)===1 && $row[0]['interface']==='WebSocket','Source missing from list');
-    check($row[0]['webAvailability']==='Noch nicht geprüft','An unmeasured device was labelled available');
+    check($row[0]['source']==='Keine aktuellen Daten','An unmeasured device was labelled available');
     check(str_contains(json_encode($form),'3.81'),'Firmware requirement missing from form');
 };
 
@@ -210,7 +210,7 @@ $tests['device availability distinguishes incomplete discovery from a failed por
     $form=json_decode($module->GetConfigurationForm(),true);
     $rows=fields($form)['IDListe']['values'];
     $row=array_values(array_filter($rows,static fn($row)=>$row['id']===400001))[0];
-    check($row['webAvailability']==='Teilabfrage: kein Messwert','Partial scan claimed a field was unavailable');
+    check($row['source']==='Keine aktuellen Daten','Partial scan claimed a field was unavailable');
     $listener=stream_socket_server('tcp://127.0.0.1:0');
     $port=(int)substr(strrchr(stream_socket_get_name($listener,false),':'),1);
     fclose($listener);
@@ -222,7 +222,7 @@ $tests['device availability distinguishes incomplete discovery from a failed por
     $form=json_decode($module->GetConfigurationForm(),true);
     $rows=fields($form)['IDListe']['values'];
     $row=array_values(array_filter($rows,static fn($row)=>$row['id']===400001))[0];
-    check($row['webAvailability']==='Abfrage fehlgeschlagen' && str_contains(json_encode($form,JSON_UNESCAPED_UNICODE),$message),'Connection error hidden from the configuration');
+    check($row['source']==='Keine aktuellen Daten' && str_contains(json_encode($form,JSON_UNESCAPED_UNICODE),$message),'Connection error hidden from the configuration');
 };
 
 $tests['targeted pages supplement a missing Java point and retain other Java readings'] = static function():void {
@@ -246,9 +246,9 @@ $tests['targeted pages supplement a missing Java point and retain other Java rea
         $rows=fields(json_decode($module->GetConfigurationForm(),true))['IDListe']['values'];
         $row=array_values(array_filter($rows,static fn($row)=>$row['id']===10))[0];
         check(str_contains($row['interface'],'WebSocket') && str_contains($row['interface'],'Java'),'Shared source listing lost');
-        check($row['webAvailability']==='Messwert geliefert','Valid zero was not shown as actually supplied');
+        check($row['source']==='WebSocket','Valid zero was not shown as actually supplied');
         $returnRow=array_values(array_filter($rows,static fn($row)=>$row['id']===11))[0];
-        check($returnRow['webAvailability']==='Hauptquelle liefert Wert','Invalid reading was shown as an available measurement');
+        check($returnRow['source']==='Java','Invalid reading was shown as an available measurement');
         $module->properties['IPAddress']='127.0.0.2';
         check(invoke($module,'GetWebEEVPoint','Vorlauftemperatur_Heizkreis')===null,'Device change kept previous WebSocket values');
     },['xml'=>'<Content><item id="heat"><name>EEV Heizen</name><value>42.9 %</value></item><item id="cool"><name>EEV Kühlen</name><value>100.0 %</value></item><item id="hup-state"><name>HUP</name><value>Aus</value></item><item id="hup-percent"><name>HUP</name><value>0.0 %</value></item></Content>',
@@ -295,14 +295,14 @@ $tests['all 25 outputs of the real firmware response have separate typed mapping
     },['xml'=>file_get_contents(__DIR__.'/fixtures/web-outputs.xml')]);
     $module=new Luxtronik();
     $values=invoke($module,'MapWebSnapshot',$clientSnapshot);
-    check($clientSnapshot['count']===25 && count($values)===25,'Real output coverage incomplete');
+    check($clientSnapshot['count']===25 && count(array_unique(array_column($values,'webId')))===25,'Real output coverage incomplete');
     check($values['SHI_Pumpe_Mischkreis_1']['value']===true,'FUP 1 was confused with HUP');
     check($values['Ausgang_Heizungsumwaelzpumpe']['value']===true && $values['Steuersignal_Umwaelzpumpe']['value']===44.5,'HUP relay and command confused');
     check($values['Analog_Ausgang_21']['value']===0.0 && $values['Ventil_BOSUP']['value']===true,'Additional output missing');
     check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Unselected real outputs created objects');
 };
 
-$tests['Modbus primary keeps a valid off state instead of replacing it with WebSocket on'] = static function():void {
+$tests['WebSocket measurements remain preferred when Modbus is selected only for writing'] = static function():void {
     withEEVPeer(static function(int $port):void {
         $module=new WebEEVTestModule();$module->webTestPort=$port;$module->properties['IPAddress']='127.0.0.1';
         $module->properties['CommunicationMode']='modbus';$module->properties['IDListe']='[{"id":39,"enabled":true}]';
@@ -312,7 +312,7 @@ $tests['Modbus primary keeps a valid off state instead of replacing it with WebS
             'points'=>['input:10354'=>['value'=>false,'changedAt'=>0]]]));
         invoke($module,'UpdateWebEEV');
         $reading=invoke($module,'GetVisualizationPointData','HeatingCircuitPumpRunning1');
-        check($reading['value']===false && $reading['source']==='Modbus' && GetValue($id)===false,'WebSocket overrode valid Modbus off');
+        check($reading['value']===true && $reading['source']==='WebSocket' && GetValue($id)===true,'Write selection incorrectly changed measurement priority');
     },['xml'=>file_get_contents(__DIR__.'/fixtures/web-outputs.xml')]);
 };
 
@@ -339,14 +339,15 @@ $tests['Java stays default and successful Java values request only the EEV page'
         check($module->properties['CommunicationMode']==='java' && !$module->properties['ModbusReadSupplement'],'Defaults changed');
         invoke($module,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($module,'VisualizationSourceKey'),'count'=>276]));
         invoke($module,'StoreVisualizationPoints',[10=>0.0]);
+        invoke($module,'SetBuffer','WebInventory',json_encode(['source'=>invoke($module,'WebEEVSourceKey'),'nextAttempt'=>time()+86400]));
         invoke($module,'UpdateWebEEV');
         $cache=json_decode($module->GetWebSocketData(),true);
         check(array_keys($cache['values'])===['EEV_Heizen','EEV_Kuehlen'],'Unneeded page fields retained as fallback values');
         check(invoke($module,'GetVisualizationPointData','SupplyTemperature')['value']===0.0,'Java zero was replaced');
         $form=fields(json_decode($module->GetConfigurationForm(),true));
-        check(array_column($form['CommunicationMode']['options'],'value')===['java','modbus'],'WebSocket is still a communication choice');
+        check(!isset($form['CommunicationMode']) && $form['ModbusWrites']['type']==='CheckBox' && !$form['ModbusWrites']['value'],'Write selection is not simplified');
         $rows=array_column($form['IDListe']['values'],null,'id');
-        check($rows[10]['webAvailability']==='Hauptquelle liefert Wert' && $rows[400019]['webAvailability']==='Nicht angefordert','Coverage labels imply unrequested reads');
+        check($rows[10]['source']==='Java' && $rows[400019]['source']==='Keine aktuellen Daten','Coverage labels imply unrequested reads');
     },['expectPages'=>['Ausgänge'],'extra'=>[['name'=>'Temperaturen','id'=>'unused-temperatures','xml'=>'<Content><item><name>Vorlauf</name><value>99.0°C</value></item></Content>']]]);
 };
 
@@ -366,7 +367,7 @@ $tests['fourteen additional fields have stable selectable IDs correct types and 
         invoke($module,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($module,'VisualizationSourceKey'),'count'=>276]));
         invoke($module,'UpdateWebEEV');
         $values=json_decode($module->GetWebSocketData(),true)['values'];
-        check(count($values)===19,'Additional values incomplete or redundant native values retained');
+        check(count($values)===20,'Additional values or required FUP1 reading incomplete');
         $definitions=invoke($module,'WebDefinitions');
         foreach(range(400001,400019) as $selection) {
             $id=$module->GetIDForIdent($definitions[$selection]['ident']);
@@ -407,6 +408,74 @@ $tests['failed Java automatically requests replacements and recovery returns to 
         check($module->GetIDForIdent('Vorlauftemperatur_Heizkreis')===$id && IPS_GetName($id)==='Mein Vorlauf','Reserve switched object identity');
         check(!isset(json_decode($module->GetWebSocketData(),true)['values']['Vorlauftemperatur_Heizkreis']),'Recovered Java value still fetched over WebSocket');
     },['expectPages'=>['Ausgänge']]);
+};
+
+$tests['first and daily inventory discover other pages while normal polling remains targeted'] = static function():void {
+    $module=new WebEEVTestModule();$module->properties['IPAddress']='127.0.0.1';
+    invoke($module,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($module,'VisualizationSourceKey'),'count'=>276]));
+    $extra=[['name'=>'Temperaturen','id'=>'unused-page','xml'=>'<Content><item><name>Vorlauf</name><value>99.0°C</value></item></Content>'],
+        ['name'=>'Anlagenstatus','id'=>'software','xml'=>'<Content><item id="version"><name>Softwarestand</name><value>V3.86.1 (r7762)</value></item></Content>']];
+    withEEVPeer(static function(int $port) use($module):void {
+        $module->webTestPort=$port;invoke($module,'UpdateWebEEV');
+        $cache=json_decode($module->GetWebSocketData(),true);
+        check($cache['inventory']['discovery']['fullScan'] && count($cache['inventory']['discovery']['groups'])===3,'First contact did not inventory all pages');
+        check(!isset($cache['values']['Softwarestand']) && $module->GetIDForIdent('Softwarestand')===false,'Discovery promoted an unrequested object or value');
+    },['extra'=>$extra,'expectPages'=>['Ausgänge','Temperaturen','Anlagenstatus']]);
+    $module->properties['IDListe']='[{"id":400009,"enabled":true}]';
+    withEEVPeer(static function(int $port) use($module):void {
+        $module->webTestPort=$port;invoke($module,'UpdateWebEEV');
+        check(GetValue($module->GetIDForIdent('Softwarestand'))==='V3.86.1 (r7762)','Previously discovered extra was unavailable for selection');
+        check(!json_decode($module->GetWebSocketData(),true)['discovery']['fullScan'],'Regular poll unexpectedly read every page');
+    },['extra'=>$extra,'expectPages'=>['Ausgänge','Anlagenstatus']]);
+    $inventory=json_decode($module->buffers['WebInventory'],true);$inventory['nextAttempt']=time()-1;
+    invoke($module,'SetBuffer','WebInventory',json_encode($inventory));
+    withEEVPeer(static function(int $port) use($module):void {
+        $module->webTestPort=$port;invoke($module,'UpdateWebEEV');
+        check(json_decode($module->GetWebSocketData(),true)['inventory']['nextAttempt']>time()+86000,'Daily inventory not renewed');
+    },['extra'=>$extra,'expectPages'=>['Ausgänge','Temperaturen','Anlagenstatus']]);
+};
+
+$tests['configuration diagnostic downloads the full read-only report without promoting values or exposing the password'] = static function():void {
+    withEEVPeer(static function(int $port):void {
+        $module=new WebEEVTestModule();$module->webTestPort=$port;$module->properties['IPAddress']='127.0.0.1';$module->properties['WebSocketPassword']='test-secret';
+        $json=$module->RunWebSocketDiagnostic();$report=json_decode($json,true);
+        check($report['ok'] && $report['count']===3 && count($report['groups'])===2,'Manual configuration diagnostic missed pages');
+        check(!str_contains($json,'test-secret'),'Diagnostic exposed authentication');
+        check($module->GetIDForIdent('EEV_Heizen')===false && ($module->buffers['WebEEVCache']??'')==='','Manual diagnostic changed selected live values or created objects');
+        $form=fields(json_decode($module->GetConfigurationForm(),true));
+        check(isset($form['WebInventoryStatus']) && !isset($form['WebSocketSupplement']),'Diagnostic still requires a visualization switch');
+        check(array_filter($module->formUpdates,static fn($u)=>$u[0]==='WebInventoryStatus')!==[],'Configuration status was not updated');
+        check(!str_contains($module->GetVisualizationTile(),'wp-eev-test') && !str_contains($module->GetVisualizationTile(),'wp-web-test'),'Diagnostics retained in visualization');
+    },['password'=>'test-secret','extra'=>[['name'=>'Temperaturen','id'=>'temp','xml'=>'<Content><item><name>Vorlauf</name><value>24.4°C</value></item></Content>']],
+        'expectPages'=>['Ausgänge','Temperaturen']]);
+};
+
+$tests['WebSocket fault history reuses existing code and timestamp Idents with local dates and clears an empty log'] = static function():void {
+    $module=new WebEEVTestModule();$module->properties['IPAddress']='127.0.0.1';$module->properties['WebSocketTimezone']='Europe/Zurich';
+    $module->properties['IDListe']='[{"id":95,"enabled":true},{"id":100,"enabled":true},{"id":400020,"enabled":true}]';
+    $module->RegisterVariableString('Fehlercode_Fehler_0','Mein Fehlercode','');$old=$module->GetIDForIdent('Fehlercode_Fehler_0');
+    invoke($module,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($module,'VisualizationSourceKey'),'count'=>276]));
+    invoke($module,'StoreVisualizationPoints',[95=>1,100=>'999',105=>'1']);
+    withEEVPeer(static function(int $port) use($module,$old):void {
+        $module->webTestPort=$port;invoke($module,'UpdateWebEEV');
+        $history=invoke($module,'GetFaultHistoryData');
+        check($history['source']==='WebSocket' && count($history['entries'])===5 && $history['entries'][0]['code']===718,'Fault history did not prefer WebSocket');
+        check(str_contains($history['entries'][0]['text'],'Max. Aussentemp.'),'Full fault text missing');
+        check(GetValue($old)==='718' && $module->GetIDForIdent('Fehlercode_Fehler_0')===$old && IPS_GetName($old)==='Mein Fehlercode','Existing fault Ident or object changed');
+        check(GetValue($module->GetIDForIdent('Zeitstempel_Fehler_0'))===1708090519,'Fault timestamp does not respect device timezone');
+        $values=json_decode($module->GetWebSocketData(),true)['values'];
+        check($values['Zeitstempel_Fehler_2']['value']===1665921109,'Historic DST was ignored');
+        check(IPS_GetObject($module->GetIDForIdent('Fehlerspeicher_Meldungen'))['ObjectPosition']===400020,'Fault aggregate position incorrect');
+        $rows=array_column(fields(json_decode($module->GetConfigurationForm(),true))['IDListe']['values'],null,'id');
+        check($rows[100]['source']==='WebSocket' && $rows[95]['source']==='WebSocket','Fault source column incorrectly claims Java');
+    },['extra'=>[['name'=>'Fehlerspeicher','id'=>'faults','xml'=>file_get_contents(__DIR__.'/fixtures/web-faults.xml')]],'expectPages'=>['Ausgänge','Fehlerspeicher']]);
+    $cache=json_decode($module->buffers['WebEEVCache'],true);$cache['nextAttempt']=0;invoke($module,'SetBuffer','WebEEVCache',json_encode($cache));
+    withEEVPeer(static function(int $port) use($module,$old):void {
+        $module->webTestPort=$port;invoke($module,'UpdateWebEEV');
+        $history=invoke($module,'GetFaultHistoryData');
+        check($history['available'] && $history['entries']===[] && GetValue($old)==='0','Cleared fault log remained stale or became unknown');
+        check(GetValue($module->GetIDForIdent('Fehlerspeicher_Meldungen'))==='','Cleared aggregate retained old messages');
+    },['extra'=>[['name'=>'Fehlerspeicher','id'=>'faults','xml'=>'<Content/>']],'expectPages'=>['Ausgänge','Fehlerspeicher']]);
 };
 
 $failed=0;

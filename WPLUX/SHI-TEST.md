@@ -3,7 +3,7 @@
 Die Testversion unterstützt die im Herstellerhandbuch **83026900aDE** beschriebenen
 **76 Input-Datenpunkte, 12 Discrete Inputs und 41 Holding-Register**. Input und
 Holding mit derselben Adresse sind unterschiedliche Datenpunkte. Der vollständige
-[Katalog mit Idents, Einheiten und Grenzen](SHI-REGISTER.md) gehört zu dieser Version.
+[Katalog mit Idents, Einheiten und Grenzen](SHI-REGISTER.md) und der [API-Abgleich](SHI-ZUORDNUNG.md) gehört zu dieser Version.
 Die Implementierung ist mit einem lokalen TCP-Simulator geprüft, noch nicht an einer
 echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalten.
 
@@ -12,27 +12,28 @@ echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalt
 - Voraussetzung laut Handbuch: Luxtronik 2.1 ab V3.90.1 mit verfügbarer/aktiver
   SHI-Schnittstelle. Neuere Funktionen können auf älteren Firmwareständen fehlen.
   Ob die konkrete CTA-Firmware SHI bereitstellt, muss am Gerät geprüft werden.
-- `Kommunikation` auf `Modbus TCP / SHI (Testversion)` stellen und übernehmen.
+- Unter **Modbus TCP / SHI** den Schalter **Schreibbefehle über Modbus/SHI senden**
+  bei Bedarf aktivieren und übernehmen. Standardmäßig wird über Java geschrieben.
+- Messwerte kommen unabhängig davon bevorzugt über Java. Fehlende Werte werden
+  automatisch über WebSocket und bei Bedarf über Modbus ergänzt. Es gibt keine
+  separaten Lese-Schalter mehr.
 - Gleiche Geräte-IP wie Java; Modbus-Port **502**, Unit-ID **1**, Timeout **500 ms**
   pro Anfrage. Port, Unit-ID und Timeout (100–5000 ms) sind separat konfigurierbar.
-- Java bleibt auch mit aktivierter Option **Im Java-Betrieb fehlende benötigte
-  Messwerte zusätzlich über Modbus lesen** die bevorzugte Quelle und der Schreibweg.
-  Diese Option ist standardmäßig aus. Sie liest nur benötigte fehlende Register;
-  zusätzliche Holding-Werte bleiben in diesem Betrieb ohne Modbus-Schreibaktion.
-- **Fehlende Messwerte ergänzend über Java lesen** ist standardmäßig aktiv.
-  Dafür wird der gespeicherte Java-Port (8888/8889) verwendet und eingeblendet.
-  Für einen reinen Modbus-Test diese Ergänzung und die zusätzliche Abfrage unter
-  „WebSocket / Messwerte“ abschalten.
 - Literaladressen mit **Offset 0**, Byte- und Wortfolge Big-Endian.
 - Als anfänglichen Aktualisierungstakt beispielsweise **30 Sekunden** verwenden.
-- In der bestehenden Checkboxliste zeigt die Spalte **Schnittstelle**:
-  `Java`, `Modbus` oder `Java + Modbus`. Variablennamen bekommen keinen Zusatz.
-- Im Modbus-Hauptbetrieb werden alle 129 dokumentierten Punkte intern abgefragt.
-  Die Leseergänzung im Java-Betrieb beschränkt sich auf fehlende benötigte Punkte.
-  Nur als `aktiv` ausgewählte Zeilen
-  erzeugen zusätzliche Objekte. Die Grafik benötigt keine
-  ausgewählten Messvariablen. Hohe IDs der SHI-Zeilen sind Auswahlschlüssel,
-  keine Java-Indizes und keine Modbus-Adressen.
+- **Aktuelle Quelle** in der ID-Liste zeigt die tatsächlich verwendete Herkunft.
+  **Verfügbar über** nennt die unterstützten Schnittstellen.
+- Die normale Liste zeigt Java-Zeilen und zehn zusätzliche Modbus-Messwerte.
+  Grenzen, Konfigurationsmeldungen und externe Steuervorgaben stehen unter
+  **Erweiterte Modbus-Datenpunkte** zur Auswahl. Bereits gewählte Punkte bleiben
+  auch bei ausgeblendeter Erweiterung sichtbar. Es sind dokumentierte Register,
+  keine unbekannten Java-Indizes.
+- Die Abfrage beschränkt sich auf benötigte fehlende Werte und die ausgewählten
+  Zusatzpunkte. Grafik und Diagnose erzeugen keine Messobjekte. Nur ausgewählte
+  Zeilen legen zusätzliche Objekte an.
+- Ein erfolgreicher expliziter SHI-Schreibauftrag wird gelesen gehalten, solange
+  der Modbus-Schreibweg aktiv ist. Das setzt keine Werte erneut und unterstützt
+  die im Handbuch genannte Kommunikationsüberwachung.
 
 Ident, numerische Variablen-ID, Name, Typ und Profil bestehender gemeinsamer Werte
 bleiben erhalten. Neue SHI-Werte erhalten eigene `SHI_…`-Idents. Keine neuen
@@ -44,20 +45,18 @@ Nicht unterstützte Register, Geräteausnahmen 1/2/3 und Ersatzwerte werden
 durch Null ersetzt. Der letzte Objektwert ist dann kein aktueller SHI-Messwert.
 Die interne Grafik verwendet dafür keine alten Objektwerte. Ein Transportfehler
 verwirft den unvollständigen Modbus-Lesezyklus und kennzeichnet dessen letzten
-Snapshot als veraltet. Der Instanzstatus unterscheidet Fehler und teilweise
-verfügbare Daten.
+Snapshot als veraltet. Fehler stehen im Debug; eine fehlgeschlagene optionale Abfrage blockiert die
+anderen Lesequellen nicht.
 
 ## Ergänzende Java-Messwerte und Datenquelle
 
-Ein aktueller gültiger Modbus-Wert hat Vorrang, auch **0 oder Aus**. Wenn für einen
-benötigten bisherigen Ident kein aktueller gültiger Modbus-Messwert vorliegt,
-liest das Modul bei aktivierter Ergänzung **einmal pro Lesezyklus Kommando 3004**
-über den Java-Port. Das gilt für fehlende Zuordnungen, Ersatzwerte und optionale
-Registerausnahmen sowie bei einem verworfenen Modbus-Lesezyklus. Es werden nur
-die benötigten Werte für Grafik, aktivierte Objekte und COP/JAZ übernommen.
-Idents und numerische Objekt-IDs bleiben erhalten; nicht ausgewählte Messwerte
-werden nur intern gespeichert. Unbestätigte Ident-/Registerzuordnungen werden
-dadurch nicht ergänzt: etwa `SEC_EEV` wird weiterhin nicht zur EEV-Öffnung erklärt.
+Java wird einmal pro Aktualisierung mit Kommando 3004 gelesen. Gültige Java-Werte
+haben Vorrang, auch **0 oder Aus**. Fehlende benötigte Werte werden automatisch
+über WebSocket ergänzt. Modbus liest nur noch benötigte verbleibende Register
+sowie ausgewählte zusätzliche Punkte. Die Auswahl des Schreibwegs ändert diese
+Lesereihenfolge nicht. Idents und numerische Objekt-IDs bleiben erhalten;
+nicht ausgewählte Grafikwerte werden nur intern gespeichert. Unbestätigte
+Zuordnungen werden nicht geraten: etwa `SEC_EEV` wird nicht zur EEV-Öffnung erklärt.
 
 So können etwa Durchfluss, Verdichter-Ist/-Soll, Drücke, Temperaturen und laufende
 Lauf-/Standzeit weiter über Java kommen. Reine SHI-Werte ohne bestätigtes Java-

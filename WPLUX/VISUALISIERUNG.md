@@ -229,14 +229,17 @@ wurde in dieser Cloud-Umgebung nicht verwendet.
 
 
 EEV Heizen/Kühlen wird abhängig vom Kühlstatus am Expansionsventil beschriftet.
-Die numerischen Java-IDs und deren Skalierung sind noch nicht bestätigt; ID 247
-wird dafür ausdrücklich nicht verwendet. Bis zur Bestätigung erscheint „—“.
-Vorhandene, bereits in Prozent aufbereitete eigene Idents `EEV_Heizen` und
-`EEV_Kuehlen` können direkt gelesen werden; das Modul legt diese nicht an.
-Zur gezielten Zuordnung kann `WPLUX_GetEEVDiagnosticData(InstanzID)` eine einzelne,
-rein lesende Java-3004-Abfrage mit unveränderten Rohwerten und Indizes liefern.
-Ein Vergleich mit den Geräteanzeigen während laufendem Verdichter ist erforderlich.
-Die Diagnose läuft niemals automatisch und ist in SHI sowie bei deaktivierter Instanz gesperrt.
+Die Prozentwerte kommen aus den bestätigten WebSocket-Feldern, nicht aus Java-ID 247.
+Die Grafik benötigt dafür keine angelegten Messvariablen. Diagnose und JSON-Download
+stehen unter WebSocket-Ergänzung in der Instanzkonfiguration; das LUX-Fenster enthält
+nur die bisherige Geräteanzeige mit Bedienung.
+
+Im Statusfeld öffnet „Fehlerspeicher: Anzahl“ die gespeicherte Historie mit Datum,
+Fehlercode und vollständigem Meldungstext. WebSocket wird für diese Daten bevorzugt;
+Java bleibt die Reserve. Die Historie stellt keine aktuellen Alarmzustände dar.
+Die vorhandenen IDs 95–105 werden wiederverwendet, die zusätzliche Auswahl-ID 400020
+bietet den gesamten Meldungstext als Stringvariable. Die konfigurierte Reglerzeitzone
+bestimmt die Umrechnung der Fehlerdaten in Zeitstempel.
 
 Das Umschaltventil zeigt ohne zusätzliche Beschriftung seinen angeforderten
 Durchgang: BUP (38) ein führt nach rechts zum Warmwasserspeicher, aus nach oben

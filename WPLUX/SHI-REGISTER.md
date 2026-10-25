@@ -2,7 +2,9 @@
 
 Quelle: Herstellerhandbuch **83026900aDE**, Seiten 6–32. Literaladressen, Offset 0.
 Werte und Grenzen unten sind in der angegebenen Zieleinheit, keine Rohwerte.
-Die Spalte Schnittstelle in der Konfiguration unterscheidet Java, Modbus und beide.
+Die Konfiguration unterscheidet unterstützte Schnittstellen und die aktuelle Quelle.
+Gemeinsame Zuordnungen und bewusst getrennte Zusatzwerte erklärt der
+[API-Abgleich](SHI-ZUORDNUNG.md).
 
 ## Input-Register (FC04)
 

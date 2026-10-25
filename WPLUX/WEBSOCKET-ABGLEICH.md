@@ -20,9 +20,11 @@ unten in der Checkboxliste auswählbar. Bestehende Idents bleiben unverändert.
 
 Mit den bestätigten Beschriftungen der sechs Betriebsstundenzähler sind damit
 85 der 104 Berichtseinträge technisch zugeordnet. Zyklisch werden davon nur
-benötigte fehlende Werte übernommen. Bivalenzstufe, fünf Fehlereinträge und der
-leere Betriebszustand bleiben noch umzusetzen; die zwölf unten beschriebenen
-Zuordnungen bleiben offen. Die vollständige Diagnose liest weiterhin alle Seiten.
+benötigte fehlende Werte übernommen. Bivalenzstufe und der leere Betriebszustand bleiben noch umzusetzen; die zwölf unten beschriebenen
+Zuordnungen bleiben offen. Die vollständige Diagnose liest weiterhin alle Seiten. Inzwischen sind auch die fünf
+Fehlereinträge mit den bestehenden Zeitstempeln und Codes sowie der Sammel-ID 400020
+umgesetzt. Die tägliche Bestandsabfrage und die Konfigurationsdiagnose ermitteln
+die verfügbaren Seiten unabhängig von ausgewählten Messobjekten.
 
 Die 13 zusätzlich zuordenbaren Einträge sind sechs Betriebsstundenzähler,
 Bivalenzstufe, fünf Fehlereinträge (je Zeitstempel und Code) und Betriebszustand.

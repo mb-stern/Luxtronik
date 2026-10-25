@@ -29,6 +29,7 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyInteger('ModbusTimeout', 500);
         $this->RegisterPropertyBoolean('ModbusJavaSupplement', true);
         $this->RegisterPropertyBoolean('ModbusReadSupplement', false);
+        $this->RegisterPropertyBoolean('ShowAdvancedModbusPoints', false);
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
         $this->RegisterPropertyInteger('Port', 8889);
@@ -139,7 +140,6 @@ class Luxtronik extends IPSModuleStrict
     {
          //Never delete this line!
         parent::ApplyChanges();
-        $this->SetBuffer('WebEEVCache','');
         $this->SyncWebVariableSelection();
         $this->RefreshVisualization(true);
 
@@ -1251,11 +1251,6 @@ class Luxtronik extends IPSModuleStrict
 
     private function UpdateInstance(): void
     {
-        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
-            $this->UpdateModbus();
-            return;
-        }
-
         if (!$this->ReadPropertyBoolean('InstanceStatus')) {
             return;
         }
@@ -1286,14 +1281,15 @@ class Luxtronik extends IPSModuleStrict
         $daten_raw = $this->ReadData(3004);
         if ($daten_raw === null) {
             $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>0,'failed'=>true],JSON_THROW_ON_ERROR));
-            $this->UpdateModbusSupplement();
+            $this->SetBuffer('ControlSources','');
             $this->UpdateWebEEV();
+            $this->UpdateModbusSupplement();
             $this->RefreshVisualization();
             return;
         }
         $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>count($daten_raw)],JSON_THROW_ON_ERROR));
         $JavaWerte = count($daten_raw);
-        $graphicPoints = $this->GetVisualizationRequiredPointIDs();
+        $graphicPoints = $this->HybridMeasurementIDs();
         $graphicValues = [];
 
         // Init für JAZ (falls 151/152 nicht vorkommen)
@@ -1353,8 +1349,10 @@ class Luxtronik extends IPSModuleStrict
         $this->StoreVisualizationPoints($graphicValues);
 
         // JAZ berechnen
-        $value_out = $value_out_heizung + $value_out_warmwasser;
-        $this->calc_jaz('jaz', $value_out);
+        if(array_key_exists(151,$daten_raw) && array_key_exists(152,$daten_raw)) {
+            $value_out = $value_out_heizung + $value_out_warmwasser;
+            $this->calc_jaz('jaz', $value_out);
+        }
 
         /*
          * Sollwerte / Betriebsarten ebenfalls zyklisch von der Luxtronik
@@ -1365,8 +1363,8 @@ class Luxtronik extends IPSModuleStrict
          * neue Socket-Verbindung je Sollwert.
          */
         $this->RefreshControlValues();
-        $this->UpdateModbusSupplement();
         $this->UpdateWebEEV();
+        $this->UpdateModbusSupplement();
         $this->RefreshVisualization();
     }
 
@@ -1712,11 +1710,14 @@ class Luxtronik extends IPSModuleStrict
             $targets['Anpassung_RBE'] = ['index' => 1148, 'conversion' => 'tenth'];
         }
 
+        if($this->ReadPropertyString('CommunicationMode')==='modbus') foreach(['Anpassung_Temp','Anpassung_WW','Anpassung_RBE'] as $ident) unset($targets[$ident]);
         if ($targets === []) {
             return;
         }
 
         $datenRaw = $this->ReadData(3003);
+        $controlSources=['source'=>$this->VisualizationSourceKey(),'updatedAt'=>time(),'idents'=>[]];
+        $this->SetBuffer('ControlSources',json_encode($controlSources,JSON_THROW_ON_ERROR));
         if ($datenRaw === null) {
             return;
         }
@@ -1734,6 +1735,7 @@ class Luxtronik extends IPSModuleStrict
             }
 
             $value = $datenRaw[$index];
+            $controlSources['idents'][$ident]=true;
 
             switch ($target['conversion']) {
                 case 'minus_correction':
@@ -1760,6 +1762,7 @@ class Luxtronik extends IPSModuleStrict
                 );
             }
         }
+        $this->SetBuffer('ControlSources',json_encode($controlSources,JSON_THROW_ON_ERROR));
     }
 
     private function setParameter(string $type, mixed $value): bool
