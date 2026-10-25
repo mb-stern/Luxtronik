@@ -3101,7 +3101,7 @@ window.SymconHeatPump = {
 
             const waterSupplyY = 640;
             const waterReturnY = 847;
-            const boilerValveX = 850;
+            const boilerValveX = !cfg.tankHP && (hk1 !== hk2) ? 825 : 850;
             // Tank base and WP enclosure share the same baseline (y=910).
             const dhwLift = 39;
             const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0,3) : [];
