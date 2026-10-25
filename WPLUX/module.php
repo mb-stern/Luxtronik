@@ -3,6 +3,7 @@
 require_once __DIR__ . '/ModbusSHI.php';
 require_once __DIR__ . '/Visualization.php';
 require_once __DIR__ . '/WebEEV.php';
+require_once __DIR__ . '/DataSources.php';
 
 // Abort an obsolete timer invocation as soon as its Symcon interface disappears.
 class LuxtronikInstanceUnavailable extends Exception {}
@@ -12,6 +13,7 @@ class Luxtronik extends IPSModuleStrict
     use LuxtronikModbusSHI;
     use LuxtronikVisualization;
     use LuxtronikWebEEV;
+    use LuxtronikDataSources;
 
     private const SOCKET_TIMEOUT = 5.0;
     private const MAX_RESPONSE_VALUES = 65536;
@@ -30,6 +32,7 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ModbusJavaSupplement', true);
         $this->RegisterPropertyBoolean('ModbusReadSupplement', false);
         $this->RegisterPropertyBoolean('ShowAdvancedModbusPoints', false);
+        $this->RegisterPropertyString('SHIControlList', '[]');
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
         $this->RegisterPropertyInteger('Port', 8889);
@@ -143,12 +146,6 @@ class Luxtronik extends IPSModuleStrict
         $this->SyncWebVariableSelection();
         $this->RefreshVisualization(true);
 
-        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
-            $this->ApplyChangesModbus();
-            $this->RefreshVisualization(true);
-            return;
-        }
-
         $this->DisableSHIActions();
 
         if (!$this->ReadPropertyBoolean('InstanceStatus')) {
@@ -238,8 +235,8 @@ class Luxtronik extends IPSModuleStrict
 
         if ($tempsetVisible) 
         {
-            $this->RegisterVariableFloat('Anpassung_Temp', 'Temperaturkorrektur', 'WPLUX.Tset', 3);
-            $this->getParameter('Anpassung_Temp'); 
+            if (@$this->GetIDForIdent('Anpassung_Temp')===false) $this->RegisterVariableFloat('Anpassung_Temp', 'Temperaturkorrektur', 'WPLUX.Tset', 3);
+            if (!$this->UsesModbusWrite('Anpassung_Temp')) $this->getParameter('Anpassung_Temp');
             $Value = $this->GetValue('Anpassung_Temp'); 
             $this->EnableAction('Anpassung_Temp');
         } 
@@ -250,8 +247,8 @@ class Luxtronik extends IPSModuleStrict
 
         if ($wwsetVisible) 
         {
-            $this->RegisterVariableFloat('Anpassung_WW', 'Warmwasser Soll', 'WPLUX.Wset', 4);
-            $this->getParameter('Anpassung_WW'); 
+            if (@$this->GetIDForIdent('Anpassung_WW')===false) $this->RegisterVariableFloat('Anpassung_WW', 'Warmwasser Soll', 'WPLUX.Wset', 4);
+            if (!$this->UsesModbusWrite('Anpassung_WW')) $this->getParameter('Anpassung_WW');
             $Value = $this->GetValue('Anpassung_WW'); 
             $this->EnableAction('Anpassung_WW');
         } 
@@ -273,8 +270,8 @@ class Luxtronik extends IPSModuleStrict
 
         if ($rbesetVisible) 
         {
-            $this->RegisterVariableFloat('Anpassung_RBE', 'Raumtemperatur Soll', 'WPLUX.Rset', 6);
-            $this->getParameter('Anpassung_RBE'); 
+            if (@$this->GetIDForIdent('Anpassung_RBE')===false) $this->RegisterVariableFloat('Anpassung_RBE', 'Raumtemperatur Soll', 'WPLUX.Rset', 6);
+            if (!$this->UsesModbusWrite('Anpassung_RBE')) $this->getParameter('Anpassung_RBE');
             $Value = $this->GetValue('Anpassung_RBE'); 
             $this->EnableAction('Anpassung_RBE');
         } 
@@ -932,6 +929,8 @@ class Luxtronik extends IPSModuleStrict
             }
         }
         // Rebind after configuration-created values (including COP/JAZ) exist.
+        $this->SyncSHIControlVariables(true);
+        $this->RefreshDerivedMeasurements();
         $this->RefreshVisualization(true);
     }
 
@@ -945,7 +944,7 @@ class Luxtronik extends IPSModuleStrict
             $this->HandleVisualizationAction($Ident, $Value);
             return;
         }
-        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
+        if ($this->UsesModbusWrite($Ident) || str_starts_with($Ident, 'SHI_')) {
             $this->HandleSHIAction($Ident, $Value);
             return;
         }
@@ -1282,8 +1281,7 @@ class Luxtronik extends IPSModuleStrict
         if ($daten_raw === null) {
             $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>0,'failed'=>true],JSON_THROW_ON_ERROR));
             $this->SetBuffer('ControlSources','');
-            $this->UpdateWebEEV();
-            $this->UpdateModbusSupplement();
+            $this->UpdateMeasurementSupplements();
             $this->RefreshVisualization();
             return;
         }
@@ -1291,10 +1289,6 @@ class Luxtronik extends IPSModuleStrict
         $JavaWerte = count($daten_raw);
         $graphicPoints = $this->HybridMeasurementIDs();
         $graphicValues = [];
-
-        // Init für JAZ (falls 151/152 nicht vorkommen)
-        $value_out_heizung = 0;
-        $value_out_warmwasser = 0;
 
         // Alle Werte einmal durchgehen
         for ($i = 0; $i < $JavaWerte; ++$i) {
@@ -1304,55 +1298,17 @@ class Luxtronik extends IPSModuleStrict
                 $graphicValues[$i] = $this->convertValueBasedOnID($daten_raw[$i], $i);
             }
 
-            // --- Werte erfassen für COP/JAZ unabhängig von Auswahl ---
-            if ($i == 257) { // Wärmeleistung an Funktion senden zur Berechnung des COP
-                $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
-                $this->calc_cop('cop', $value);
-            }
-
-            if ($i == 151) { // Wärmemenge Heizung
-                $value_out_heizung = $this->convertValueBasedOnID($daten_raw[$i], $i);
-            }
-
-            if ($i == 152) { // Wärmemenge Warmwasser
-                $value_out_warmwasser = $this->convertValueBasedOnID($daten_raw[$i], $i);
-            }
-
-            // --- Nur ausgewählte IDs verarbeiten ---
-            if (isset($enabledIds[$i])) {
-
-                // umrechnen wenn nötig
-                $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
-
-                // Ident aus Dataset, Fallback falls nicht vorhanden
-                $ident = $java_dataset[$i] ?? ('ID_' . $i);
-
-                // Variable anlegen/aktualisieren
-                $this->CreateOrUpdateVariable($ident, $value, $i);
-
-                // Debug
-                $this->SendDebug(
-                    "Wert gesendet",
-                    "Der Wert: {$daten_raw[$i]} der ID: {$i} wurde erfasst, umgerechnet in: {$value} und an 'CreateOrUpdateVariable' gesandt",
-                    0
-                );
-
-            } else {
+            // Publish selected values after the preferred and replacement sources have been read.
+            if (!isset($enabledIds[$i])) {
                 // Variable löschen, da nicht ausgewählt
                 $this->DeleteVariableIfExists($java_dataset[$i] ?? ('ID_' . $i));
             }
             if (isset($enabledIds[$i]) || isset($graphicPoints[$i])) {
-                $this->SendDebug('Datenquelle', ($java_dataset[$i] ?? ('ID_' . $i)) . ": Java (3004, ID $i)", 0);
+                $this->SendDebug('Java gelesen', ($java_dataset[$i] ?? ('ID_' . $i)) . ": 3004, ID $i", 0);
             }
         }
 
         $this->StoreVisualizationPoints($graphicValues);
-
-        // JAZ berechnen
-        if(array_key_exists(151,$daten_raw) && array_key_exists(152,$daten_raw)) {
-            $value_out = $value_out_heizung + $value_out_warmwasser;
-            $this->calc_jaz('jaz', $value_out);
-        }
 
         /*
          * Sollwerte / Betriebsarten ebenfalls zyklisch von der Luxtronik
@@ -1363,8 +1319,7 @@ class Luxtronik extends IPSModuleStrict
          * neue Socket-Verbindung je Sollwert.
          */
         $this->RefreshControlValues();
-        $this->UpdateWebEEV();
-        $this->UpdateModbusSupplement();
+        $this->UpdateMeasurementSupplements();
         $this->RefreshVisualization();
     }
 

@@ -452,7 +452,7 @@ $tests['configuration diagnostic downloads the full read-only report without pro
 
 $tests['WebSocket fault history reuses existing code and timestamp Idents with local dates and clears an empty log'] = static function():void {
     $module=new WebEEVTestModule();$module->properties['IPAddress']='127.0.0.1';$module->properties['WebSocketTimezone']='Europe/Zurich';
-    $module->properties['IDListe']='[{"id":95,"enabled":true},{"id":100,"enabled":true},{"id":400020,"enabled":true}]';
+    $module->properties['IDListe']=json_encode([...array_map(static fn($id)=>['id'=>$id,'enabled'=>in_array($id,[95,100],true),'preferredSource'=>'websocket'],range(95,105)),['id'=>400020,'enabled'=>true]]);
     $module->RegisterVariableString('Fehlercode_Fehler_0','Mein Fehlercode','');$old=$module->GetIDForIdent('Fehlercode_Fehler_0');
     invoke($module,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($module,'VisualizationSourceKey'),'count'=>276]));
     invoke($module,'StoreVisualizationPoints',[95=>1,100=>'999',105=>'1']);
@@ -476,6 +476,28 @@ $tests['WebSocket fault history reuses existing code and timestamp Idents with l
         check($history['available'] && $history['entries']===[] && GetValue($old)==='0','Cleared fault log remained stale or became unknown');
         check(GetValue($module->GetIDForIdent('Fehlerspeicher_Meldungen'))==='','Cleared aggregate retained old messages');
     },['extra'=>[['name'=>'Fehlerspeicher','id'=>'faults','xml'=>'<Content/>']],'expectPages'=>['Ausgänge','Fehlerspeicher']]);
+};
+
+$tests['preferred WebSocket readings override Java and fall back without replacing the variable'] = static function():void {
+    $m=new WebEEVTestModule();$m->properties['IPAddress']='127.0.0.1';
+    $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"websocket"}]';
+    $m->RegisterVariableFloat('Aussentemperatur','Mein Außenfühler','~Temperature');$id=$m->GetIDForIdent('Aussentemperatur');
+    invoke($m,'StoreVisualizationPoints',[15=>0.0]);
+    invoke($m,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'count'=>276]));
+    withEEVPeer(static function(int $port) use($m,$id):void {
+        $m->webTestPort=$port;invoke($m,'UpdateWebEEV');
+        $reading=invoke($m,'GetVisualizationPointData','OutdoorTemperature');
+        check($reading['source']==='WebSocket' && $reading['value']===-3.5 && GetValue($id)===-3.5,'Preferred WebSocket did not override valid Java zero');
+        check(invoke($m,'CurrentPointSource',15)==='WebSocket','Actual source did not follow the preference');
+        $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"java"}]';
+        invoke($m,'PublishMeasurements');
+        check(GetValue($id)===0.0 && invoke($m,'CurrentPointSource',15)==='Java','Java preference ignored valid zero');
+        $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"websocket"}]';
+        invoke($m,'SetBuffer','WebEEVCache','');invoke($m,'PublishMeasurements');
+        check(GetValue($id)===0.0 && invoke($m,'CurrentPointSource',15)==='Java','Missing preferred source did not fall back to Java');
+        check($m->GetIDForIdent('Aussentemperatur')===$id && IPS_GetName($id)==='Mein Außenfühler','Reading preference changed object identity');
+    },['extra'=>[['name'=>'Temperaturen','id'=>'temperatures','xml'=>'<Content><item id="outside"><name>Außentemperatur</name><value>-3.5 °C</value></item></Content>']],
+        'expectPages'=>['Ausgänge','Temperaturen']]);
 };
 
 $failed=0;

@@ -207,7 +207,7 @@ $tests['enabling an existing native action refreshes controls without reopening 
     check(end($module->updates)['controls']['hotwater']['configured'], 'Newly enabled action not updated');
     $module->properties['CommunicationMode'] = 'modbus';
     $module->MessageSink(2, $module->InstanceID, IM_CHANGESTATUS, []);
-    check(!end($module->updates)['controls']['hotwater']['configured'], 'SHI mode did not revoke control');
+    check(end($module->updates)['controls']['hotwater']['configured'], 'Modbus preference disabled the Java-only DHW mode');
 };
 $tests['graphic rejects forged, foreign, disabled and SHI write actions'] = static function (): void {
     withoutConnection(static function (Luxtronik $module): void {

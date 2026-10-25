@@ -148,6 +148,7 @@ class IPSModuleStrict
     protected function SendDebug(string $name, mixed $value, int $format): void { $this->debugMessages[] = [$name,$value,$format]; }
     protected function LogMessage(string $message, int $severity): void { $this->errors[] = $message; }
     public function GetIDForIdent(string $ident): int|false { return IPS_GetObjectIDByIdent($ident, $this->InstanceID); }
+    protected function GetValue(string $ident): mixed { return GetValue($this->GetIDForIdent($ident)); }
 
     protected function RegisterVariableBoolean(string $ident, string $name, string $profile = '', int $position = 0): bool
     {

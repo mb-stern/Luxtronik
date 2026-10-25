@@ -29,9 +29,11 @@ jeder Modbus-Zugriff intern garantiert ohne Speicherzugriff bleibt. Solche
 Firmwaredetails sind hier nicht belegt. Reine Messwertabfragen ändern keine
 Reglerparameter; Modbus bleibt auch für zusätzliche Messwerte sinnvoll.
 
-Java bleibt die bevorzugte Lesequelle. Fehlende benötigte Werte werden automatisch
-über WebSocket bzw. Modbus ergänzt. Der Schalter „Schreibbefehle über Modbus/SHI
-senden“ ändert nur den Schreibweg. WebSocket bleibt lesende Reserve.
+Java ist die voreingestellte Lesequelle. Eine andere bevorzugte Quelle kann je Messwert
+in der ID-Liste gewählt werden. Fehlende benötigte Werte werden automatisch ergänzt.
+Der Schalter „Unterstützte Schreibbefehle über Modbus/SHI senden“ ändert nur den
+Schreibweg; Nur über Java unterstützte Betriebsarten und Zeitprogramme bleiben über Java bedienbar.
+Alle 41 Modbus-Steuervariablen stehen in einer eigenen Auswahlliste. [Konfiguration](DATENQUELLEN.md).
 
 ## Zusätzliche Modbus-Sollwerte ohne bisherige Java-Schreibaktion im Modul
 
@@ -62,8 +64,9 @@ Ausschaltfunktion. Die zusätzliche Warmwasser-Zieltemperatur und -Dauer unter
 IR 10500/10501/10502 sind im Handbuch nur lesbar. Die vorhandenen Java-Zeitprogramme
 besitzen dort kein schreibbares Gegenstück.
 
-Die Java-Ergänzung im Modbus-Modus liest ausschließlich Messwerte mit Kommando
-3004. Sie führt weder Java-Schreibbefehle noch Java-Steuerwertabfragen aus.
+Java-Messwerte werden mit Kommando 3004 gelesen. Nur über Java unterstützte Steuervariablen werden
+weiter mit 3003 gelesen und bei einer Bedienaktion mit 3002 geschrieben. Für die
+drei gemeinsamen Sollwerte bestimmt der gewählte Schreibweg auch die Steuerwertabfrage.
 
 Vollständige Register und Bedienhinweise: [SHI-REGISTER.md](SHI-REGISTER.md) und
 [SHI-TEST.md](SHI-TEST.md).

@@ -281,7 +281,7 @@ trait LuxtronikWebEEV
         400017 => ['ident'=>'Waermemengenzaehler_Seit_Datum','label'=>'Wärmemenge seit Regler-Startdatum','field'=>['Wärmemenge','seit:','kWh'],'namePattern'=>'/^seit\s*:/iu','type'=>'float','profile'=>'~Electricity'],
         400018 => ['ident'=>'Waermemengenzaehler_Seit_Reset','label'=>'Wärmemenge seit Regler-Reset','field'=>['Wärmemenge','seit Reset:','kWh'],'type'=>'float','profile'=>'~Electricity'],
         400019 => ['ident'=>'GLT_Art','label'=>'GLT Art','field'=>['GLT','Art','text'],'type'=>'string','profile'=>''],
-        400020 => ['ident'=>'Fehlerspeicher_Meldungen','label'=>'Fehlerspeicher Meldungen','field'=>['Fehlerspeicher','Meldungen','fault'],'type'=>'string','profile'=>'','preferWeb'=>true]
+        400020 => ['ident'=>'Fehlerspeicher_Meldungen','label'=>'Fehlerspeicher Meldungen','field'=>['Fehlerspeicher','Meldungen','fault'],'type'=>'string','profile'=>'']
     ];
 
     private function WebFieldKey(string $value): string
@@ -297,7 +297,7 @@ trait LuxtronikWebEEV
         foreach(self::WEB_NATIVE_FIELDS as $id=>$field) $result[$id]=['ident'=>self::DATA_POINT_CONFIG[$id]['name'],
             'label'=>self::DATA_POINT_CONFIG[$id]['name'],'field'=>$field,'native'=>$id];
         foreach(range(95,105) as $id) $result[$id]=['ident'=>self::DATA_POINT_CONFIG[$id]['name'],
-            'label'=>self::DATA_POINT_CONFIG[$id]['name'],'field'=>['Fehlerspeicher','','fault'],'native'=>$id,'preferWeb'=>true];
+            'label'=>self::DATA_POINT_CONFIG[$id]['name'],'field'=>['Fehlerspeicher','','fault'],'native'=>$id];
         return $result;
     }
 
@@ -421,12 +421,8 @@ trait LuxtronikWebEEV
     /** Availability is based on the complete Java frame, not only values retained for the graphic. */
     private function WebPrimaryHasValue(array $definition): bool
     {
-        if(!empty($definition['preferWeb'])) return false;
-        if(!isset($definition['native'])) return false;
-        $availability=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
-        if(($availability['source']??'')===$this->VisualizationSourceKey())
-            return empty($availability['failed']) && $definition['native']<($availability['count']??0);
-        return $this->GetCachedVisualizationPoint($definition['ident'])!==null;
+        $id=$this->MeasurementIDForIdent($definition['ident']);
+        return $id!==null && !$this->ShouldReadMeasurement($id,'websocket');
     }
 
     /** Only requested objects and graphic readings that the preferred source cannot supply. */
@@ -515,34 +511,30 @@ trait LuxtronikWebEEV
 
     private function PublishWebEEV(): void
     {
-        $selected=[];
-        foreach (json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if (!empty($row['enabled'])) $selected[(int)$row['id']]=true;
-        foreach ($this->WebDefinitions() as $id=>$point) {
-            if (!isset($selected[$id])) continue;
-            $reading=$this->GetWebEEVPoint($point['ident']);
-            if ($reading===null) continue;
-            if($this->WebPrimaryHasValue($point)) continue;
-            if (@$this->GetIDForIdent($point['ident'])===false) {
-                if(isset($point['native'])) {
-                    $native=self::DATA_POINT_CONFIG[$point['native']];
-                    $method=match($native['type']) {'bool'=>'RegisterVariableBoolean','int'=>'RegisterVariableInteger','float'=>'RegisterVariableFloat',default=>'RegisterVariableString'};
-                    $this->$method($point['ident'],$point['label'],$native['profile'],$point['native']);
-                } elseif(isset($point['profile'])) {
-                    $method=match($point['type']) {'bool'=>'RegisterVariableBoolean','int'=>'RegisterVariableInteger','string'=>'RegisterVariableString',default=>'RegisterVariableFloat'};
-                    $this->$method($point['ident'],$point['label'],$point['profile'],$id);
-                } else {
-                if (!IPS_VariableProfileExists('WPLUX.EEV.Percent')) {
+        $this->PublishMeasurements();
+    }
+
+    private function EnsureWebVariable(int $id,array $point): void
+    {
+        if(@$this->GetIDForIdent($point['ident'])===false) {
+            if(isset($point['native'])) {
+                $native=self::DATA_POINT_CONFIG[$point['native']];
+                $method=match($native['type']) {'bool'=>'RegisterVariableBoolean','int'=>'RegisterVariableInteger','float'=>'RegisterVariableFloat',default=>'RegisterVariableString'};
+                $this->$method($point['ident'],$point['label'],$native['profile'],$point['native']);
+            } elseif(isset($point['profile'])) {
+                $method=match($point['type']) {'bool'=>'RegisterVariableBoolean','int'=>'RegisterVariableInteger','string'=>'RegisterVariableString',default=>'RegisterVariableFloat'};
+                $this->$method($point['ident'],$point['label'],$point['profile'],$id);
+            } else {
+                if(!IPS_VariableProfileExists('WPLUX.EEV.Percent')) {
                     IPS_CreateVariableProfile('WPLUX.EEV.Percent',2);
                     IPS_SetVariableProfileValues('WPLUX.EEV.Percent',0,100,0.1);
                     IPS_SetVariableProfileDigits('WPLUX.EEV.Percent',1);
                     IPS_SetVariableProfileText('WPLUX.EEV.Percent','',' %');
                 }
                 $this->RegisterVariableFloat($point['ident'],$point['label'],'WPLUX.EEV.Percent',$id);
-                }
             }
-            if(isset(self::WEB_ONLY_POINTS[$id])) IPS_SetPosition($this->GetIDForIdent($point['ident']),$id);
-            $this->SetValueIfChanged($point['ident'],$reading['value']);
         }
+        if(isset(self::WEB_ONLY_POINTS[$id])) IPS_SetPosition($this->GetIDForIdent($point['ident']),$id);
     }
 
     private function SyncWebVariableSelection(): void
@@ -601,16 +593,11 @@ trait LuxtronikWebEEV
     private function CurrentPointSource(int $id): string
     {
         if(!$this->ReadPropertyBoolean('InstanceStatus')) return 'Instanz deaktiviert';
-        $definition=$this->WebDefinitions()[$id]??$this->SHISelections()[$id]??null;
-        $ident=self::DATA_POINT_CONFIG[$id]['name']??$definition['ident']??null;
-        if($ident===null) return 'Keine aktuellen Daten';
-        if(!empty($definition['preferWeb']) && $this->GetWebEEVPoint($ident)!==null) return 'WebSocket';
-        if($this->JavaHasMeasurement($ident)) return 'Java';
-        $controls=json_decode($this->GetBuffer('ControlSources'),true)??[];
-        if($this->ReadPropertyString('CommunicationMode')!=='modbus' && ($controls['source']??'')===$this->VisualizationSourceKey()
-            && isset($controls['idents'][$ident]) && time()-($controls['updatedAt']??0)<=max(30,2*$this->ReadPropertyInteger('UpdateInterval')+5)) return 'Java';
-        if($this->GetWebEEVPoint($ident)!==null) return 'WebSocket';
-        if($this->GetSHIVisualizationPoint($ident)!==null) return 'Modbus/SHI';
+        $reading=$this->MeasurementReading($id);
+        if($reading!==null) return $reading['source']==='Modbus'?'Modbus/SHI':$reading['source'];
+        // The complete Java frame can include unselected fields that are not retained in the live cache.
+        $ident=$this->MeasurementIdent($id);
+        if($ident!==null && $this->JavaHasMeasurement($ident)) return 'Java';
         return 'Keine aktuellen Daten';
     }
 
@@ -643,6 +630,11 @@ trait LuxtronikWebEEV
                 $column['caption']='Verfügbar über';$column['width']='230px';
             }
             unset($column);
+            $element['columns'][]=['name'=>'preferredSource','caption'=>'Bevorzugte Quelle','width'=>'180px','save'=>true,
+                'edit'=>['type'=>'Select','options'=>[
+                    ['caption'=>'Java (Standard)','value'=>'java'],
+                    ['caption'=>'WebSocket','value'=>'websocket'],
+                    ['caption'=>'Modbus/SHI','value'=>'modbus']]]];
             $element['columns'][]=['name'=>'source','caption'=>'Aktuelle Quelle','width'=>'160px','save'=>false];
             foreach($element['columns'] as &$column) if(isset($column['width']) && ctype_digit((string)$column['width'])) $column['width'].='px';
             unset($column);
@@ -651,11 +643,15 @@ trait LuxtronikWebEEV
             unset($row);
             foreach(self::WEB_ONLY_POINTS as $id=>$point) if(empty($point['aliasOf']) || !empty($saved[$id])) $element['values'][]=[
                 'enabled'=>$saved[$id]??false,'id'=>$id,'name'=>$point['label'],'interface'=>'WebSocket'];
-            foreach($element['values'] as &$row) $row['source']=$this->CurrentPointSource((int)$row['id']);
+            foreach($element['values'] as &$row) {
+                $row['preferredSource']=$this->MeasurementSourceOrder((int)$row['id'])[0];
+                $row['source']=$this->CurrentPointSource((int)$row['id']);
+            }
             unset($row);
         }
         unset($element);
-        array_splice($form['elements'],$index,0,[$panel]);
+        array_splice($form['elements'],$index,0,[$panel,
+            ['type'=>'Label','caption'=>'Bevorzugte Quelle gilt für die unter Verfügbar über zugeordneten Schnittstellen. Ohne passende Zuordnung wird die Auswahl übersprungen. Bei fehlenden Werten ergänzen die übrigen Quellen automatisch; 0 und Aus sind gültige Werte. Die Auswahl einer Lesequelle sendet keine Schreibbefehle.']]);
         return $form;
     }
 }

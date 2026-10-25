@@ -12,9 +12,10 @@ echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalt
 - Voraussetzung laut Handbuch: Luxtronik 2.1 ab V3.90.1 mit verfügbarer/aktiver
   SHI-Schnittstelle. Neuere Funktionen können auf älteren Firmwareständen fehlen.
   Ob die konkrete CTA-Firmware SHI bereitstellt, muss am Gerät geprüft werden.
-- Unter **Modbus TCP / SHI** den Schalter **Schreibbefehle über Modbus/SHI senden**
+- Unter **Modbus TCP / SHI** den Schalter **Unterstützte Schreibbefehle über Modbus/SHI senden**
   bei Bedarf aktivieren und übernehmen. Standardmäßig wird über Java geschrieben.
-- Messwerte kommen unabhängig davon bevorzugt über Java. Fehlende Werte werden
+- Java ist unabhängig davon die voreingestellte Lesequelle. **Bevorzugte Quelle**
+  kann je Messwert geändert werden. Fehlende Werte werden
   automatisch über WebSocket und bei Bedarf über Modbus ergänzt. Es gibt keine
   separaten Lese-Schalter mehr.
 - Gleiche Geräte-IP wie Java; Modbus-Port **502**, Unit-ID **1**, Timeout **500 ms**
@@ -24,11 +25,15 @@ echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalt
 - **Aktuelle Quelle** in der ID-Liste zeigt die tatsächlich verwendete Herkunft.
   **Verfügbar über** nennt die unterstützten Schnittstellen.
 - Die normale Liste zeigt Java-Zeilen und zehn zusätzliche Modbus-Messwerte.
-  Grenzen, Konfigurationsmeldungen und externe Steuervorgaben stehen unter
-  **Erweiterte Modbus-Datenpunkte** zur Auswahl. Bereits gewählte Punkte bleiben
+  Weitere lesbare Grenzen und Konfigurationsmeldungen stehen unter
+  **Weitere lesbare Modbus-Datenpunkte** zur Auswahl. Bereits gewählte lesbare Punkte bleiben
   auch bei ausgeblendeter Erweiterung sichtbar. Es sind dokumentierte Register,
   keine unbekannten Java-Indizes.
-- Die Abfrage beschränkt sich auf benötigte fehlende Werte und die ausgewählten
+- Alle 41 Schreibfunktionen stehen getrennt unter **Modbus-Steuervariablen**.
+  Eine Auswahl legt die Variable an, eine Bedienaktion sendet ihren Wert. Gemeinsame
+  Sollwerte verwenden die vorhandenen Objekte; Java-Betriebsarten und Zeitprogramme bleiben
+  auch bei bevorzugtem Modbus-Schreibweg über Java bedienbar. [Details](DATENQUELLEN.md).
+- Die Abfrage beschränkt sich auf benötigte bevorzugte bzw. Ersatzwerte und die ausgewählten
   Zusatzpunkte. Grafik und Diagnose erzeugen keine Messobjekte. Nur ausgewählte
   Zeilen legen zusätzliche Objekte an.
 - Ein erfolgreicher expliziter SHI-Schreibauftrag wird gelesen gehalten, solange
@@ -51,7 +56,8 @@ anderen Lesequellen nicht.
 ## Ergänzende Java-Messwerte und Datenquelle
 
 Java wird einmal pro Aktualisierung mit Kommando 3004 gelesen. Gültige Java-Werte
-haben Vorrang, auch **0 oder Aus**. Fehlende benötigte Werte werden automatisch
+haben standardmäßig Vorrang, auch **0 oder Aus**. Die bevorzugte Quelle kann je
+Messwert geändert werden. Fehlende benötigte Werte werden automatisch
 über WebSocket ergänzt. Modbus liest nur noch benötigte verbleibende Register
 sowie ausgewählte zusätzliche Punkte. Die Auswahl des Schreibwegs ändert diese
 Lesereihenfolge nicht. Idents und numerische Objekt-IDs bleiben erhalten;
@@ -65,24 +71,24 @@ Antwort wird vollständig verworfen; bestehende Objekte behalten ihre letzten We
 die Grafik übernimmt davon keine alten Java-Daten. Funktionierendes Modbus bleibt
 dabei nutzbar. Umgekehrt bleiben Modbus-Verbindungsfehler im Status sichtbar, auch
 wenn Java noch Messwerte liefert. Die Java-Verbindung hat die bisherige begrenzte
-Zeitüberschreitung von fünf Sekunden. Geräte-IP, beide Ports, Unit-ID und der
-Ergänzungsschalter binden den internen Speicher an die aktuelle Konfiguration.
+Zeitüberschreitung von fünf Sekunden. Geräte-IP, beide Ports und Unit-ID binden den internen Speicher an die aktuelle Konfiguration.
 
 Im Debug erscheint unter **Datenquelle** die tatsächliche Quelle pro Datenpunkt,
-beispielsweise `Aussentemperatur: Modbus (input:10108)` oder
-`Flow_Rate: Java (3004, ID 254)`, jeweils mit dem Wert. Fehlende aktuelle Quellen
-werden ausdrücklich gemeldet. `GetSHIData()` zeigt den Modbus-Snapshot unter
+beispielsweise `Aussentemperatur: Modbus = -2.5 °C` oder
+`Flow_Rate: Java = 617 l/h`. Die Spalte Aktuelle Quelle meldet fehlende aktuelle Daten. `GetSHIData()` zeigt den Modbus-Snapshot unter
 `values` und aktuelle ergänzende Java-Werte separat unter `javaSupplement`.
 
-Die Ergänzung ist **ausschließlich lesend**: keine Java-Steuerwertabfrage 3003,
-keine Java-Schreibbefehle, kein automatischer Ersatz fehlgeschlagener Modbus-
-Schreibbefehle. Unterstützte gemeinsame Sollwerte werden weiterhin über Modbus
-geschrieben; neue getrennte Sollwertvariablen werden vorerst nicht eingeführt.
+Die Messwertergänzung ist **ausschließlich lesend**. Davon unabhängig werden
+aktivierte Java-Steuervariablen mit 3003 gelesen und bei einer Bedienaktion mit 3002
+geschrieben. Unterstützte gemeinsame Sollwerte nutzen bei eingeschaltetem
+Modbus-Schreibschalter Modbus. Ein fehlgeschlagener Modbus-Schreibbefehl wird nicht
+automatisch zusätzlich über Java gesendet. Für gemeinsame Funktionen gibt es keine
+doppelten Sollwertvariablen.
 
 ## Schreiben und Bedienung
 
 Nur die **41 dokumentierten Holding-Register** sind schreibbar. Ausgewählte
-Holding-Zeilen erzeugen Bedienvariablen mit passenden Wertebereichen und
+Zeilen unter **Modbus-Steuervariablen** erzeugen Bedienvariablen mit passenden Wertebereichen und
 Assoziationen. Sie lassen sich über die übliche Symcon-Aktion bedienen. Auswahl,
 Konfigurationsspeichern und zyklische Abfrage schreiben keine Vorgabewerte.
 

@@ -3950,9 +3950,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         [$ident, $visible] = $controls[$property];
         $shared = in_array($ident, ['Anpassung_WW', 'Anpassung_Temp', 'Anpassung_RBE'], true);
         if (!($shared ? $this->SharedNumericControlEnabled($ident) : $this->ReadPropertyBoolean($visible))) return false;
-        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
-            if (!$shared || $this->GetSHIVisualizationPoint($ident) === null) return false;
-        }
+        if ($shared && $this->UsesModbusWrite($ident) && $this->GetSHIVisualizationPoint($ident) === null) return false;
         if (@$this->GetIDForIdent($ident) !== $id) return false;
         $variable = IPS_GetVariable($id);
         return in_array((int)$variable['VariableType'], [1, 2], true)
@@ -4360,16 +4358,8 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
             && !in_array($property, ['HeatingCircuitPumpRunning1','HeatingCircuitPumpValue1'], true)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return null;
-        foreach ($this->GetVisualizationIdents($property) as $ident) {
-            $point = $this->GetCachedVisualizationPoint($ident);
-            if ($point !== null) return $point;
-        }
         foreach($this->GetVisualizationIdents($property) as $ident) {
-            $web=$this->GetWebEEVPoint($ident);
-            if($web!==null) return $web;
-        }
-        foreach($this->GetVisualizationIdents($property) as $ident) {
-            $point=$this->GetSHIVisualizationPoint($ident);
+            $point=$this->GetHybridVisualizationPoint($ident);
             if($point!==null) return $point;
         }
         // Existing own/external assignments remain compatible when no internal reading is available.

@@ -54,10 +54,12 @@ sie grundsätzlich nicht zusätzlich über Java liefern könnte.
 
 ## Erweiterte Punkte sind nicht unbekannt
 
-Grenzen, Konfigurationsmeldungen, Softwarekomponenten, externe Vorgaben und
-Steuerfunktionen werden standardmäßig ausgeblendet. Sie lassen sich unter
-**Modbus TCP / SHI → Erweiterte Modbus-Datenpunkte** einblenden; bereits ausgewählte
-Zeilen bleiben immer sichtbar. Einige ähnlich benannte Werte sind bewusst getrennt:
+Weitere lesbare Grenzen, Konfigurationsmeldungen und Softwarekomponenten sind unter
+**Modbus TCP / SHI → Weitere lesbare Modbus-Datenpunkte** einblendbar; ausgewählte
+lesbare Zeilen bleiben sichtbar. Alle externen Vorgaben und Schreibfunktionen stehen
+ausschließlich in der separaten Liste **Modbus-Steuervariablen**, einschließlich
+alter Auswahlen aus der ID-Liste. [Konfiguration und Quellenwahl](DATENQUELLEN.md).
+Einige ähnlich benannte Werte sind bewusst getrennt:
 
 - Status Heizen: Aus / keine Anforderung / Anforderung / aktiv. Das ist keine
   Java-Betriebsart Automatik / Party / Urlaub / Aus.

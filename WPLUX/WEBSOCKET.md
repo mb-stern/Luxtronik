@@ -1,9 +1,10 @@
 # Messwerte und WebSocket-Ergänzung in 5.0
 
-Java bleibt die bevorzugte Lesequelle. Fehlende benötigte Messwerte werden zuerst
-über WebSocket, verbleibende dokumentierte Punkte über Modbus/SHI ergänzt.
-Null und Aus sind gültige Werte. Der Schalter **Schreibbefehle über Modbus/SHI
-senden** ändert nur den Schreibweg. Vorhandene Idents und Objekt-IDs bleiben erhalten.
+Java ist die voreingestellte Lesequelle. Unter **Bevorzugte Quelle** kann je Messwert
+auch WebSocket oder Modbus gewählt werden; fehlende Werte ergänzen die übrigen
+zugeordneten Schnittstellen automatisch. Null und Aus sind gültige Werte. Der Schalter
+**Unterstützte Schreibbefehle über Modbus/SHI senden** ändert nur den Schreibweg.
+Vorhandene Idents und Objekt-IDs bleiben erhalten. [Konfiguration](DATENQUELLEN.md).
 
 ## Konfiguration und Quellenanzeige
 
@@ -13,14 +14,15 @@ laufen automatisch. Die alten separaten Lese-Schalter werden nicht mehr angebote
 Im Debug bleiben Abfragefehler und die tatsächlich verwendeten Quellen sichtbar.
 
 Die ID-Liste enthält **Verfügbar über** für unterstützte Schnittstellen und
-**Aktuelle Quelle** für den zuletzt tatsächlich verfügbaren Wert: Java, WebSocket,
+**Bevorzugte Quelle** zur Auswahl und **Aktuelle Quelle** für den tatsächlich verwendeten Wert: Java, WebSocket,
 Modbus/SHI oder keine aktuellen Daten. Eine vollständige Java-Sammelantwort zählt
-auch für Werte, die nicht zusätzlich für die Grafik gepuffert werden. Bei Fehlercodes
-und Fehlerzeitstempeln wird WebSocket bevorzugt; Java bleibt deren Reserve.
+auch für Werte, die nicht zusätzlich für die Grafik gepuffert werden. Einzelne Fehlercodes
+und Fehlerzeitstempel verwenden standardmäßig Java; WebSocket kann bevorzugt werden.
+Die vollständige Fehlerhistorie und der Meldungstext kommen weiterhin über WebSocket.
 
 ## Gezielt lesen und trotzdem neue Felder entdecken
 
-- Im normalen Aktualisierungszyklus werden nur fehlende Werte für Grafik und
+- Im normalen Aktualisierungszyklus werden die bevorzugten und nötigen Ersatzwerte für Grafik und
   ausgewählte Variablen angefordert, und nur deren Informationsseiten gelesen.
 - WebSocket liefert ganze Seiten. Weitere mitgelieferte Felder werden nicht als
   benötigte Live-Werte übernommen. Die frühere Feldzählung beschrieb diese Seiten,
@@ -32,7 +34,7 @@ und Fehlerzeitstempeln wird WebSocket bevorzugt; Java bleibt deren Reserve.
   angelegte Variablen auswählbar. Noch nicht zugeordnete Felder bleiben im Bericht;
   es entstehen keine geratenen Java-Indizes oder wechselnden Idents.
 - Wenn Java ausfällt, werden die zugeordneten Ersatzfelder automatisch angefordert.
-  Nach Erholung hat Java wieder Vorrang, mit denselben Idents und Objekt-IDs.
+  Nach Erholung hat die bevorzugte Quelle wieder Vorrang, mit denselben Idents und Objekt-IDs.
 
 Die Menükennungen werden bei jeder Verbindung anhand von Seitennamen ermittelt.
 Hex-Adressen werden nicht fest gespeichert. Zuordnungen berücksichtigen Seite,
@@ -95,10 +97,11 @@ Die sechs bestätigten Betriebsstundenzähler verwenden ihre vorhandenen Java-Id
 
 ## Fehlerhistorie
 
-Der gespeicherte Fehlerspeicher wird bevorzugt über WebSocket gelesen. Die bestehenden
+Die vollständige Historie kommt über WebSocket. Die bestehenden
 IDs 95–99 bleiben die Zeitstempel, 100–104 die Codes und 105 die Anzahl. Die neue
-ID 400020 enthält den vollständigen Text. Eine leere Historie löscht alte Codes und
-Texte. Codes oder Zeitstempel, die sich nicht eindeutig lesen lassen, werden nicht
+ID 400020 enthält den vollständigen Text. Wird WebSocket für Codes und Zeitstempel
+bevorzugt, aktualisiert bzw. leert die Historie auch diese bestehenden Variablen. Eine
+leere Historie leert ihren Meldungstext. Codes oder Zeitstempel, die sich nicht eindeutig lesen lassen, werden nicht
 erraten. Unter Diagnose kann die Zeitzone des Reglers angegeben werden; leer verwendet
 Symcon seine PHP-Zeitzone. Historische Sommerzeit wird bei der Umrechnung berücksichtigt.
 

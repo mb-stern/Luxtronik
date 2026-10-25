@@ -129,9 +129,9 @@ $tests['interface column identifies Java Modbus and shared values without renami
     $m=new Luxtronik();check($m->properties['CommunicationMode']==='java','Java default changed');
     foreach (['java','modbus'] as $mode) {
         $m->properties['CommunicationMode']=$mode;$m->properties['ShowAdvancedModbusPoints']=true;$form=fields(json_decode($m->GetConfigurationForm(),true));$rows=array_column($form['IDListe']['values'],null,'id');
-        check($rows[15]['interface']==='Java + Modbus + WebSocket' && $rows[14]['interface']==='Java + WebSocket' && $rows[310041]['interface']==='Modbus' && $rows[310006]['interface']==='Java + Modbus'
+        check($rows[15]['interface']==='Java + Modbus + WebSocket' && $rows[14]['interface']==='Java + WebSocket' && !isset($rows[310041],$rows[310006]) && count($form['SHIControlList']['values'])===41
             && $rows[400001]['interface']==='WebSocket','Protocol overview missing');
-        check($rows[15]['name']==='Aussentemperatur' && $rows[310006]['name']==='Warmwasser Soll','Name changed or MB suffix survives');
+        check($rows[15]['name']==='Aussentemperatur' && array_column($form['SHIControlList']['values'],null,'id')[310006]['name']==='Warmwasser Soll','Name changed or MB suffix survives');
     }
 };
 $tests['full fragmented scan reads all 129 points without writes or measurement objects'] = static function ():void {
@@ -367,7 +367,8 @@ $tests['a failed Modbus scan discards staged readings and uses Java measurements
             check($m->status===201 && $p['data']['outdoorTemperature']['source']==='Java' && GetValue($id)===-2.5,'Failed Modbus scan blocks Java supplementation');
             check(!$m->actions['Anpassung_WW'] && !$p['controls']['warmWaterSetpoint']['configured'],'Stale SHI control revived by Java measurement');
             check(json_decode($m->GetSHIData(),true)['stale'],'Modbus error hidden');
-            shiThrows(fn()=>$m->RequestAction('Mode_WW',0));
+            // Java-only modes remain routed through Java; malformed modes are still rejected.
+            shiThrows(fn()=>$m->RequestAction('Mode_WW',99));
         },['javaSupplement'=>true,'input'=>[10108=>20],'fault'=>['function'=>4,'address'=>10120,'kind'=>'truncate','after'=>130]],$m);
     });
 };
@@ -386,7 +387,7 @@ $tests['Java supplementation is optional source-bound and does not introduce Jav
         },['javaSupplement'=>true],$m);
     });
     withoutConnection(static function(Luxtronik $m):void {
-        withSHI(static function(Luxtronik $m):void {check($m->SetSHIValue('SHI_LPC_Modus',1),'Explicit Modbus write failed');shiThrows(fn()=>$m->RequestAction('set_223',1));},['javaSupplement'=>true],$m);
+        withSHI(static function(Luxtronik $m):void {check($m->SetSHIValue('SHI_LPC_Modus',1),'Explicit Modbus write failed');shiThrows(fn()=>$m->RequestAction('set_223',90000));},['javaSupplement'=>true],$m);
     });
 };
 
@@ -402,11 +403,11 @@ $tests['optional Modbus reads in Java mode fetch only missing selected fields an
         check(GetValue($m->GetIDForIdent('SHI_Elektrische_Energie_Gesamt'))===800.0,'Missing energy was not read');
         $limit=$m->GetIDForIdent('SHI_PC_Limit');
         check($limit!==false && IPS_GetVariable($limit)['VariableAction']===0,'Read supplement enabled Modbus writes');
-        check(count(array_filter(json_decode($m->GetSHIData(),true)['values'],static fn($point)=>$point['available']))===2,'Unneeded registers fetched');
+        check(count(array_filter(json_decode($m->GetSHIData(),true)['values'],static fn($point)=>$point['available']))===1,'Unneeded registers fetched');
         $before=$m->status;invoke($m,'UpdateModbusSupplement');check($m->status===$before,'Supplement changed primary status');
     },['input'=>[10310=>8000,10108=>650],'holding'=>[10041=>100]]);
-    check(count($requests)===2 && array_column($requests,'address')===[10310,10041],'Extra register requests');
-    check(array_unique(array_column($requests,'function'))===[0=>4,1=>3],'Supplement sent a write function');
+    check(count($requests)===1 && array_column($requests,'address')===[10310],'Extra register requests');
+    check(array_unique(array_column($requests,'function'))===[0=>4],'Supplement sent a write function');
 };
 
 $tests['Modbus fallback in Java mode yields to recovered Java without changing Idents'] = static function():void {
@@ -454,7 +455,7 @@ $tests['normal update reads Java first while the configured write route sends on
             $point=invoke($m,'GetVisualizationPointData','OutdoorTemperature');
             check($point['source']==='Java' && $point['value']===12.3,'Write route changed Java-first measurement priority');
             $rows=array_column(fields(json_decode($m->GetConfigurationForm(),true))['IDListe']['values'],null,'id');
-            check($rows[15]['source']==='Java' && $rows[310041]['source']==='Modbus/SHI','Source column shows capabilities instead of actual origin');
+            check($rows[15]['source']==='Java' && !isset($rows[310041]) && array_column(fields(json_decode($m->GetConfigurationForm(),true))['SHIControlList']['values'],null,'id')[310041]['value']==='10.0 kW','Source column shows capabilities instead of actual origin');
             $m->RequestAction('SHI_PC_Limit',5.0);
             check(GetValue($m->GetIDForIdent('SHI_PC_Limit'))===5.0,'Configured Modbus write did not read back');
         },['input'=>[10108=>65511],'holding'=>[10040=>1,10041=>100]],$m);
@@ -473,7 +474,7 @@ $tests['default list contains only additional Modbus measurements and retains se
     check(count(array_filter($rows,static fn($row)=>$row['id']>=100000 && $row['id']<400000))===10,'Unexpected additional Modbus count');
     $m->properties['IDListe']='[{"id":310041,"enabled":true},{"id":400003,"enabled":true},{"id":110350,"enabled":true}]';
     $rows=array_column(fields(json_decode($m->GetConfigurationForm(),true))['IDListe']['values'],null,'id');
-    check($rows[310041]['enabled'] && $rows[400003]['enabled'] && $rows[110350]['enabled'],'Saved advanced selection or Ident was retired');
+    check(!isset($rows[310041]) && array_column(fields(json_decode($m->GetConfigurationForm(),true))['SHIControlList']['values'],null,'id')[310041]['enabled'] && $rows[400003]['enabled'] && $rows[110350]['enabled'],'Saved advanced selection or Ident was retired');
     $m->properties['ShowAdvancedModbusPoints']=true;
     $rows=array_column(fields(json_decode($m->GetConfigurationForm(),true))['IDListe']['values'],null,'id');
     check(isset($rows[210000],$rows[110103]),'Documented advanced API points became inaccessible');
@@ -488,6 +489,77 @@ $tests['write checkbox preserves the original configuration property and measure
     $m->properties['CommunicationMode']='modbus';
     check(invoke($m,'GetVisualizationIdents','MixerPump1')===$java && $java===['SHI_Pumpe_Mischkreis_1'],'Write transport changes the physical pump measurement');
     check(fields(json_decode($m->GetConfigurationForm(),true))['ModbusWrites']['value'],'Existing Modbus configuration not reflected in checkbox');
+};
+
+$tests['preferred Modbus measurement overrides Java zeroes remain valid and writing stays disabled'] = static function():void {
+    $values=array_fill(0,276,0);$values[15]=123;
+    withServer([[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $m):void {
+        $requests=withSHI(static function(Luxtronik $m):void {
+            $m->properties['CommunicationMode']='java';$m->properties['VisualizationHeatingCircuitMixer1']=0;
+            $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"modbus"}]';
+            $id=shiVariable($m,'Aussentemperatur',99.0,'Mein Außenfühler','~Temperature');
+            $m->Update();$point=invoke($m,'GetVisualizationPointData','OutdoorTemperature');
+            check($point['source']==='Modbus' && $point['value']===0.0 && GetValue($id)===0.0,'Selected Modbus source lost to Java or rejected zero');
+            check(invoke($m,'CurrentPointSource',15)==='Modbus/SHI','Actual source does not match the chosen measurement');
+            $cache=json_decode($m->buffers['SHICache'],true);$cache['stale']=true;invoke($m,'SetBuffer','SHICache',json_encode($cache));
+            invoke($m,'PublishMeasurements');check(GetValue($id)===12.3 && invoke($m,'CurrentPointSource',15)==='Java','Failed preferred Modbus source did not fall back');
+            $cache['stale']=false;invoke($m,'SetBuffer','SHICache',json_encode($cache));invoke($m,'PublishMeasurements');
+            check(GetValue($id)===0.0 && $m->GetIDForIdent('Aussentemperatur')===$id && IPS_GetName($id)==='Mein Außenfühler','Recovered source changed the existing variable');
+            check(!invoke($m,'UsesModbusWrite','Anpassung_WW'),'Read source enabled Modbus writing');
+        },['input'=>[10108=>0]],$m);
+        check(count($requests)===1 && $requests[0]['function']===4 && $requests[0]['address']===10108,'Preference fetched unneeded registers or wrote a value');
+    });
+};
+
+$tests['Modbus writes coexist with Java-only mode and timer actions'] = static function():void {
+    $values=array_fill(0,224,0);$values[4]=2;$values[223]=7200;
+    withServer([[pack('N*',3002,4,2),pack('N*',3002,4)],[pack('N*',3003,0),frame(3003,$values)],
+        [pack('N*',3002,223,7200),pack('N*',3002,223)],[pack('N*',3003,0),frame(3003,$values)]],static function(Luxtronik $m):void {
+        $requests=withSHI(static function(Luxtronik $m):void {
+            $m->properties['TempsetVisible']=true;shiVariable($m,'Anpassung_Temp',0.0);
+            shiVariable($m,'Mode_WW',0);shiVariable($m,'set_223',0);
+            $m->RequestAction('Anpassung_Temp',-1.5);
+            $m->RequestAction('Mode_WW',2);$m->RequestAction('set_223',3600);
+            check(GetValue($m->GetIDForIdent('Mode_WW'))===2 && GetValue($m->GetIDForIdent('set_223'))===3600,'Java-only mode or timer did not retain Java write and readback');
+            $m->properties['CommunicationMode']='java';shiThrows(fn()=>$m->RequestAction('SHI_PC_Limit',5.0));
+        },['discrete'=>[10000=>1]],$m);
+        $writes=array_values(array_filter($requests,static fn($r)=>$r['function']===16));
+        check(array_column($writes,'address')===[10002,10000],'Java-only actions were reinterpreted as Modbus writes');
+    });
+};
+
+$tests['separate control selection creates variables while disabled and migrates legacy selections without duplicates'] = static function():void {
+    $m=new Luxtronik();$m->properties['IDListe']='[{"id":310041,"enabled":true}]';
+    $m->properties['SHIControlList']='[{"id":310006,"enabled":true},{"id":310070,"enabled":true}]';
+    $old=shiVariable($m,'Anpassung_WW',50,'Mein WW-Soll');
+    $m->ApplyChanges();
+    check($m->GetIDForIdent('Anpassung_WW')===$old && IPS_GetName($old)==='Mein WW-Soll' && IPS_GetVariable($old)['VariableType']===1,'Shared control was replaced or renamed');
+    foreach(['SHI_PC_Limit','SHI_Zirkulation_Start'] as $ident) {
+        $id=$m->GetIDForIdent($ident);check($id!==false && IPS_GetVariable($id)['VariableAction']===0,'Pure Modbus control missing or active with writes disabled');
+    }
+    $form=fields(json_decode($m->GetConfigurationForm(),true));$reads=array_column($form['IDListe']['values'],null,'id');$controls=array_column($form['SHIControlList']['values'],null,'id');
+    check(!isset($reads[310006],$reads[310041],$reads[310070]) && $controls[310006]['enabled'] && $controls[310041]['enabled'] && $controls[310070]['enabled'],'Old controls were lost or leaked into the read list');
+    $m->properties['SHIControlList']='[{"id":310041,"enabled":false},{"id":310006,"enabled":true}]';
+    $m->ApplyChanges();check($m->GetIDForIdent('SHI_PC_Limit')===false,'Explicit new deselection lost to a legacy selection');
+    check($m->properties['CommunicationMode']==='java','Selecting a control enabled Modbus writing');
+};
+
+$tests['preferred Modbus prefetch shares fresh readings with control polling and does not keep ageing values alive'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m):void {
+        $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"modbus"},{"id":110310,"enabled":true}]';
+        $m->properties['SHIControlList']='[{"id":310041,"enabled":true}]';
+        invoke($m,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'count'=>276]));
+        invoke($m,'StoreVisualizationPoints',[15=>12.3]);
+        invoke($m,'SetBuffer','WebEEVCache',json_encode(['source'=>invoke($m,'WebEEVSourceKey'),'updatedAt'=>time(),
+            'values'=>['SHI_Pumpe_Mischkreis_1'=>['value'=>false,'webId'=>'fup1','formatted'=>'Aus','unit'=>'']]]));
+        for($i=0;$i<2;++$i) {invoke($m,'UpdateModbusSupplement',true);invoke($m,'UpdateModbusSupplement');}
+        check(invoke($m,'CurrentPointSource',110351)==='WebSocket','Modbus prefetch displaced a preferred WebSocket pump state');
+        $cache=json_decode($m->buffers['SHICache'],true);$cache['points']['input:10108']['readAt']=microtime(true)-6;
+        invoke($m,'SetBuffer','SHICache',json_encode($cache));
+        invoke($m,'UpdateModbusSupplement',true);invoke($m,'UpdateModbusSupplement');
+    },['input'=>[10108=>0,10310=>8000],'holding'=>[10041=>100]]);
+    check(array_column($requests,'address')===[10108,10310,10041,10108],'Prefetch duplicated fresh reads, polled an unneeded source, or refreshed cache timestamps without reading');
+    check(array_filter($requests,static fn($r)=>$r['function']===16)===[],'Selecting controls wrote default values');
 };
 
 $failed=0;foreach ($tests as $name=>$test) {try {$test();echo 'PASS '.$name."\n";}catch(Throwable $e){++$failed;fwrite(STDERR,'FAIL '.$name.': '.$e->getMessage()."\n");}}
