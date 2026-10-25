@@ -121,6 +121,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Optionaler Wettercode aus einer externen Variable (OpenWeather, z. B. 10d/01n) ersetzt die feste Sonne durch ein lokales Wettersymbol mit Tag-/Nacht-Darstellung.
 - EEV-Lesediagnose mit `WPLUX_GetEEVDiagnosticData($id, 3003)` für Parameter bzw. unverändert mit 3004 für Berechnungswerte; bekannte Zugangsdatenfelder im Parameterexport ausgeblendet.
 - Manueller EEV-Lesetest unter LUX-Bedienfeld → EEV-Diagnose: liest Informationen/Ausgänge über WebSocket und gibt Namen, Feldkennungen und Prozentwerte als kopierbares Ergebnis aus; keine automatische Übernahme oder Regleränderung.
+- EEV-Diagnose als direkt sichtbarer Button im LUX-Fenster; Dialogtexte bleiben auch bei transparentem Kartenhintergrund in hellen und dunklen Themes lesbar.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

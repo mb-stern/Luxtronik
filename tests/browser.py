@@ -47,11 +47,12 @@ class LuxtronikFixture:
     def connect(self, route):
         index = len(self.connections) + 1
         connection = {'route': route, 'closed': False, 'navigation': False,
-                      'display': False, 'menu': f'remote-{index}', 'lcd': f'lcd-{index}'}
+                      'display': False, 'menu': f'remote-{index}', 'lcd': f'lcd-{index}', 'commands':[]}
         self.connections.append(connection)
 
         def receive(message):
             self.commands.append(message)
+            connection['commands'].append(message)
             if message == 'REFRESH':
                 if self.silent:
                     return
@@ -1128,18 +1129,36 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 peer=LuxtronikFixture()
                 diagnostic.route_web_socket(re.compile(r'^ws://127\.0\.0\.1:8214/$'),peer.connect)
                 diagnostic.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
+                # Host themes can provide white text together with a transparent card background.
+                diagnostic.evaluate('''()=>{
+                    document.documentElement.style.setProperty('--content-color','#ffffff');
+                    document.documentElement.style.setProperty('--card-background-color','transparent');
+                    document.body.style.background='#ffffff';
+                }''')
                 diagnostic.evaluate('(url)=>window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:url}})',web_url)
                 diagnostic.locator('#gSettings').dispatch_event('click')
                 diagnostic.wait_for_function('!document.querySelector("#wp-luxtronik-controls").disabled')
-                diagnostic.locator('#wp-eev-diagnostic').evaluate('e=>e.open=true')
+                assert diagnostic.locator('#wp-eev-test').is_visible()
+                assert diagnostic.locator('#wp-eev-test').text_content()=='EEV-Diagnose starten'
+                assert not diagnostic.locator('#wp-eev-diagnostic').evaluate('e=>e.open')
+                for scheme in ['light','dark']:
+                    diagnostic.emulate_media(color_scheme=scheme)
+                    colors=diagnostic.locator('#wp-luxtronik-dialog').evaluate('''e=>({
+                        foreground:getComputedStyle(e).color,background:getComputedStyle(e).backgroundColor,
+                        heading:getComputedStyle(document.getElementById('wp-luxtronik-title')).color,
+                        summary:getComputedStyle(document.querySelector('#wp-eev-diagnostic summary')).color})''')
+                    assert colors['foreground']!=colors['background'],colors
+                    assert colors['background'] not in ['transparent','rgba(0, 0, 0, 0)'],colors
+                    assert colors['heading']==colors['foreground'] and colors['summary']==colors['foreground'],colors
+                diagnostic.emulate_media(color_scheme='light')
                 diagnostic.evaluate('()=>{window.testDiagnosticActions=[];window.requestAction=(...args)=>window.testDiagnosticActions.push(args);}')
 
                 def read_eev():
-                    start=len(peer.commands)
                     diagnostic.locator('#wp-eev-test').click()
+                    assert diagnostic.locator('#wp-eev-diagnostic').evaluate('e=>e.open')
                     diagnostic.wait_for_function('!document.querySelector("#wp-eev-copy").disabled')
                     report=json.loads(diagnostic.locator('#wp-eev-result').input_value())
-                    commands=peer.commands[start:]
+                    commands=peer.connections[-1]['commands']
                     assert commands[:2]==['LOGIN;999999','REFRESH'],commands
                     assert all(c=='REFRESH' or c.startswith(('LOGIN;','GET;')) for c in commands),commands
                     assert diagnostic.locator('#wp-luxtronik-controls').evaluate('e=>e.disabled')

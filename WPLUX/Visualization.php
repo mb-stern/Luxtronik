@@ -476,8 +476,9 @@ trait LuxtronikVisualization
         padding: 12px;
         border: 1px solid var(--divider-color, #888);
         border-radius: 10px;
-        background: var(--card-background-color, Canvas);
-        color: var(--content-color, CanvasText);
+        color-scheme: light dark;
+        background: Canvas;
+        color: CanvasText;
     }
     #wp-luxtronik-dialog[open] { display: flex; flex-direction: column; gap: 10px; }
     #wp-luxtronik-dialog::backdrop { background: rgba(0, 0, 0, .4); }
@@ -519,10 +520,10 @@ trait LuxtronikVisualization
         <label for="wp-luxtronik-password">Webinterface-Passwort</label>
         <input id="wp-luxtronik-password" type="password" value="999999" autocomplete="off" />
         <button type="submit">Erneut verbinden</button>
+        <button id="wp-eev-test" type="button">EEV-Diagnose starten</button>
     </form>
     <details id="wp-eev-diagnostic">
-        <summary>EEV-Diagnose</summary>
-        <button id="wp-eev-test" type="button">Lesetest starten</button>
+        <summary>Diagnoseergebnis</summary>
         <button id="wp-eev-copy" type="button" disabled>Ergebnis kopieren</button>
         <textarea id="wp-eev-result" rows="8" readonly aria-label="EEV-Diagnoseergebnis" spellcheck="false"></textarea>
     </details>
@@ -2604,6 +2605,7 @@ window.SymconHeatPump = {
         };
         const startEEVDiagnostic = () => {
             stopLuxtronik();
+            document.getElementById('wp-eev-diagnostic').open = true;
             const result = document.getElementById('wp-eev-result');
             const copy = document.getElementById('wp-eev-copy');
             const steps = [];
