@@ -337,8 +337,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#main #textHeatingFlow').text_content()=='607 l/h'
                 assert page.locator('#gHeatPumpFlow > text').count()==1
                 assert page.locator('#heatPump #textWPSupplyTemperature').text_content()=='VL: 25.5 °C'
-                assert page.locator('#textHeatingFlow').get_attribute('x')=='680'
-                assert page.locator('#textHeatingFlow').get_attribute('y')=='618'
+                assert page.locator('#textHeatingFlow').get_attribute('x')=='780'
+                assert page.locator('#textHeatingFlow').get_attribute('y')=='785'
                 assert 'Ansteuerung' not in page.locator('#textHeatingPump1').text_content()
                 small_labels=page.evaluate('''()=>{
                     const svg=document.querySelector('#wp-card svg');
@@ -920,8 +920,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 hybrid.goto(f'http://127.0.0.1:{server.server_port}/hybrid.html')
                 assert hybrid.locator('#wp-error').text_content()==''
                 assert hybrid.locator('#textHeatingFlow').text_content()=='612 l/h'
-                assert hybrid.locator('#textHeatingFlow').get_attribute('x')=='680'
-                assert hybrid.locator('#textHeatingFlow').get_attribute('y')=='618'
+                assert hybrid.locator('#textHeatingFlow').get_attribute('x')=='780'
+                assert hybrid.locator('#textHeatingFlow').get_attribute('y')=='785'
                 assert hybrid.locator('#textCompressorSpeedValue').text_content()=='Ist 55 rpm'
                 assert hybrid.locator('#textCondenserTemperature').text_content()=='8.2 °C'
                 assert hybrid.locator('#textHeatPumpCycle').text_content()=='Läuft seit 2h 3m'

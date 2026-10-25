@@ -3587,14 +3587,14 @@ window.SymconHeatPump = {
                     visibleStatus=visibleStatus.slice(0,-1);status.textContent=visibleStatus+'…';
                 }
             }
-            const waterLineGap = 24;
+            const waterLineGap = 18;
             const flow = formatted(cfg.heatingFlow);
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:waterSupplyY - 22,
-                    'dominant-baseline':'text-after-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
-                    flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 110);
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:780, y:waterReturnY - waterLineGap - 44,
+                    'text-anchor':'end', 'dominant-baseline':'text-after-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
+                    flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 100);
             }
             // Common WP temperatures belong before the DHW/heating split, in every operating mode.
             const wpTemperatures = group('gHeatPumpTemperatures', svg.querySelector('#heatPump'));
@@ -3809,8 +3809,8 @@ window.SymconHeatPump = {
                 [0,120,240].forEach(angle=>node(rotor,'path',{
                     d:'M-2-10C5-9 9-5 9-1C5-3 1-3-2-2C0-5 0-8-2-10Z',transform:'rotate('+angle+')'}));
                 node(rotor,'circle',{r:3.5});
-                node(primaryPumpSymbol,'text',{id:'textPrimaryPumpValue',class:'sm',x:750,y:712,
-                    'text-anchor':'middle','dominant-baseline':'middle',style:'font-size:18px'});
+                node(primaryPumpSymbol,'text',{id:'textPrimaryPumpValue',class:'sm',x:750,y:waterSupplyY - 22,
+                    'text-anchor':'middle','dominant-baseline':'text-after-edge',style:'font-size:18px'});
             }
             show('#gPrimaryWaterPump',hasPrimaryPump);
             const primaryRotor = svg.querySelector('#primaryPumpRotor');
