@@ -487,6 +487,8 @@ trait LuxtronikVisualization
     #wp-luxtronik-help { margin: 0; font-size: 14px; }
     #wp-luxtronik-login { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     #wp-luxtronik-password { width: 110px; max-width: 100%; }
+    #wp-eev-diagnostic summary { cursor: pointer; }
+    #wp-eev-result { display: block; width: 100%; box-sizing: border-box; margin-top: 8px; font: 13px monospace; }
     #wp-luxtronik-device { padding: 24px; border-radius: 14px; background: linear-gradient(145deg, #59616a, #30363d); }
     #wp-luxtronik-display { display: block; width: 100%; height: auto; background: #0000ff; image-rendering: pixelated; border: 8px solid #252a30; border-radius: 5px; box-sizing: border-box; cursor: pointer; touch-action: manipulation; }
     #wp-luxtronik-controls { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px; border: 0; margin: 22px 0 0; padding: 0; }
@@ -518,6 +520,12 @@ trait LuxtronikVisualization
         <input id="wp-luxtronik-password" type="password" value="999999" autocomplete="off" />
         <button type="submit">Erneut verbinden</button>
     </form>
+    <details id="wp-eev-diagnostic">
+        <summary>EEV-Diagnose</summary>
+        <button id="wp-eev-test" type="button">Lesetest starten</button>
+        <button id="wp-eev-copy" type="button" disabled>Ergebnis kopieren</button>
+        <textarea id="wp-eev-result" rows="8" readonly aria-label="EEV-Diagnoseergebnis" spellcheck="false"></textarea>
+    </details>
     <div id="wp-luxtronik-device">
         <canvas id="wp-luxtronik-display" width="160" height="64" tabindex="0" role="img" aria-label="Luxtronik-Gerätedisplay; Bedienung mit Pfeiltasten und Enter"></canvas>
         <fieldset id="wp-luxtronik-controls" disabled aria-label="Luxtronik bedienen">
@@ -2403,6 +2411,16 @@ window.SymconHeatPump = {
         let luxtronikDisplayID = '';
         let luxtronikReady = false;
         let luxtronikPressed = false;
+        let eevSocket = null;
+        let eevTimeout = null;
+        const stopEEVDiagnostic = () => {
+            clearTimeout(eevTimeout);
+            eevTimeout = null;
+            const socket = eevSocket;
+            eevSocket = null;
+            if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, 'Lesetest beendet');
+            document.getElementById('wp-eev-test').disabled = false;
+        };
         const getLuxtronikWebURL = () => {
             try {
                 const url = new URL(currentConfig.luxtronikWebInterfaceURL || '');
@@ -2421,6 +2439,7 @@ window.SymconHeatPump = {
             luxtronikPressed = false;
         };
         const stopLuxtronik = () => {
+            stopEEVDiagnostic();
             releaseLuxtronikButton();
             clearInterval(luxtronikRefresh);
             clearTimeout(luxtronikTimeout);
@@ -2583,6 +2602,106 @@ window.SymconHeatPump = {
                 failLuxtronik('Der Browser konnte die Verbindung nicht öffnen. Bitte das Originalinterface separat öffnen.');
             }
         };
+        const startEEVDiagnostic = () => {
+            stopLuxtronik();
+            const result = document.getElementById('wp-eev-result');
+            const copy = document.getElementById('wp-eev-copy');
+            const steps = [];
+            let stage = 'Verbindung';
+            let requestedID = '';
+            result.value = '';
+            copy.disabled = true;
+            const finish = (report) => {
+                stopEEVDiagnostic();
+                result.value = JSON.stringify({source:'WebSocket / Lux_WS',capturedAt:new Date().toISOString(),stage,steps,...report},null,2);
+                copy.disabled = false;
+                luxtronikHelp.textContent = report.ok
+                    ? 'Lesetest abgeschlossen. Ergebnis kopieren; „Erneut verbinden“ öffnet wieder die Geräteanzeige.'
+                    : 'Lesetest: ' + report.error;
+            };
+            try {
+                const address = getLuxtronikWebURL();
+                if (!address || !luxtronikDialog.open) throw new Error('Kein aktiver LUX-Webinterface-Zugang.');
+                const pageProtocol = window.location.protocol === 'about:' ? new URL(document.baseURI).protocol : window.location.protocol;
+                if (pageProtocol === 'https:') throw new Error('Der Lesetest benötigt eine über HTTP geöffnete Visu, damit ws auf Port 8214 erreichbar ist.');
+                const password = document.getElementById('wp-luxtronik-password').value;
+                if (password.length > 256 || /[;\r\n\x00]/.test(password)) throw new Error('Das Passwort enthält unzulässige Zeichen.');
+                const url = new URL(address);
+                url.protocol = 'ws:'; url.port = '8214'; url.pathname = '/'; url.search = url.hash = '';
+                const socket = new WebSocket(url.href,'Lux_WS');
+                eevSocket = socket;
+                document.getElementById('wp-eev-test').disabled = true;
+                luxtronikHelp.textContent = 'Lese Informationen → Ausgänge …';
+                eevTimeout = setTimeout(() => finish({ok:false,error:'Keine vollständige Antwort innerhalb von 12 Sekunden. Passwort und Port 8214 prüfen.'}),12000);
+                const child = (node,name) => Array.from(node.children).find(item => item.localName === name);
+                const key = name => String(name).trim().toLocaleLowerCase('de').replace(/[\s_-]+/g,'');
+                const find = (root,names) => Array.from(root.querySelectorAll('item')).find(item => names.includes(key(child(item,'name')?.textContent || '')));
+                const capture = (root) => {
+                    const outputs = Array.from(root.querySelectorAll('item')).filter(item => child(item,'value'))
+                        .map(item => ({id:item.getAttribute('id') || '',name:child(item,'name')?.textContent.trim() || '',raw:child(item,'value').textContent.trim()}));
+                    const eev = {heating:null,cooling:null};
+                    outputs.forEach(item => {
+                        const name = key(item.name);
+                        const functionName = ['eevheizen','eevheating'].includes(name) ? 'heating'
+                            : ['eevkühlen','eevkuehlen','eevcooling'].includes(name) ? 'cooling' : '';
+                        if (!functionName) return;
+                        if (eev[functionName]) throw new Error('EEV-Bezeichnung mehrfach vorhanden.');
+                        const match = item.raw.replace(/\u00a0|\u202f/g,' ').match(/^([0-9]+(?:[.,][0-9]+)?)\s*%?$/);
+                        const value = match ? Number(match[1].replace(',','.')) : NaN;
+                        eev[functionName] = {...item,value:Number.isFinite(value) && value <= 100 ? value : null,unit:'%'};
+                    });
+                    finish({ok:true,path:'Informationen / Ausgänge',eev,
+                        missing:Object.entries(eev).filter(([,item])=>item?.value === null || !item).map(([name])=>name),
+                        outputs,outputXml:new XMLSerializer().serializeToString(root)});
+                };
+                const advance = (root) => {
+                    if (stage === 'Ausgänge') { capture(root); return; }
+                    const names = stage === 'Navigation' ? ['informationen','information'] : ['ausgänge','ausgaenge','outputs'];
+                    const item = find(root,names);
+                    if (!item) {
+                        steps.push({stage,availableItems:Array.from(root.querySelectorAll('item')).slice(0,128)
+                            .map(item=>({id:item.getAttribute('id') || '',name:child(item,'name')?.textContent.trim() || ''}))});
+                        throw new Error(stage === 'Navigation' ? 'Menü Informationen fehlt; Anmeldung prüfen.' : 'Menü Ausgänge fehlt.');
+                    }
+                    stage = stage === 'Navigation' ? 'Informationen' : 'Ausgänge';
+                    requestedID = item.getAttribute('id') || '';
+                    steps.push({stage,id:requestedID});
+                    if (child(item,'item')) { advance(item); return; }
+                    if (!/^[^\x00-\x20;]{1,128}$/.test(requestedID)) throw new Error('Ungültige Menükennung für ' + stage + '.');
+                    socket.send('GET;' + requestedID);
+                };
+                socket.onopen = () => {
+                    if (eevSocket !== socket) return;
+                    stage = 'Navigation';
+                    socket.send('LOGIN;' + (password || '0'));
+                    socket.send('REFRESH');
+                };
+                socket.onmessage = event => {
+                    if (eevSocket !== socket) return;
+                    try {
+                        if (typeof event.data !== 'string' || event.data.length > 262144 || /<!DOCTYPE|<!ENTITY/i.test(event.data)) throw new Error('Ungültige XML-Antwort.');
+                        const xml = new DOMParser().parseFromString(event.data,'application/xml');
+                        if (xml.querySelector('parsererror')) throw new Error('XML-Antwort konnte nicht gelesen werden.');
+                        const root = xml.documentElement;
+                        const type = root.localName.toLowerCase();
+                        if (steps.length < 32) steps.push({stage,reply:type,id:root.getAttribute('id') || ''});
+                        if (stage === 'Navigation' && type === 'navigation') advance(root);
+                        else if (stage !== 'Navigation' && type === 'content') {
+                            if (root.hasAttribute('id') && root.getAttribute('id') !== requestedID) throw new Error('Antwort gehört zu einem anderen Menü.');
+                            advance(root);
+                        }
+                    } catch (error) { finish({ok:false,error:error.message}); }
+                };
+                socket.onerror = () => { if (eevSocket === socket) finish({ok:false,error:'Verbindung auf Port 8214 fehlgeschlagen.'}); };
+                socket.onclose = () => { if (eevSocket === socket) finish({ok:false,error:'Der Regler hat die Verbindung beendet; Anmeldung prüfen.'}); };
+            } catch (error) { finish({ok:false,error:error.message}); }
+        };
+        document.getElementById('wp-eev-test').addEventListener('click',startEEVDiagnostic);
+        document.getElementById('wp-eev-copy').addEventListener('click',async () => {
+            const result = document.getElementById('wp-eev-result');
+            try { await navigator.clipboard.writeText(result.value); }
+            catch (_) { result.focus(); result.select(); luxtronikHelp.textContent = 'Ergebnis markiert – mit Strg+C oder dem Kopieren-Menü kopieren.'; }
+        });
         const closeLuxtronikWebInterface = () => {
             if (!luxtronikDialog) return;
             stopLuxtronik();

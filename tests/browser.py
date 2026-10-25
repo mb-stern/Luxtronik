@@ -37,6 +37,10 @@ class LuxtronikFixture:
         self.commands = []
         self.empty_updates = False
         self.silent = False
+        self.eev_values = ('34.8 %','100.0 %')
+        self.output_xml = None
+        self.information_xml = None
+        self.inline_outputs = False
         # Packed bytes cover vertical bits, row boundaries and the last pixel.
         self.image = base64.b64encode(bytes([1] + [0] * 1278 + [128])).decode()
 
@@ -53,13 +57,26 @@ class LuxtronikFixture:
                     return
                 if not connection['navigation']:
                     connection['navigation'] = True
-                    route.send('<Navigation><item><item id="info"><name>Informationen</name></item>'
+                    information = '<item id="info"><name>Informationen</name></item>'
+                    if self.inline_outputs:
+                        information = '<item id="info"><name>Informationen</name><item><name>Ausgänge</name><item id="inline-eev"><name>EEV Heizen</name><value>0.0 %</value></item></item></item>'
+                    route.send('<Navigation><item>' + information +
                                f'<item id="{connection["menu"]}"><name>Fernsteuerung</name></item>'
                                '</item></Navigation>')
                 elif connection['display']:
                     route.send('<Values/>' if self.empty_updates else
                                f'<Values><item id="{connection["lcd"]}"><value>{self.image}</value></item></Values>')
             elif message.startswith('GET;'):
+                if message=='GET;info':
+                    route.send(self.information_xml if self.information_xml is not None else
+                        f'<Content id="info"><name>Informationen</name><item id="outputs-{index}"><name>Ausgänge</name></item></Content>')
+                    return
+                if message==f'GET;outputs-{index}':
+                    route.send(self.output_xml if self.output_xml is not None else
+                        f'<Content id="outputs-{index}"><name>Ausgänge</name><item id="hup-{index}"><name>HUP</name><value>19.5 %</value></item>'
+                        f'<item id="eev-heat-{index}"><name>EEV Heizen</name><value>{self.eev_values[0]}</value></item>'
+                        f'<item id="eev-cool-{index}"><name>EEV Kühlen</name><value>{self.eev_values[1]}</value></item></Content>')
+                    return
                 assert message == 'GET;' + connection['menu'], message
                 connection['display'] = True
                 route.send('<Content><name>Fernsteuerung</name><item><name>Gerät</name>'
@@ -1103,6 +1120,81 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
             assert readonly_peer.connections[-1]['closed']
             assert not any(command.startswith('MOVE;') for command in readonly_peer.commands)
             readonly.close()
+
+            # Named EEV reads use one explicit diagnostic session; no control command or SDK action.
+            for width in [1200,390]:
+                diagnostic=browser.new_page(viewport={'width':width,'height':850})
+                diagnostic.clock.install()
+                peer=LuxtronikFixture()
+                diagnostic.route_web_socket(re.compile(r'^ws://127\.0\.0\.1:8214/$'),peer.connect)
+                diagnostic.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
+                diagnostic.evaluate('(url)=>window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:url}})',web_url)
+                diagnostic.locator('#gSettings').dispatch_event('click')
+                diagnostic.wait_for_function('!document.querySelector("#wp-luxtronik-controls").disabled')
+                diagnostic.locator('#wp-eev-diagnostic').evaluate('e=>e.open=true')
+                diagnostic.evaluate('()=>{window.testDiagnosticActions=[];window.requestAction=(...args)=>window.testDiagnosticActions.push(args);}')
+
+                def read_eev():
+                    start=len(peer.commands)
+                    diagnostic.locator('#wp-eev-test').click()
+                    diagnostic.wait_for_function('!document.querySelector("#wp-eev-copy").disabled')
+                    report=json.loads(diagnostic.locator('#wp-eev-result').input_value())
+                    commands=peer.commands[start:]
+                    assert commands[:2]==['LOGIN;999999','REFRESH'],commands
+                    assert all(c=='REFRESH' or c.startswith(('LOGIN;','GET;')) for c in commands),commands
+                    assert diagnostic.locator('#wp-luxtronik-controls').evaluate('e=>e.disabled')
+                    assert diagnostic.evaluate('window.testDiagnosticActions')==[],diagnostic.evaluate('window.testDiagnosticActions')
+                    assert '999999' not in json.dumps(report)
+                    return report,commands
+
+                report,commands=read_eev()
+                assert report['ok'] and report['eev']['heating']['value']==34.8 and report['eev']['cooling']['value']==100
+                assert report['capturedAt'] and any(step.get('reply')=='content' for step in report['steps'])
+                assert report['eev']['heating']['id']=='eev-heat-2' and report['missing']==[]
+                assert commands==['LOGIN;999999','REFRESH','GET;info','GET;outputs-2'],commands
+                assert 'EEV Heizen' in report['outputXml']
+                peer.eev_values=('0,0\u00a0%','0.0 %')
+                report,_=read_eev()
+                assert report['eev']['heating']['value']==0 and report['eev']['cooling']['value']==0
+                peer.eev_values=('101 %','—')
+                report,_=read_eev()
+                assert report['eev']['heating']['value'] is None and report['eev']['cooling']['value'] is None
+                assert report['missing']==['heating','cooling']
+                peer.inline_outputs=True
+                report,commands=read_eev()
+                assert report['ok'] and report['eev']['heating']['value']==0 and report['eev']['cooling'] is None
+                assert commands==['LOGIN;999999','REFRESH'],commands
+                peer.inline_outputs=False
+                for xml,error in [
+                    ('<Content><item>','XML'),
+                    ('<!DOCTYPE Content [<!ENTITY x SYSTEM "file:///etc/passwd">]><Content/>','XML'),
+                    ('<Content id="different"/>','anderen Menü'),
+                    ('<Content><item><name>EEV Heizen</name><value>1 %</value></item><item><name>EEV Heizen</name><value>2 %</value></item></Content>','mehrfach'),
+                ]:
+                    peer.output_xml=xml
+                    report,_=read_eev()
+                    assert not report['ok'] and error in report['error'],report
+                peer.output_xml=None
+                peer.information_xml='<Content><item id="bad;command"><name>Ausgänge</name></item></Content>'
+                report,commands=read_eev()
+                assert not report['ok'] and 'Menükennung' in report['error'] and len(commands)==3,report
+                peer.information_xml='<Content><name>Informationen</name></Content>'
+                report,_=read_eev()
+                assert not report['ok'] and 'Ausgänge fehlt' in report['error'],report
+                peer.information_xml=None
+                peer.silent=True
+                diagnostic.locator('#wp-eev-test').click()
+                diagnostic.clock.fast_forward(12001)
+                diagnostic.wait_for_function('!document.querySelector("#wp-eev-copy").disabled')
+                report=json.loads(diagnostic.locator('#wp-eev-result').input_value())
+                assert not report['ok'] and '12 Sekunden' in report['error']
+                diagnostic.locator('#wp-eev-test').click()
+                diagnostic.locator('#wp-luxtronik-close').click()
+                diagnostic.wait_for_timeout(50)
+                assert peer.connections[-1]['closed']
+                assert not any(c.startswith(('MOVE;','SET;','CHANGE;')) for c in peer.commands)
+                diagnostic.close()
+            print(json.dumps({'eev_read_only':'PASS','eev_zero_missing':'PASS','eev_xml_and_timeout':'PASS'}))
 
             # Exercise inactivity and retry limits without waiting for real timeouts.
             liveness=browser.new_page()
