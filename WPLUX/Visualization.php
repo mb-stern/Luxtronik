@@ -3314,7 +3314,7 @@ window.SymconHeatPump = {
                 info.appendChild(status);
                 status.setAttribute('x', '365');
                 status.setAttribute('y', '185');
-                status.style.fontSize = '20px';
+                status.style.fontSize = '28px';
             }
             const history = currentControls.faultHistory;
             if(document.getElementById('wp-fault-dialog').open) renderFaultHistory();
