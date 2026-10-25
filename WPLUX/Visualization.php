@@ -3315,26 +3315,27 @@ window.SymconHeatPump = {
                     status.setAttribute('lengthAdjust', 'spacingAndGlyphs');
                 }
             }
+            const waterLineGap = 12;
             const flow = formatted(cfg.heatingFlow);
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:waterSupplyY + temperatureLineGap,
-                    'dominant-baseline':'text-before-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:waterSupplyY - waterLineGap,
+                    'dominant-baseline':'text-after-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 110);
             }
             // Common WP temperatures belong before the DHW/heating split, in every operating mode.
             const wpTemperatures = group('gHeatPumpTemperatures', svg.querySelector('#heatPump'));
             wpTemperatures.setAttribute('transform','translate(680 0)');
             [
-                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,waterSupplyY,false],
+                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,waterSupplyY,true],
                 ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,waterReturnY,false],
                 ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint,waterReturnY,true]
             ].forEach(([id,label,key,lineY,below]) => {
                 const reading = temperature(key);
                 if (!reading) return;
                 fittedText(wpTemperatures,{id,class:'sm',x:0,
-                    y:lineY + (below ? temperatureLineGap : -temperatureLineGap),
+                    y:lineY + (below ? waterLineGap : -waterLineGap),
                     'dominant-baseline':below ? 'text-before-edge' : 'text-after-edge'},
                     label + ': ' + reading,below ? 155 : 105);
             });

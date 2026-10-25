@@ -113,7 +113,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Grafik mit internem Messwertspeicher ohne zusätzliche Variablen; Durchfluss aus ID 254 am WP-Ausgang und Verdichter-Ist/-Soll; Wasserflussanimation gemäß Durchflusswert.
 - Timer-Aufrufe bei nicht mehr verfügbarer Instanzschnittstelle mit einer Meldung abbrechen.
 - Lauf-/Standzeit (ID 67/73) und Abtau-Restzeit (ID 141) zentriert unter dem ausgerichteten Gerätebild; Heißgas (ID 14) auf Höhe der Verdichterbeschriftung und Lüfterdrehzahl über dem Lüfterrad.
-- Einheitliche Mindestschrift wie Verdampfer/Kondensator; Temperaturen einzeilig mit °C; Heizkreisname und VL gleich groß untereinander; Durchflusswert direkt am roten Anschluss, Pumpenwert ohne Zusatztext; Ventilbeschriftung mit symmetrischen Abständen.
+- Einheitliche Mindestschrift wie Verdampfer/Kondensator; Temperaturen einzeilig mit °C; Heizkreisname und VL gleich groß untereinander; Durchfluss über, VL direkt unter dem roten Anschluss, Pumpenwert ohne Zusatztext; Ventilbeschriftung mit symmetrischen Abständen.
 - Warmwasserspeicher mittig zum Gerät mit symmetrischen Anschlüssen und kurzem Zirkulationsabgang ohne breitere Kachel; Temperatur/Leistung gleich groß und zentriert, Sollwert nur oben. Summierte Heizstableistung aus W/kW-Messwerten mit Blitz und Bedienbutton.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
 

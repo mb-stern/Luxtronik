@@ -275,7 +275,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#gHeatPumpFlow > text').count()==1
                 assert page.locator('#heatPump #textWPSupplyTemperature').text_content()=='VL: 25.5 °C'
                 assert page.locator('#textHeatingFlow').get_attribute('x')=='680'
-                assert page.locator('#textHeatingFlow').get_attribute('y')=='620.5'
+                assert page.locator('#textHeatingFlow').get_attribute('y')=='580.5'
                 assert 'Ansteuerung' not in page.locator('#textHeatingPump1').text_content()
                 small_labels=page.evaluate('''()=>{
                     const svg=document.querySelector('#wp-card svg');
@@ -319,8 +319,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#main > path.hot').get_attribute('d')=='M650 680H670V592.5H825'
                 assert page.locator('#main > path.cold').get_attribute('d')=='M790 762.5H670V705H650'
                 assert page.locator('#gDHW > path.hot').get_attribute('d')=='M826 638H900'
-                for value_id,port_y in [('textWPSupplyTemperature',592.5),('textWPReturnTemperature',762.5)]:
-                    assert float(page.locator('#'+value_id).get_attribute('y'))<port_y
+                assert float(page.locator('#textWPSupplyTemperature').get_attribute('y'))>592.5
+                assert float(page.locator('#textWPReturnTemperature').get_attribute('y'))<762.5
 
 
                 assert page.locator('#textHeaterRodStatus,#gHeaterRodWaves').count()==0
@@ -605,7 +605,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 slim['config']['heatingFlow']='testFlowPosition'
                 slim['data']['testFlowPosition']={'value':612,'formatted':'612 l/h'}
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',slim)
-                assert mixed.locator('#textHeatingFlow').get_attribute('y')=='620.5'
+                assert mixed.locator('#textHeatingFlow').get_attribute('y')=='580.5'
                 assert mixed.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.width')<1570
                 slim_x=mixed.locator('#gHK1').bounding_box()['x']
                 full=json.loads(json.dumps(slim));full['config']['tankHP']=True
@@ -621,7 +621,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 single_flow['config'].update(heatingCircuitType2='off',heatingCircuitType3='off')
                 mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',single_flow)
                 assert mixed.locator('#textHeatingFlow').get_attribute('x')=='680'
-                assert mixed.locator('#textHeatingFlow').get_attribute('y')=='620.5'
+                assert mixed.locator('#textHeatingFlow').get_attribute('y')=='580.5'
                 if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'flow-upper-supply-{width}.png'))
                 # Circuit temperatures remain MK measurements even without a drawn mixer valve.
                 direct=json.loads(json.dumps(original))
@@ -866,7 +866,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert hybrid.locator('#wp-error').text_content()==''
                 assert hybrid.locator('#textHeatingFlow').text_content()=='612 l/h'
                 assert hybrid.locator('#textHeatingFlow').get_attribute('x')=='680'
-                assert hybrid.locator('#textHeatingFlow').get_attribute('y')=='620.5'
+                assert hybrid.locator('#textHeatingFlow').get_attribute('y')=='580.5'
                 assert hybrid.locator('#textCompressorSpeedValue').text_content()=='Ist 55 rpm'
                 assert hybrid.locator('#textCondenserTemperature').text_content()=='8.2 °C'
                 assert hybrid.locator('#textHeatPumpCycle').text_content()=='Läuft seit 2h 3m'
