@@ -3252,6 +3252,18 @@ window.SymconHeatPump = {
                 && Number.isFinite(Number(eevValue)) && Number(eevValue) >= 0 && Number(eevValue) <= 100;
             setText('#textExpansionValveOpening', 'EEV ' + (eevCooling ? 'Kühlen' : 'Heizen') + ': ' + (validEEV ? Number(eevValue).toFixed(1) + ' %' : '—'));
 
+            const expansionLabel = svg.querySelector('#textExpansionValveLabel');
+            const expansionSymbol = svg.querySelector('#expansionValveSymbol');
+            const expansionValue = svg.querySelector('#textExpansionValveOpening');
+            if (expansionLabel && expansionSymbol && expansionValue) {
+                const labelBounds = expansionLabel.getBBox();
+                const valveBounds = expansionSymbol.getBBox();
+                if (labelBounds.height > 0 && valveBounds.height > 0) {
+                    const gap = Math.max(0,valveBounds.y - labelBounds.y - labelBounds.height);
+                    expansionValue.setAttribute('y',String(valveBounds.y + valveBounds.height + gap));
+                }
+            }
+
             // Umschaltventil: EIN = Warmwasser, AUS = Heizung.
             // Nur anzeigen, wenn eine Variable konfiguriert ist.
             const wwValveToHotWater =
@@ -3491,9 +3503,9 @@ window.SymconHeatPump = {
             const elapsed = formatted(compressorActive ? cfg.heatPumpRuntime : cfg.compressorStandstill);
             const cycleReadings = group('gHeatPumpCycle', svg.querySelector('#heatPump'));
             const cycleText = compressorStateKnown ? (compressorActive ? 'Läuft seit ' : 'Steht seit ') + (elapsed || '—') : 'Lauf-/Standzeit —';
-            fittedText(cycleReadings, {id:'textHeatPumpCycle',class:'sm',x:55,y:843,style:'font-size:18px'},cycleText,175);
+            fittedText(cycleReadings, {id:'textHeatPumpCycle',class:'sm',x:142.5,y:863,'text-anchor':'middle','dominant-baseline':'text-after-edge',style:'font-size:18px'},cycleText,175);
             const defrostTime = formatted(cfg.timeUntilDefrost);
-            if (defrostTime) fittedText(cycleReadings,{id:'textTimeUntilDefrost',class:'sm',x:55,y:875,style:'font-size:18px'},'Abtauen in ' + defrostTime,175);
+            if (defrostTime) fittedText(cycleReadings,{id:'textTimeUntilDefrost',class:'sm',x:142.5,y:895,'text-anchor':'middle','dominant-baseline':'text-after-edge',style:'font-size:18px'},'Abtauen in ' + defrostTime,175);
             node(cycleReadings,'title',{},compressorStateKnown
                 ? 'Reglerwert: ' + (compressorActive ? 'Waermepumpe_laeuft_seit (ID 67)' : 'Verdichter_Standzeit (ID 73)')
                 : 'Verdichterzustand nicht verfügbar');

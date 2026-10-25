@@ -86,23 +86,23 @@ text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:
 
 <g id="heatPump"><rect id="heatPumpPanel" class="pn" x="28" y="445" width="842" height="465" rx="10" /><text id="textHPStatus" class="md" x="55" y="480" fill="#25e85d" />
 
-<g id="gHeatPumpDeviceImage" transform="translate(0 -24)">
+<g id="gHeatPumpDeviceImage" transform="translate(0 -50)">
 <g id="gHPUnitCabinet">
  <defs>
   <linearGradient id="hpCabinetV28" x1="0" x2="1">
    <stop offset="0" stop-color="#dfe5e8" /><stop offset=".5" stop-color="#aeb8bd" /><stop offset="1" stop-color="#eef2f4" />
   </linearGradient>
  </defs>
- <path d="M55 575L70 565H218L230 575V835H55Z" fill="url(#wpEquipmentShell)" stroke="var(--wp-border2)" stroke-width="2" />
+ <path d="M55 575L70 565H218L230 575V875H55Z" fill="url(#wpEquipmentShell)" stroke="var(--wp-border2)" stroke-width="2" />
  <path d="M55 575L70 565H218L230 575H55Z" fill="var(--wp-equipment-face)" opacity=".9" />
- <line x1="55" y1="775" x2="230" y2="775" stroke="var(--wp-border2)" />
- <line x1="172" y1="775" x2="172" y2="835" stroke="var(--wp-border2)" />
- <rect x="68" y="792" width="25" height="30" rx="2" fill="var(--wp-panel1)" stroke="var(--wp-border2)" />
+ <line x1="55" y1="815" x2="230" y2="815" stroke="var(--wp-border2)" />
+ <line x1="172" y1="815" x2="172" y2="875" stroke="var(--wp-border2)" />
+ <rect x="68" y="832" width="25" height="30" rx="2" fill="var(--wp-panel1)" stroke="var(--wp-border2)" />
  <g stroke="#45545b" stroke-width="1.5">
-  <line x1="73" y1="799" x2="88" y2="799" /><line x1="73" y1="805" x2="88" y2="805" />
-  <line x1="73" y1="811" x2="88" y2="811" /><line x1="73" y1="817" x2="88" y2="817" />
+  <line x1="73" y1="839" x2="88" y2="839" /><line x1="73" y1="845" x2="88" y2="845" />
+  <line x1="73" y1="851" x2="88" y2="851" /><line x1="73" y1="857" x2="88" y2="857" />
  </g>
- <text x="190" y="810" font-size="16" font-weight="700" fill="#263238">WP</text>
+ <text x="190" y="850" font-size="16" font-weight="700" fill="#263238">WP</text>
 </g>
 <g id="gHPFan" transform="translate(145 690)"><circle r="83" fill="#090d10" stroke="#89959e" stroke-width="3" /><circle r="69" fill="#171e23" stroke="#56626b" /><g id="pathHPFan" fill="#aeb8bf">
    <circle cx="0" cy="0" r="12" />
@@ -116,13 +116,13 @@ text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:
  </g>
 </g>
  <g id="gRefrigerantCircuit" transform="translate(30 0)">
-<rect id="refrigerantPanel" class="pn" x="210" y="515" width="425" height="350" rx="10" /><path class="cold" d="M260 665V620Q260 575 305 575H401.5" /><g id="pathCompressor"><circle class="theme-surface" cx="422.5" cy="575" r="21" fill="var(--wp-button)" stroke="var(--wp-border2)" stroke-width="3" /><circle cx="422.5" cy="575" r="9" fill="none" stroke="var(--wp-icon)" stroke-width="3" /><path class="theme-dot" d="M422.5 554L430.5 570L414.5 570Z" fill="var(--wp-icon)" /></g><path class="hot" d="M443.5 575H540Q585 575 585 620V665M585 720V775Q585 820 540 820H445" /><path class="cold" d="M400.5 820H305Q260 820 260 775V720" /><g id="evaporatorElement">
+<rect id="refrigerantPanel" class="pn" x="210" y="515" width="425" height="380" rx="10" /><path class="cold" d="M260 665V620Q260 575 305 575H401.5" /><g id="pathCompressor"><circle class="theme-surface" cx="422.5" cy="575" r="21" fill="var(--wp-button)" stroke="var(--wp-border2)" stroke-width="3" /><circle cx="422.5" cy="575" r="9" fill="none" stroke="var(--wp-icon)" stroke-width="3" /><path class="theme-dot" d="M422.5 554L430.5 570L414.5 570Z" fill="var(--wp-icon)" /></g><path class="hot" d="M443.5 575H540Q585 575 585 620V665M585 720V775Q585 820 540 820H445" /><path class="cold" d="M400.5 820H305Q260 820 260 775V720" /><g id="evaporatorElement">
 <rect class="theme-surface" x="230" y="665" width="55" height="55" rx="12" fill="var(--wp-button)" stroke="url(#evaporatorGradient)" stroke-width="5" />
 <path d="M240 676V709M250 676V709M260 676V709M270 676V709M280 676V709" fill="none" stroke="url(#evaporatorGradient)" stroke-width="4" stroke-linecap="round" />
 </g><g id="condenserElement">
 <rect class="theme-surface" x="565" y="665" width="55" height="55" rx="12" fill="var(--wp-button)" stroke="url(#condenserGradient)" stroke-width="5" />
 <path d="M575 676V709M585 676V709M595 676V709M605 676V709M615 676V709" fill="none" stroke="url(#condenserGradient)" stroke-width="4" stroke-linecap="round" />
-</g><text class="sm" x="295" y="674">Verdampfer</text><text class="sm" x="550" y="674" text-anchor="end">Kondensator</text><text id="textEvaporatorPressure" class="sm" x="295" y="698" /><text id="textEvaporatorTemperature" class="sm" x="295" y="720" /><text id="textCondenserPressure" class="sm" x="550" y="698" text-anchor="end" /><text id="textCondenserTemperature" class="sm" x="550" y="720" text-anchor="end" /><text class="sm" x="422.5" y="548" text-anchor="middle">Verdichter</text><text id="textCompressorSpeedValue" class="sm" x="422.5" y="620" text-anchor="middle" /><path class="w" d="M400.5 805l22 20 22-20v40l-22-20-22 20z" /><text class="sm" x="422.5" y="790" text-anchor="middle">Expansionsventil</text><text id="textExpansionValveOpening" class="sm" x="422.5" y="862" text-anchor="middle" />
+</g><text class="sm" x="295" y="674">Verdampfer</text><text class="sm" x="550" y="674" text-anchor="end">Kondensator</text><text id="textEvaporatorPressure" class="sm" x="295" y="698" /><text id="textEvaporatorTemperature" class="sm" x="295" y="720" /><text id="textCondenserPressure" class="sm" x="550" y="698" text-anchor="end" /><text id="textCondenserTemperature" class="sm" x="550" y="720" text-anchor="end" /><text id="textCompressorLabel" class="sm" x="422.5" y="547" text-anchor="middle" dominant-baseline="text-after-edge">Verdichter</text><text id="textCompressorSpeedValue" class="sm" x="422.5" y="620" text-anchor="middle" /><path id="expansionValveSymbol" class="w" d="M400.5 805l22 20 22-20v40l-22-20-22 20z" /><text id="textExpansionValveLabel" class="sm" x="422.5" y="790" text-anchor="middle">Expansionsventil</text><text id="textExpansionValveOpening" class="sm" x="422.5" y="855" text-anchor="middle" dominant-baseline="text-before-edge" />
 </g>
 </g>
 
