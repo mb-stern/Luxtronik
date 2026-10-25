@@ -95,8 +95,10 @@ Die Pumpenausgänge sind HUP (ID 39) für Mischkreis 1, FP2 (51) für Mischkreis
 und FP3 (140) für Mischkreis 3. Nur HUP hat hier den bestätigten Prozentwert 183.
 Der BUP-Ausgang wird nicht als Pufferspeicher-Ladepumpe dargestellt.
 
-Der Puffer nutzt `Ruecklauftemperatur_im_Trennspeicher` (ID 13) als **RL extern**;
-daraus werden keine drei Speicherfühler abgeleitet. Solarthermie nutzt
+Der externe Rücklauffühler `Ruecklauftemperatur_im_Trennspeicher` (Java-ID 13,
+SHI-IR 10102) dient je nach Hydraulikschema der Regelung. Er wird nicht pauschal
+als Puffertemperatur angezeigt; der Datenpunkt bleibt über die ID-Liste verfügbar.
+Solarthermie nutzt
 `Fuehler_Solarkollektor` (26), `Fuehler_Solarspeicher` (27) und
 `Ausgang_Solarladepumpe` (52). Die Komponenten-Schalter steuern die Darstellung
 und die interne Datenauswahl. Das Solarziel muss zur tatsächlichen Anlage passen.
@@ -240,3 +242,10 @@ Das Umschaltventil zeigt ohne zusätzliche Beschriftung seinen angeforderten
 Durchgang: BUP (38) ein führt nach rechts zum Warmwasserspeicher, aus nach oben
 zur Heizung. Bei unbekanntem Ausgang wird keine Stellung gezeichnet. Der Tooltip
 weist darauf hin, dass keine mechanische Positionsrückmeldung vorliegt.
+
+Die Heißgastemperatur (`Heisgastemperatur`, Java-ID 14) steht nach dem Verdichter
+vor dem Kondensator. Die Lüfterdrehzahl (`Ventilator_Drehzahl`, ID 184) steht
+über dem Lüfterrad. Unter dem Gerätebild ergänzt `Zeit_bis_Abtauen` (ID 141)
+die Lauf-/Standzeit, sofern der Regler den Wert liefert. Im SHI-Betrieb können
+beide Werte über die vorhandene optionale Java-Ergänzung kommen. Es werden keine
+zusätzlichen Messwertobjekte und kein eigener Abtau-Countdown erzeugt.

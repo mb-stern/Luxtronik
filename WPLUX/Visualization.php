@@ -60,7 +60,8 @@ trait LuxtronikVisualization
         'CompressorStandstill' => ['Verdichter_Standzeit'],
         // Prepared engineering-value Idents; no unconfirmed numeric Java index.
         'EEVHeatingOpening' => ['EEV_Heizen'], 'EEVCoolingOpening' => ['EEV_Kuehlen'],
-        'BufferReturnTemperature' => ['Ruecklauftemperatur_im_Trennspeicher'],
+        'HotGasTemperature' => ['Heisgastemperatur'],
+        'TimeUntilDefrost' => ['Zeit_bis_Abtauen'],
         'SolarStorageTemperature' => ['Fuehler_Solarspeicher'],
         'ThermalSolarPump' => ['Ausgang_Solarladepumpe']
     ];
@@ -655,7 +656,8 @@ HTML;
         $config['inputPower'] = $this->DataKey('InputPower', 'inputPower');
         $config['circulation'] = $this->ReadPropertyBoolean('VisualizationCirculation');
         $config['heatingFlow'] = $this->DataKey('HeatingFlow', 'heatingFlow');
-        $config['bufferReturnTemperature'] = $this->DataKey('BufferReturnTemperature', 'bufferReturnTemperature');
+        $config['hotGasTemperature'] = $this->DataKey('HotGasTemperature', 'hotGasTemperature');
+        $config['timeUntilDefrost'] = $this->DataKey('TimeUntilDefrost', 'timeUntilDefrost');
         $config['solarStorageTemperature'] = $this->DataKey('SolarStorageTemperature', 'solarStorageTemperature');
         $config['solarTarget'] = $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer'
             && $this->ReadPropertyBoolean('TankHP') ? 'buffer' : 'hotwater';
@@ -2900,15 +2902,19 @@ window.SymconHeatPump = {
             });
 
 
+            const waterSupplyY = 592.5;
+            const waterReturnY = 762.5;
+            const dhwLift = -45.5;
             const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0,3) : [];
             const narrowHydraulics = !previewAll && !cfg.tankHP && !cfg.thermalSolarAvailable;
             const dhwShift = previewAll || cfg.thermalSolarAvailable || cfg.circulation ? 24 : 80;
             const circulationVisible = previewAll || (!!cfg.tankWW && !!cfg.circulation && !!cfg.circulatingPumpRunning);
             const activeMixers = mixers.some(item => [hk1,hk2,hk3][(item.circuit || item.number) - 1]);
-            const contentRight = narrowHydraulics ? Math.max(activeMixers ? 1335 : 1235,nextButtonX - buttonGap) : 1568;
+            const storageClearance = hk3 && cfg.tankWW ? 1353 + dhwShift : 0;
+            const contentRight = narrowHydraulics ? Math.max(activeMixers ? 1335 : 1235,storageClearance,nextButtonX - buttonGap) : 1568;
             const heatingShift = narrowHydraulics ? Math.min(0,contentRight - 1525) : 0;
             svg.querySelector('#gHeating')?.setAttribute('transform','translate(' + heatingShift + ' 0)');
-            const hotHeaderX = Math.max(835,945 + heatingShift);
+            const hotHeaderX = Math.max(825,945 + heatingShift);
             const coldHeaderX = hotHeaderX + 20;
             const hotHeaderLocalX = hotHeaderX - heatingShift;
             const coldHeaderLocalX = coldHeaderX - heatingShift;
@@ -2933,26 +2939,26 @@ window.SymconHeatPump = {
                 svg.querySelector('#textHeatingPump' + n)?.setAttribute('y',String(y - (mixedBranch ? 48 : 31)));
             });
             const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
-            const bufferGeometry = ['M835 640V430H690V245H720','M720 380H705V440H800V835H675','M890 245H945','M965 380H890'];
+            const bufferGeometry = ['M825 ' + (waterSupplyY - 25) + 'V430H690V245H720','M720 380H705V440H790V' + waterReturnY,'M890 245H945','M965 380H890'];
             bufferPaths.forEach((path,index) => path.setAttribute('d',bufferGeometry[index]));
-            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M835 640V' + firstSupply + 'H' + hotHeaderX);
-            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M' + coldHeaderX + ' ' + firstReturn + 'H800V835H675');
+            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M825 ' + (waterSupplyY - 25) + 'V' + firstSupply + 'H' + hotHeaderX);
+            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M' + coldHeaderX + ' ' + firstReturn + 'H790V' + waterReturnY);
 
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
             show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
             const solarBuffer = cfg.solarTarget === 'buffer' && !!cfg.tankHP;
             const solarHotWater = !!cfg.thermalSolarAvailable && !solarBuffer;
             show('#gDHW', previewAll || !!cfg.tankWW || solarHotWater);
-            svg.querySelector('#gDHW')?.setAttribute('transform','translate(' + dhwShift + ' 0)');
-            svg.querySelector('#gDHW > path.hot')?.setAttribute('d','M' + (860 - dhwShift) + ' 665H900');
-            svg.querySelector('#gDHW > path.cold')?.setAttribute('d','M900 835H' + (800 - dhwShift));
+            svg.querySelector('#gDHW')?.setAttribute('transform','translate(' + dhwShift + ' ' + dhwLift + ')');
+            svg.querySelector('#gDHW > path.hot')?.setAttribute('d','M' + (850 - dhwShift) + ' ' + (waterSupplyY - dhwLift) + 'H900');
+            svg.querySelector('#gDHW > path.cold')?.setAttribute('d','M900 ' + (waterReturnY - dhwLift) + 'H' + (790 - dhwShift));
             show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? heating : true)));
             const solarPipe = svg.querySelector('#gSolar > path.sol');
             if (solarPipe) solarPipe.setAttribute('d', solarBuffer
                 ? 'M884 300H910V155H1230V680H1260M1260 820H1245V140H900V330H884'
-                : 'M' + (1064 + dhwShift) + ' 790H1185V680H1260M1260 820H1185V835H' + (1064 + dhwShift));
+                : 'M' + (1064 + dhwShift) + ' ' + (790 + dhwLift) + 'H1185V680H1260M1260 820H1185V' + (835 + dhwLift) + 'H' + (1064 + dhwShift));
             const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
-            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : '');
+            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : 'translate(0 ' + dhwLift + ')');
 
             // Optional DHW circulation uses its confirmed native output.
             show(
@@ -3156,11 +3162,6 @@ window.SymconHeatPump = {
                 ['#textTankTempHPMiddle', cfg.tankTempHPMiddle, 128],
                 ['#textTankTempHPDown', cfg.tankTempHPDown, 190]
             ]);
-            const bufferReading = group('gBufferReturnReading', svg.querySelector('#gBuffer'));
-            if (formatted(cfg.bufferReturnTemperature)) {
-                fittedText(bufferReading, {id:'textBufferReturnTemperature', class:'sm', x:805, y:435,
-                    'text-anchor':'middle', style:'font-size:16px'}, 'RL extern ' + formatted(cfg.bufferReturnTemperature), 180);
-            }
             const solarReading = group('gSolarStorageReading', svg.querySelector('#gSolar'));
             if (formatted(cfg.solarStorageTemperature)) {
                 fittedText(solarReading, {id:'textSolarStorageTemperature', class:'sm', x:1295, y:900,
@@ -3186,30 +3187,36 @@ window.SymconHeatPump = {
                 const name = svg.querySelector('#textHeatingCircuitName' + n);
                 const offset = (n - 1) * 120;
                 if (name) {
-                    name.setAttribute('y',String(232 + offset));
-                    name.setAttribute('x','1392.5');
-                    name.setAttribute('text-anchor','middle');
+                    const fullName = cfg['heatingCircuitName' + n] || 'HK' + n;
+                    name.setAttribute('y',String(232.5 + offset));
+                    name.setAttribute('x','1370');
+                    name.setAttribute('text-anchor','start');
+                    name.setAttribute('dominant-baseline','text-before-edge');
+                    name.setAttribute('class','sm');
                     name.style.fontSize = '18px';
                     name.removeAttribute('textLength');
                     name.removeAttribute('lengthAdjust');
-                    if (name.getComputedTextLength() > 235) {
-                        name.setAttribute('textLength','235');
-                        name.setAttribute('lengthAdjust','spacingAndGlyphs');
+                    let visibleName = fullName;
+                    name.textContent = visibleName;
+                    while (name.getComputedTextLength() > 140 && visibleName.length > 1) {
+                        visibleName = visibleName.slice(0,-1);
+                        name.textContent = visibleName + '…';
                     }
+                    name.parentElement.querySelector('title').textContent = fullName;
                 }
                 if (value) {
                     const reading = temperature(supply);
                     value.textContent = reading ? 'VL: ' + reading : '';
                     value.style.display = reading !== '' ? 'inline' : 'none';
                     value.style.fontSize = '18px';
-                    value.setAttribute('x','1378');
-                    value.setAttribute('y',String(245 + offset + temperatureLineGap));
+                    value.setAttribute('x','1370');
+                    value.setAttribute('y',String(260.5 + offset));
                     value.setAttribute('text-anchor','start');
                     value.setAttribute('dominant-baseline','text-before-edge');
                     value.removeAttribute('textLength');
                     value.removeAttribute('lengthAdjust');
-                    if (value.getComputedTextLength() > 132) {
-                        value.setAttribute('textLength','132');
+                    if (value.getComputedTextLength() > 140) {
+                        value.setAttribute('textLength','140');
                         value.setAttribute('lengthAdjust','spacingAndGlyphs');
                     }
                 }
@@ -3233,6 +3240,10 @@ window.SymconHeatPump = {
             setText('#textEvaporatorTemperature', formatted(cfg.evaporatorTemperature));
             setText('#textCondenserPressure', formatted(cfg.condenserPressure));
             setText('#textCondenserTemperature', formatted(cfg.condenserTemperature));
+            const hotGasReadings = group('gHotGasReadings', svg.querySelector('#gRefrigerantCircuit'));
+            const hotGas = temperature(cfg.hotGasTemperature);
+            if (hotGas) fittedText(hotGasReadings,{id:'textHotGasTemperature',class:'sm',x:630,
+                y:575 - temperatureLineGap,'text-anchor':'end','dominant-baseline':'text-after-edge'},'Heißgas: ' + hotGas,150);
             setText('#textExpansionValveOpening', formatted(cfg.expansionValveOpening));
             const eevCooling = binary(cfg.heatingPumpCoolingMode);
             const eevKey = eevCooling ? cfg.eevCoolingOpening : cfg.eevHeatingOpening;
@@ -3296,7 +3307,7 @@ window.SymconHeatPump = {
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:665 + temperatureLineGap,
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:waterSupplyY + temperatureLineGap,
                     'dominant-baseline':'text-before-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 110);
             }
@@ -3304,16 +3315,16 @@ window.SymconHeatPump = {
             const wpTemperatures = group('gHeatPumpTemperatures', svg.querySelector('#heatPump'));
             wpTemperatures.setAttribute('transform','translate(680 0)');
             [
-                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,665,false],
-                ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,835,false],
-                ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint,835,true]
+                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,waterSupplyY,false],
+                ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,waterReturnY,false],
+                ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint,waterReturnY,true]
             ].forEach(([id,label,key,lineY,below]) => {
                 const reading = temperature(key);
                 if (!reading) return;
                 fittedText(wpTemperatures,{id,class:'sm',x:0,
                     y:lineY + (below ? temperatureLineGap : -temperatureLineGap),
                     'dominant-baseline':below ? 'text-before-edge' : 'text-after-edge'},
-                    label + ': ' + reading,below ? 155 : 115);
+                    label + ': ' + reading,below ? 155 : 105);
             });
 
             // Touch handling. Bind once per SVG element.
@@ -3355,6 +3366,11 @@ window.SymconHeatPump = {
             // Lüfterlogik wie im ursprünglich geposteten Modul:
             // FanSpeed steuert die Drehzahl. Nur wenn FanSpeed nicht konfiguriert
             // ist, wird HpRunning als Fallback verwendet.
+            const fanReading = group('gFanSpeedReading', svg.querySelector('#gHPUnitCabinet'));
+            const fanSpeedText = formatted(cfg.fanSpeed);
+            if (fanSpeedText) fittedText(fanReading,{id:'textFanSpeed',class:'sm',x:145,y:602,
+                'text-anchor':'middle','dominant-baseline':'text-after-edge'},
+                'Lüfter: ' + fanSpeedText + (/(?:rpm|u\s*\/\s*(?:min|m))\b/i.test(fanSpeedText) ? '' : ' RPM'),160);
             const fanRotor = svg.querySelector('#pathHPFan');
             if (!svg.querySelector('#symconModernRotationStyle')) {
                 const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
@@ -3475,7 +3491,9 @@ window.SymconHeatPump = {
             const elapsed = formatted(compressorActive ? cfg.heatPumpRuntime : cfg.compressorStandstill);
             const cycleReadings = group('gHeatPumpCycle', svg.querySelector('#heatPump'));
             const cycleText = compressorStateKnown ? (compressorActive ? 'Läuft seit ' : 'Steht seit ') + (elapsed || '—') : 'Lauf-/Standzeit —';
-            fittedText(cycleReadings, {id:'textHeatPumpCycle',class:'sm',x:55,y:867,style:'font-size:18px'},cycleText,175);
+            fittedText(cycleReadings, {id:'textHeatPumpCycle',class:'sm',x:55,y:843,style:'font-size:18px'},cycleText,175);
+            const defrostTime = formatted(cfg.timeUntilDefrost);
+            if (defrostTime) fittedText(cycleReadings,{id:'textTimeUntilDefrost',class:'sm',x:55,y:875,style:'font-size:18px'},'Abtauen in ' + defrostTime,175);
             node(cycleReadings,'title',{},compressorStateKnown
                 ? 'Reglerwert: ' + (compressorActive ? 'Waermepumpe_laeuft_seit (ID 67)' : 'Verdichter_Standzeit (ID 73)')
                 : 'Verdichterzustand nicht verfügbar');
@@ -4231,7 +4249,6 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 && !isset($mixers[(int)$match[1]])) continue;
             if ($property === 'ThermalSolarPanelTemp' && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
             if (in_array($property, ['SolarStorageTemperature', 'ThermalSolarPump'], true) && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
-            if ($property === 'BufferReturnTemperature' && !$this->ReadPropertyBoolean('TankHP')) continue;
             if ($property === 'CirculatingPumpRunning' && !$this->ReadPropertyBoolean('VisualizationCirculation')) continue;
             foreach ($this->GetVisualizationIdents($property) as $ident) $idents[$ident] = true;
         }

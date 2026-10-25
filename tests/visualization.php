@@ -541,10 +541,11 @@ $tests['buffer solar circulation and pump data are internal and component-contro
     foreach ([13,26,27,46,52] as $id) check(!isset($points[$id]),'Disabled component requests data');
     $module->properties['TankHP']=true; $module->properties['ThermalSolarAvailable']=true; $module->properties['VisualizationCirculation']=true;
     $points=invoke($module,'GetVisualizationRequiredPointIDs');
-    foreach ([13,26,27,46,52] as $id) check(isset($points[$id]),'Enabled component data not requested');
+    foreach ([26,27,46,52] as $id) check(isset($points[$id]),'Enabled component data not requested');
+    check(!isset($points[13]),'External return automatically treated as a buffer sensor');
     invoke($module,'StoreVisualizationPoints',[13=>28.5,26=>65.0,27=>42.0,46=>true,52=>true,183=>31.7]);
     $data=invoke($module,'BuildVisualizationData');
-    check($data['bufferReturnTemperature']['value']===28.5 && $data['solarStorageTemperature']['value']===42.0,'Storage data rescaled');
+    check(!isset($data['bufferReturnTemperature']) && $data['solarStorageTemperature']['value']===42.0,'Storage data rescaled or external return shown at buffer');
     check($data['thermalSolarPump']['value']===true && $data['circulatingPumpRunning']['value']===true,'Pump state missing');
     check($data['heatingCircuitPumpValue']['value']===31.7,'HUP control missing');
     check(!isset($data['heatingPumpSpeed']),'Pump rpm invented from percentage');
@@ -921,6 +922,26 @@ $tests['WP temperatures and numbered circuit supplies remain separate during hot
     check(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating2']['value']===22.0,'Explicit external circuit sensor lost without internal MK sensor');
 };
 
+$tests['hot gas defrost timer and fan speed read converted native points without creating objects'] = static function (): void {
+    $module=new Luxtronik();$module->properties['IDListe']='[]';
+    $required=invoke($module,'GetVisualizationRequiredPointIDs');
+    foreach([14,141,184] as $id) check(isset($required[$id]),'Graphic point not read independently: '.$id);
+    invoke($module,'StoreVisualizationPoints',[14=>86.5,141=>'0h 33m',184=>489]);
+    $p=visualizationPayload($module);
+    foreach(['hotGasTemperature'=>['Heisgastemperatur',86.5], 'timeUntilDefrost'=>['Zeit_bis_Abtauen','0h 33m'], 'fanSpeed'=>['Ventilator_Drehzahl',489]] as $key=>[$ident,$expected]) {
+        $point=$p['data'][$p['config'][$key]];
+        check($point['ident']===$ident && $point['value']===$expected,'Ident or converted value changed: '.$key);
+        check($module->GetIDForIdent($ident)===false,'Graphic created a measurement object: '.$ident);
+    }
+    $GLOBALS['testServiceValuesHtml']=$module->GetVisualizationTile();
+    invoke($module,'StoreVisualizationPoints',[14=>0.0,141=>'0h 0m',184=>0]);
+    $GLOBALS['testServiceValuesZero']=visualizationPayload($module);
+    invoke($module,'StoreVisualizationPoints',[]);
+    $GLOBALS['testServiceValuesMissing']=visualizationPayload($module);
+    check(!isset($GLOBALS['testServiceValuesMissing']['data']['hotGasTemperature']),'Missing hot gas field fabricated');
+    check(!isset($p['config']['bufferReturnTemperature']),'External return exposed as a buffer measurement');
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
@@ -932,6 +953,9 @@ if ($failed) exit(1);
 $dir=getenv('WP_TEST_ARTIFACT_DIR');
 if ($dir!==false && $dir!=='') {
     if(!is_dir($dir)) mkdir($dir,0777,true);
+    file_put_contents($dir.'/service-values.html','<meta charset="utf-8">'.$GLOBALS['testServiceValuesHtml']);
+    file_put_contents($dir.'/service-values-zero.json',json_encode($GLOBALS['testServiceValuesZero']));
+    file_put_contents($dir.'/service-values-missing.json',json_encode($GLOBALS['testServiceValuesMissing']));
     file_put_contents($dir.'/shi.html','<meta charset="utf-8">'.$GLOBALS['testSHIVisualizationHtml']);
     file_put_contents($dir.'/shi-update.json',json_encode($GLOBALS['testSHIVisualizationUpdate']));
     file_put_contents($dir.'/hybrid.html','<meta charset="utf-8">'.$GLOBALS['testHybridVisualizationHtml']);
