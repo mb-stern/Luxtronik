@@ -557,7 +557,7 @@ $tests['buffer solar circulation and pump data are internal and component-contro
     check(!isset($data['heatingPumpSpeed']),'Pump rpm invented from percentage');
     check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Component values created objects');
 };
-$tests['internal cache is source-bound supports aliases and survives a failed Java scan atomically'] = static function (): void {
+$tests['internal cache is source-bound and failed Java scans do not masquerade as current readings'] = static function (): void {
     $module=new Luxtronik();
     invoke($module,'StoreVisualizationPoints',[231=>50,268=>1500.0]);
     $data=invoke($module,'BuildVisualizationData');
@@ -569,7 +569,7 @@ $tests['internal cache is source-bound supports aliases and survives a failed Ja
         $module->Update(); $buffer=$module->buffers['VisualizationPointCache'];
         $module->Update();
         check($module->buffers['VisualizationPointCache']===$buffer,'Failed scan changed internal values');
-        check(invoke($module,'BuildVisualizationData')['mixerActual1']['value']===24.9,'Last complete measurement lost');
+        check(!isset(invoke($module,'BuildVisualizationData')['mixerActual1']),'Failed Java scan reused a stale reading');
         check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Cache needs objects');
     });
 };

@@ -105,7 +105,7 @@ Beispiel:
 Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Optionales Modbus/SHI mit allen 129 dokumentierten Lesepunkten und 41 Schreibfunktionen samt Rückleseprüfung; Java bleibt Standard.
 - Vorhandene Idents bleiben erhalten. [Hinweise für Tester](SHI-TEST.md).
-- Checkboxliste mit Schnittstellenübersicht: Java, Modbus oder beide; Variablennamen bleiben unverändert.
+- Checkboxliste mit Schnittstellenübersicht: Java, Modbus und WebSocket; Variablennamen bleiben unverändert. Für WebSocket zusätzlich Status der letzten Geräteabfrage; Firmwarehinweis ab 3.81 und sichtbare Verbindungsfehler.
 - Fehlende Modbus-Messwerte optional lesend über Java ergänzen; gültige Modbus-Werte haben Vorrang, Datenquelle im Debug sichtbar.
 - Bereinigte HTML-SDK-Vollansicht mit automatischen Idents, schlanker Konfiguration vor der ID-Liste ohne Fußzeile.
 - Drei Raumtemperaturen mit Name/Icon-Auswahl; Status, COP/JAZ, Heiz- und Eingangsleistung im Infobereich.
@@ -122,6 +122,8 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - EEV-Lesediagnose mit `WPLUX_GetEEVDiagnosticData($id, 3003)` für Parameter bzw. unverändert mit 3004 für Berechnungswerte; bekannte Zugangsdatenfelder im Parameterexport ausgeblendet.
 - Manueller EEV-Lesetest unter LUX-Bedienfeld → EEV-Diagnose: liest Informationen/Ausgänge über WebSocket und gibt Namen, Feldkennungen und Prozentwerte als kopierbares Ergebnis aus; keine automatische Übernahme oder Regleränderung.
 - EEV-Diagnose als direkt sichtbarer Button im LUX-Fenster; Dialogtexte bleiben auch bei transparentem Kartenhintergrund in hellen und dunklen Themes lesbar.
+- WebSocket als zusätzliche Messquelle und als auswählbare Hauptquelle; Java bleibt Standard. Informationsseiten werden per Name entdeckt, Quellen in der ID-Liste angezeigt, fehlende Werte ergänzt und gültige Nullen beibehalten. Vorhandene Bedienaktionen im WebSocket-Messmodus laufen über Java.
+- EEV Heizen/Kühlen aus bestätigten Webinterface-Feldern intern am Expansionsventil, ohne angelegte Messvariablen; optionale Variablen über die ID-Liste. Vollständiger WebSocket-Lesetest zählt alle angebotenen Informationsfelder. [Details](WEBSOCKET.md).
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

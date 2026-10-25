@@ -41,6 +41,7 @@ class LuxtronikFixture:
         self.output_xml = None
         self.information_xml = None
         self.inline_outputs = False
+        self.additional_information = []
         # Packed bytes cover vertical bits, row boundaries and the last pixel.
         self.image = base64.b64encode(bytes([1] + [0] * 1278 + [128])).decode()
 
@@ -69,8 +70,9 @@ class LuxtronikFixture:
                                f'<Values><item id="{connection["lcd"]}"><value>{self.image}</value></item></Values>')
             elif message.startswith('GET;'):
                 if message=='GET;info':
+                    extra=''.join(f'<item id="{item["id"]}"><name>{item["name"]}</name></item>' for item in self.additional_information)
                     route.send(self.information_xml if self.information_xml is not None else
-                        f'<Content id="info"><name>Informationen</name><item id="outputs-{index}"><name>Ausgänge</name></item></Content>')
+                        f'<Content id="info"><name>Informationen</name><item id="outputs-{index}"><name>Ausgänge</name></item>{extra}</Content>')
                     return
                 if message==f'GET;outputs-{index}':
                     route.send(self.output_xml if self.output_xml is not None else
@@ -78,6 +80,10 @@ class LuxtronikFixture:
                         f'<item id="eev-heat-{index}"><name>EEV Heizen</name><value>{self.eev_values[0]}</value></item>'
                         f'<item id="eev-cool-{index}"><name>EEV Kühlen</name><value>{self.eev_values[1]}</value></item></Content>')
                     return
+                for item in self.additional_information:
+                    if message=='GET;'+item['id']:
+                        route.send(item['xml'])
+                        return
                 assert message == 'GET;' + connection['menu'], message
                 connection['display'] = True
                 route.send('<Content><name>Fernsteuerung</name><item><name>Gerät</name>'
@@ -90,6 +96,9 @@ class LuxtronikFixture:
 
 with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
     subprocess.run(["php", str(repository / "tests/visualization.php")],
+                   cwd=repository, check=True,
+                   env={**os.environ, "WP_TEST_ARTIFACT_DIR": artifacts})
+    subprocess.run(["php", "-d", "extension=dom", str(repository / "tests/web-eev.php")],
                    cwd=repository, check=True,
                    env={**os.environ, "WP_TEST_ARTIFACT_DIR": artifacts})
     Path(artifacts, 'luxtronik-test.html').write_text(
@@ -1122,6 +1131,18 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
             assert not any(command.startswith('MOVE;') for command in readonly_peer.commands)
             readonly.close()
 
+            # Server-side WebSocket readings appear without any diagnostic click or browser socket.
+            for width in [1200,390]:
+                readings=browser.new_page(viewport={'width':width,'height':850})
+                opened=[]
+                readings.on('websocket',lambda socket:opened.append(socket.url))
+                readings.goto(f'http://127.0.0.1:{server.server_port}/web-eev.html')
+                assert readings.locator('#textExpansionValveOpening').text_content()=='EEV Heizen: 42.9 %'
+                readings.evaluate('(p)=>window.handleMessage(p)',json.loads(Path(artifacts,'web-eev-cooling.json').read_text()))
+                assert readings.locator('#textExpansionValveOpening').text_content()=='EEV Kühlen: 100.0 %'
+                assert opened==[],'EEV measurement incorrectly depends on a browser WebSocket'
+                readings.close()
+
             # Named EEV reads use one explicit diagnostic session; no control command or SDK action.
             for width in [1200,390]:
                 diagnostic=browser.new_page(viewport={'width':width,'height':850})
@@ -1201,6 +1222,17 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 report,_=read_eev()
                 assert not report['ok'] and 'Ausgänge fehlt' in report['error'],report
                 peer.information_xml=None
+                peer.eev_values=('34.8 %','100.0 %')
+                peer.additional_information=[{'id':'temperature-page','name':'Temperaturen',
+                    'xml':'<Content><item id="flow-temp"><name>Vorlauf</name><value>35.0 °C</value></item><item id="return-temp"><name>Rücklauf</name><value>30.0 °C</value></item></Content>'}]
+                diagnostic.locator('#wp-web-test').click()
+                diagnostic.wait_for_function('!document.querySelector("#wp-eev-copy").disabled')
+                report=json.loads(diagnostic.locator('#wp-eev-result').input_value())
+                assert report['ok'] and report['count']==5 and len(report['groups'])==2,report
+                assert report['groups'][1]['name']=='Temperaturen' and report['groups'][1]['count']==2,report
+                assert report['eev']['heating']['value']==34.8
+                assert 'GET;temperature-page' in peer.connections[-1]['commands']
+                peer.additional_information=[]
                 peer.silent=True
                 diagnostic.locator('#wp-eev-test').click()
                 diagnostic.clock.fast_forward(12001)

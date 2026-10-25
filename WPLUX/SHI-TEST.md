@@ -17,7 +17,8 @@ echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalt
   pro Anfrage. Port, Unit-ID und Timeout (100–5000 ms) sind separat konfigurierbar.
 - **Fehlende Messwerte ergänzend über Java lesen** ist standardmäßig aktiv.
   Dafür wird der gespeicherte Java-Port (8888/8889) verwendet und eingeblendet.
-  Für einen reinen Modbus-Test kann die Ergänzung abgeschaltet werden.
+  Für einen reinen Modbus-Test diese Ergänzung und die zusätzliche Abfrage unter
+  „WebSocket / Messwerte“ abschalten.
 - Literaladressen mit **Offset 0**, Byte- und Wortfolge Big-Endian.
 - Als anfänglichen Aktualisierungstakt beispielsweise **30 Sekunden** verwenden.
 - In der bestehenden Checkboxliste zeigt die Spalte **Schnittstelle**:

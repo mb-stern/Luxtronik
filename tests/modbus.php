@@ -117,7 +117,8 @@ $tests['interface column identifies Java Modbus and shared values without renami
     $m=new Luxtronik();check($m->properties['CommunicationMode']==='java','Java default changed');
     foreach (['java','modbus'] as $mode) {
         $m->properties['CommunicationMode']=$mode;$form=fields(json_decode($m->GetConfigurationForm(),true));$rows=array_column($form['IDListe']['values'],null,'id');
-        check($rows[15]['interface']==='Java + Modbus' && $rows[14]['interface']==='Java' && $rows[310041]['interface']==='Modbus' && $rows[310006]['interface']==='Java + Modbus','Protocol overview missing');
+        check($rows[15]['interface']==='Java + Modbus + WebSocket' && $rows[14]['interface']==='Java + WebSocket' && $rows[310041]['interface']==='Modbus' && $rows[310006]['interface']==='Java + Modbus'
+            && $rows[400001]['interface']==='WebSocket','Protocol overview missing');
         check($rows[15]['name']==='Aussentemperatur' && $rows[310006]['name']==='Warmwasser Soll','Name changed or MB suffix survives');
     }
 };

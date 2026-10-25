@@ -179,6 +179,7 @@ trait LuxtronikModbusSHI
         } finally {
             $client?->close();
             IPS_SemaphoreLeave($lock);
+            $this->UpdateWebEEV();
             $this->RefreshVisualization();
         }
     }

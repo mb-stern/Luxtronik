@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/ModbusSHI.php';
 require_once __DIR__ . '/Visualization.php';
+require_once __DIR__ . '/WebEEV.php';
 
 // Abort an obsolete timer invocation as soon as its Symcon interface disappears.
 class LuxtronikInstanceUnavailable extends Exception {}
@@ -10,6 +11,7 @@ class Luxtronik extends IPSModuleStrict
 {
     use LuxtronikModbusSHI;
     use LuxtronikVisualization;
+    use LuxtronikWebEEV;
 
     private const SOCKET_TIMEOUT = 5.0;
     private const MAX_RESPONSE_VALUES = 65536;
@@ -136,6 +138,8 @@ class Luxtronik extends IPSModuleStrict
     {
          //Never delete this line!
         parent::ApplyChanges();
+        $this->SetBuffer('WebEEVCache','');
+        $this->SyncWebVariableSelection();
         $this->RefreshVisualization(true);
 
         if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
@@ -1222,7 +1226,7 @@ class Luxtronik extends IPSModuleStrict
             ]
         ];
 
-        return json_encode($this->AddVisualizationForm($this->AddModbusForm($form)));
+        return json_encode($this->AddVisualizationForm($this->AddWebEEVForm($this->AddModbusForm($form))));
     }
 
     public function Update(): void
@@ -1280,8 +1284,12 @@ class Luxtronik extends IPSModuleStrict
 
         $daten_raw = $this->ReadData(3004);
         if ($daten_raw === null) {
+            $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>0,'failed'=>true],JSON_THROW_ON_ERROR));
+            $this->UpdateWebEEV();
+            $this->RefreshVisualization();
             return;
         }
+        $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>count($daten_raw)],JSON_THROW_ON_ERROR));
         $JavaWerte = count($daten_raw);
         $graphicPoints = $this->GetVisualizationRequiredPointIDs();
         $graphicValues = [];
@@ -1355,6 +1363,7 @@ class Luxtronik extends IPSModuleStrict
          * neue Socket-Verbindung je Sollwert.
          */
         $this->RefreshControlValues();
+        $this->UpdateWebEEV();
         $this->RefreshVisualization();
     }
 

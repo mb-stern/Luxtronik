@@ -60,7 +60,7 @@ trait LuxtronikVisualization
         'CompressorFrequencyTarget' => ['Verdichterfrequenz_Soll'],
         'HeatPumpRuntime' => ['Waermepumpe_laeuft_seit'],
         'CompressorStandstill' => ['Verdichter_Standzeit'],
-        // Prepared engineering-value Idents; no unconfirmed numeric Java index.
+        // Confirmed WebSocket engineering values; no numeric Java indices are invented.
         'EEVHeatingOpening' => ['EEV_Heizen'], 'EEVCoolingOpening' => ['EEV_Kuehlen'],
         'HotGasTemperature' => ['Heisgastemperatur'],
         'TimeUntilDefrost' => ['Zeit_bis_Abtauen'],
@@ -73,6 +73,8 @@ trait LuxtronikVisualization
 
         // Optional browser endpoint override; the normal endpoint uses this instance IPAddress.
         $this->RegisterPropertyString('LuxtronikWebInterfaceURL', '');
+        $this->RegisterPropertyBoolean('WebSocketSupplement', true);
+        $this->RegisterPropertyString('WebSocketPassword', '999999');
         $this->RegisterPropertyBoolean('VisualizationDirectCircuit', true);
         $this->RegisterPropertyBoolean('VisualizationMixedCircuit1', false);
         $this->RegisterPropertyBoolean('VisualizationMixedCircuit2', false);
@@ -521,6 +523,7 @@ trait LuxtronikVisualization
         <input id="wp-luxtronik-password" type="password" value="999999" autocomplete="off" />
         <button type="submit">Erneut verbinden</button>
         <button id="wp-eev-test" type="button">EEV-Diagnose starten</button>
+        <button id="wp-web-test" type="button">Alle WebSocket-Werte testen</button>
     </form>
     <details id="wp-eev-diagnostic">
         <summary>Diagnoseergebnis</summary>
@@ -2421,6 +2424,7 @@ window.SymconHeatPump = {
             eevSocket = null;
             if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, 'Lesetest beendet');
             document.getElementById('wp-eev-test').disabled = false;
+            document.getElementById('wp-web-test').disabled = false;
         };
         const getLuxtronikWebURL = () => {
             try {
@@ -2603,19 +2607,24 @@ window.SymconHeatPump = {
                 failLuxtronik('Der Browser konnte die Verbindung nicht öffnen. Bitte das Originalinterface separat öffnen.');
             }
         };
-        const startEEVDiagnostic = () => {
+        const startEEVDiagnostic = (allInformation = false) => {
             stopLuxtronik();
             document.getElementById('wp-eev-diagnostic').open = true;
             const result = document.getElementById('wp-eev-result');
             const copy = document.getElementById('wp-eev-copy');
             const steps = [];
+            const groups = [];
+            let menus = [];
+            let currentMenu = null;
+            let allEEV = null;
             let stage = 'Verbindung';
             let requestedID = '';
             result.value = '';
             copy.disabled = true;
             const finish = (report) => {
                 stopEEVDiagnostic();
-                result.value = JSON.stringify({source:'WebSocket / Lux_WS',capturedAt:new Date().toISOString(),stage,steps,...report},null,2);
+                result.value = JSON.stringify({source:'WebSocket / Lux_WS',capturedAt:new Date().toISOString(),stage,steps,
+                    ...(allInformation ? {count:groups.reduce((sum,group)=>sum+group.count,0),groups,eev:allEEV} : {}),...report},null,2);
                 copy.disabled = false;
                 luxtronikHelp.textContent = report.ok
                     ? 'Lesetest abgeschlossen. Ergebnis kopieren; „Erneut verbinden“ öffnet wieder die Geräteanzeige.'
@@ -2633,6 +2642,7 @@ window.SymconHeatPump = {
                 const socket = new WebSocket(url.href,'Lux_WS');
                 eevSocket = socket;
                 document.getElementById('wp-eev-test').disabled = true;
+                document.getElementById('wp-web-test').disabled = true;
                 luxtronikHelp.textContent = 'Lese Informationen → Ausgänge …';
                 eevTimeout = setTimeout(() => finish({ok:false,error:'Keine vollständige Antwort innerhalb von 12 Sekunden. Passwort und Port 8214 prüfen.'}),12000);
                 const child = (node,name) => Array.from(node.children).find(item => item.localName === name);
@@ -2652,11 +2662,34 @@ window.SymconHeatPump = {
                         const value = match ? Number(match[1].replace(',','.')) : NaN;
                         eev[functionName] = {...item,value:Number.isFinite(value) && value <= 100 ? value : null,unit:'%'};
                     });
+                    if(allInformation) {
+                        groups.push({name:currentMenu.name,id:currentMenu.id,count:outputs.length,fields:outputs});
+                        if(['ausgänge','ausgaenge','outputs'].includes(key(currentMenu.name))) allEEV=eev;
+                        nextMenu();
+                        return;
+                    }
                     finish({ok:true,path:'Informationen / Ausgänge',eev,
                         missing:Object.entries(eev).filter(([,item])=>item?.value === null || !item).map(([name])=>name),
                         outputs,outputXml:new XMLSerializer().serializeToString(root)});
                 };
+                const nextMenu = () => {
+                    currentMenu=menus.shift();
+                    if(!currentMenu) {finish({ok:true,path:'Informationen / alle angebotenen Seiten'});return;}
+                    stage='Informationsseite';
+                    requestedID=currentMenu.id;
+                    steps.push({stage:currentMenu.name,id:requestedID});
+                    if(child(currentMenu.node,'item')) {capture(currentMenu.node);return;}
+                    if(!/^[^\x00-\x20;]{1,128}$/.test(requestedID)) throw new Error('Ungültige Menükennung für '+currentMenu.name+'.');
+                    socket.send('GET;'+requestedID);
+                };
                 const advance = (root) => {
+                    if(allInformation && stage==='Informationen') {
+                        menus=Array.from(root.children).filter(item=>item.localName==='item' && child(item,'name') && !child(item,'value'))
+                            .map(item=>({name:child(item,'name').textContent.trim(),id:item.getAttribute('id') || '',node:item}));
+                        if(!menus.length) throw new Error('Keine Informationsseiten angeboten.');
+                        nextMenu();return;
+                    }
+                    if(allInformation && stage==='Informationsseite') {capture(root);return;}
                     if (stage === 'Ausgänge') { capture(root); return; }
                     const names = stage === 'Navigation' ? ['informationen','information'] : ['ausgänge','ausgaenge','outputs'];
                     const item = find(root,names);
@@ -2694,11 +2727,12 @@ window.SymconHeatPump = {
                         }
                     } catch (error) { finish({ok:false,error:error.message}); }
                 };
-                socket.onerror = () => { if (eevSocket === socket) finish({ok:false,error:'Verbindung auf Port 8214 fehlgeschlagen.'}); };
+                socket.onerror = () => { if (eevSocket === socket) finish({ok:false,error:'Verbindung auf Port 8214 fehlgeschlagen. Webinterface ab Firmware 3.81 und Netzwerkzugriff prüfen.'}); };
                 socket.onclose = () => { if (eevSocket === socket) finish({ok:false,error:'Der Regler hat die Verbindung beendet; Anmeldung prüfen.'}); };
             } catch (error) { finish({ok:false,error:error.message}); }
         };
-        document.getElementById('wp-eev-test').addEventListener('click',startEEVDiagnostic);
+        document.getElementById('wp-eev-test').addEventListener('click',()=>startEEVDiagnostic(false));
+        document.getElementById('wp-web-test').addEventListener('click',()=>startEEVDiagnostic(true));
         document.getElementById('wp-eev-copy').addEventListener('click',async () => {
             const result = document.getElementById('wp-eev-result');
             try { await navigator.clipboard.writeText(result.value); }
@@ -4353,7 +4387,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     private function VisualizationSourceKey(): string
     {
         $modbus = $this->ReadPropertyString('CommunicationMode') === 'modbus';
-        $key=[$modbus ? 'modbus' : 'java', $this->ReadPropertyString('IPAddress'),
+        $key=[$this->ReadPropertyString('CommunicationMode'), $this->ReadPropertyString('IPAddress'),
             $this->ReadPropertyInteger($modbus ? 'ModbusPort' : 'Port'), $modbus ? $this->ReadPropertyInteger('ModbusUnitID') : 0];
         if ($modbus) array_push($key,$this->ReadPropertyInteger('Port'),$this->ReadPropertyBoolean('ModbusJavaSupplement'));
         return json_encode($key, JSON_THROW_ON_ERROR);
@@ -4388,6 +4422,8 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     /** A current converted Java reading; never falls back to an object or another Ident. */
     private function GetCachedVisualizationPoint(string $ident): ?array
     {
+        $availability=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
+        if(($availability['source']??'')===$this->VisualizationSourceKey() && !empty($availability['failed'])) return null;
         $points = $this->VisualizationCachedPoints();
         if (!isset($points[$ident])) return null;
         $entry = $points[$ident];
@@ -4414,6 +4450,14 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function GetVisualizationPointData(string $property): ?array
     {
+        if (in_array($property,['EEVHeatingOpening','EEVCoolingOpening'],true)
+            && !in_array($this->ReadPropertyString('IPAddress'),['','0.0.0.0','::'],true)) {
+            return $this->GetWebEEVPoint($property==='EEVHeatingOpening'?'EEV_Heizen':'EEV_Kuehlen');
+        }
+        if($this->ReadPropertyString('CommunicationMode')==='websocket') foreach($this->GetVisualizationIdents($property) as $ident) {
+            $web=$this->GetWebEEVPoint($ident);
+            if($web!==null) return $web;
+        }
         if ($property === 'InputPower') {
             $id = $this->ReadPropertyInteger('kwin');
             if ($id > 0 && IPS_VariableExists($id)) {
@@ -4429,6 +4473,10 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 $point = $this->GetHybridVisualizationPoint($ident);
                 if ($point !== null) return $point;
             }
+            foreach($this->GetVisualizationIdents($property) as $ident) {
+                $web=$this->GetWebEEVPoint($ident);
+                if($web!==null) return $web;
+            }
             // Explicit external sensors remain usable; old own Java objects are not live SHI readings.
             $id = $this->GetVisualizationVariableID($property);
             if ($id <= 0 || IPS_GetParent($id) === $this->InstanceID) return null;
@@ -4439,9 +4487,19 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             $point = $this->GetCachedVisualizationPoint($ident);
             if ($point !== null) return $point;
         }
+        foreach($this->GetVisualizationIdents($property) as $ident) {
+            $web=$this->GetWebEEVPoint($ident);
+            if($web!==null) return $web;
+        }
         // Existing own/external assignments remain compatible when no internal reading is available.
         $id = $this->GetVisualizationVariableID($property);
         if ($id <= 0 || !IPS_VariableExists($id)) return null;
+        $availability=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
+        if(($availability['source']??'')===$this->VisualizationSourceKey() && IPS_GetParent($id)===$this->InstanceID) {
+            foreach($this->GetVisualizationIdents($property) as $ident) foreach(self::DATA_POINT_CONFIG as $nativeID=>$native) {
+                if($native['name']===$ident && $nativeID>=($availability['count']??0)) return null;
+            }
+        }
         return ['variableId' => $id, 'ident' => (string)(IPS_GetObject($id)['ObjectIdent'] ?? ''),
             'value' => GetValue($id), 'formatted' => GetValueFormatted($id), 'unit' => $this->GetVariableUnit($id), 'binary' => false];
     }
