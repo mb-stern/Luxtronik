@@ -24,6 +24,11 @@ class Luxtronik extends IPSModuleStrict
     public function Create(): void
     {
         parent::Create();
+        $this->SetVisualizationType(
+            defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN')
+                ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN
+                : 1
+        );
 
         $this->RegisterPropertyString('CommunicationMode', 'java');
         $this->RegisterPropertyInteger('ModbusPort', 502);
@@ -143,6 +148,11 @@ class Luxtronik extends IPSModuleStrict
     {
          //Never delete this line!
         parent::ApplyChanges();
+        $this->SetVisualizationType(
+            defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN')
+                ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN
+                : 1
+        );
         $this->SyncWebVariableSelection();
         $this->RefreshVisualization(true);
 

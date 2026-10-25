@@ -82,10 +82,15 @@ $tests['visualization retains all existing property defaults and the complete so
     foreach ($base as $property => $value) check($module->properties[$property] === $value, 'Changed native default: ' . $property);
     $expected = json_decode(file_get_contents(__DIR__ . '/fixtures/visualization-ident-map.json'), true, 512, JSON_THROW_ON_ERROR);
     check((new ReflectionClass($module))->getConstant('LUXTRONIK_IDENT_MAP') === $expected, 'Incomplete source Ident map');
-    check($module->visualizationType === 1, 'HTML-SDK not activated');
+    $visualizationType = defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN') ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN : 1;
+    check($module->visualizationType === $visualizationType, 'HTML-SDK type not activated in Create');
     $module->properties['HeatingCircuitName1'] = 'Mischkreis nur als Name';
     check(invoke($module, 'BuildCardConfig')['heatingCircuitMixed1'] === false, 'Circuit name incorrectly enables a mixer');
     foreach (['LuxtronikInstanceID', 'ManualConfiguration'] as $removed) check(!array_key_exists($removed, $module->properties), 'Separate source/manual mode retained');
+    $module->visualizationType = 0;
+    $module->properties['InstanceStatus'] = false;
+    $module->ApplyChanges();
+    check($module->visualizationType === $visualizationType, 'ApplyChanges did not update the existing visualization type');
 };
 $tests['visualization settings expose only external additions and layout without a footer'] = static function (): void {
     $module = new Luxtronik();

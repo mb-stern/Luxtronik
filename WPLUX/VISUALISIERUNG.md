@@ -18,6 +18,11 @@ welche Messwertvariablen im Objektbaum angelegt werden. Die gespeicherte Auswahl
 wird nicht verändert. Bedienvariablen
 werden weiterhin über die bisherigen Optionen aktiviert.
 
+Ab Symcon 9.1 kann die Kachel maximiert werden. Dafür in den visuellen
+Einstellungen **„Maximieren-Button anzeigen“** aktivieren. Bei bestehenden
+Instanzen die Modulkonfiguration einmal übernehmen, damit der Darstellungstyp
+aktualisiert wird. Ältere Symcon-Versionen verwenden weiterhin den HTML-Typ 1.
+
 Die Bereiche **Modbus TCP / SHI** und **HTML-SDK / Visualisierung** stehen vor der
 ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
 

@@ -209,9 +209,6 @@ trait LuxtronikVisualization
         $this->RegisterPropertyInteger('ThermalSolarFluxTemp', 0);
         $this->RegisterPropertyInteger('ThermalSolarReturnTemp', 0);
 
-        // HTML-SDK Visualisierung
-        $this->SetVisualizationType(1);
-
         $this->SetBuffer('VisualizationRegisteredVariables', '[]');
     }
 
