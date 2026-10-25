@@ -116,6 +116,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Einheitliche Mindestschrift wie Verdampfer/Kondensator; Temperaturen einzeilig mit °C; Heizkreisname und VL gleich groß untereinander; Durchfluss über, VL direkt unter dem roten Anschluss, Pumpenwert ohne Zusatztext; Ventilbeschriftung mit symmetrischen Abständen.
 - Warmwasserspeicher mittig zum Gerät mit symmetrischen Anschlüssen und kurzem Zirkulationsabgang ohne breitere Kachel; Temperatur/Leistung gleich groß und zentriert, Sollwert nur oben. Summierte Heizstableistung aus W/kW-Messwerten mit Blitz und Bedienbutton.
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
+- Obere Bedienleiste gemäß aktivierten Steuervariablen, einschließlich Schwimmbad und Raumtemperatur-Soll; dynamische Anordnung und Breite. Raum-Sollwert mit eigenem Temperaturprofil.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

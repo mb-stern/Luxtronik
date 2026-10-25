@@ -21,6 +21,7 @@ function visualizationPayload(Luxtronik $module): array
 function configuredVisualization(): Luxtronik
 {
     $module = new Luxtronik();
+    foreach (['HeizungVisible', 'WarmwasserVisible', 'KuehlungVisible', 'WWsetVisible', 'TempsetVisible'] as $property) $module->properties[$property] = true;
     invoke($module, 'CreateVariableProfiles');
     $reflection = new ReflectionClass($module);
     $map = $reflection->getConstant('LUXTRONIK_IDENT_MAP');
@@ -167,20 +168,22 @@ $tests['graphic actions use native Luxtronik write/read-back and preserve variab
     withServer([[pack('N*', 3002, 105, 505), pack('N*', 3002, 105)], [pack('N*', 3003, 0), frame(3003, $values)]], static function (Luxtronik $module): void {
         invoke($module, 'CreateVariableProfiles');
         $id = visualizationVariable($module, 'Anpassung_WW', 45.0, 'WPLUX.Wset');
+        $module->properties['WWsetVisible'] = true;
         $module->EnableAction('Anpassung_WW');
         $module->RequestAction('SetNumericControl', json_encode(['function' => 'warmWaterSetpoint', 'value' => 50.5]));
         check($module->GetIDForIdent('Anpassung_WW') === $id && GetValue($id) === 50.5, 'Native action not used');
     });
 };
 $tests['existing mode actions remain the only native path for heating hotwater and cooling'] = static function (): void {
-    $cases = [['heating', 'Mode_Heizung', 3, 4], ['hotwater', 'Mode_WW', 4, 2], ['cooling', 'Mode_Kuehlung', 108, 1]];
+    $cases = [['heating', 'Mode_Heizung', 3, 4], ['hotwater', 'Mode_WW', 4, 2], ['cooling', 'Mode_Kuehlung', 108, 1], ['pool', 'Mode_Schwimmbad', 119, 2]];
     $exchanges = [];
     foreach ($cases as [$function, $ident, $parameter, $value]) {
-        $values = array_fill(0, 109, 0); $values[$parameter] = $value;
+        $values = array_fill(0, 120, 0); $values[$parameter] = $value;
         $exchanges[] = [pack('N*', 3002, $parameter, $value), pack('N*', 3002, $parameter)];
         $exchanges[] = [pack('N*', 3003, 0), frame(3003, $values)];
     }
     withServer($exchanges, static function (Luxtronik $module) use ($cases): void {
+        foreach (['HeizungVisible', 'WarmwasserVisible', 'KuehlungVisible', 'SchwimmbadVisible'] as $property) $module->properties[$property] = true;
         invoke($module, 'CreateVariableProfiles');
         foreach ($cases as [$function, $ident, $parameter, $value]) {
             $id = visualizationVariable($module, $ident, 0, $ident === 'Mode_Kuehlung' ? 'WPLUX.Kue' : 'WPLUX.Wwhe');
@@ -194,6 +197,7 @@ $tests['enabling an existing native action refreshes controls without reopening 
     $module = new Luxtronik();
     invoke($module, 'CreateVariableProfiles');
     $id = visualizationVariable($module, 'Mode_WW', 0, 'WPLUX.Wwhe');
+    $module->properties['WarmwasserVisible'] = true;
     $module->GetVisualizationTile();
     check(!invoke($module, 'BuildControlData')['hotwater']['configured'], 'Inactive action exposed');
     check(isset($module->messages[$id][VM_CHANGEPROFILEACTION]), 'Inactive control not watched');
@@ -208,6 +212,7 @@ $tests['graphic rejects forged, foreign, disabled and SHI write actions'] = stat
     withoutConnection(static function (Luxtronik $module): void {
         invoke($module, 'CreateVariableProfiles');
         visualizationVariable($module, 'Anpassung_WW', 45.0, 'WPLUX.Wset');
+        $module->properties['WWsetVisible'] = true;
         $module->EnableAction('Anpassung_WW');
         foreach ([['function'=>'unknown','value'=>1], ['function'=>['invalid'],'value'=>1], ['function'=>'warmWaterSetpoint','value'=>66], ['function'=>'warmWaterSetpoint','value'=>'NaN']] as $payload) {
             try { $module->RequestAction('SetNumericControl', $payload); } catch (InvalidArgumentException $expected) { continue; }
@@ -227,6 +232,7 @@ $tests['integer legacy setpoints reject fractions instead of silently truncating
     withoutConnection(static function (Luxtronik $module): void {
         invoke($module, 'CreateVariableProfiles');
         visualizationVariable($module, 'Anpassung_WW', 45, 'WPLUX.Wset');
+        $module->properties['WWsetVisible'] = true;
         $module->EnableAction('Anpassung_WW');
         try {
             $module->RequestAction('SetNumericControl', ['function' => 'warmWaterSetpoint', 'value' => 50.5]);
@@ -770,22 +776,25 @@ $tests['SHI graphic uses its current internal snapshot and shared numeric contro
     $module->properties['ThermalSolarAvailable']=false;
     $module->properties['WWsetVisible']=true;
     $module->properties['TempsetVisible']=true;
+    $module->properties['RBEsetVisible']=true;
     $module->properties['IDListe']='[]';
     invoke($module,'CreateVariableProfiles');
-    foreach (['Anpassung_WW'=>50.0,'Anpassung_Temp'=>-1.5] as $ident=>$value) {
-        visualizationVariable($module,$ident,$value,$ident==='Anpassung_WW'?'WPLUX.Wset':'WPLUX.Tset');
+    foreach (['Anpassung_WW'=>50.0,'Anpassung_Temp'=>-1.5,'Anpassung_RBE'=>21.5] as $ident=>$value) {
+        visualizationVariable($module,$ident,$value,match ($ident) {'Anpassung_WW'=>'WPLUX.Wset','Anpassung_RBE'=>'WPLUX.Rset',default=>'WPLUX.Tset'});
         $module->EnableAction($ident);
     }
     $points=[];
     foreach (['input:10002'=>0,'input:10000'=>1,'input:10105'=>34.5,'input:10100'=>30.0,'input:10101'=>32.0,
         'input:10108'=>-2.5,'input:10120'=>48.0,'input:10121'=>50.0,'input:10140'=>31.5,'input:10141'=>32.5,
         'input:10354'=>true,'input:10355'=>false,'input:10351'=>true,'input:10300'=>5.8,'input:10301'=>1200,
-        'holding:10006'=>50.0,'holding:10002'=>-1.5] as $key=>$value) $points[$key]=['value'=>$value,'changedAt'=>0];
+        'holding:10006'=>50.0,'holding:10002'=>-1.5,'holding:10060'=>21.5] as $key=>$value) $points[$key]=['value'=>$value,'changedAt'=>0];
     $cache=['source'=>invoke($module,'VisualizationSourceKey'),'updatedAt'=>time(),'stale'=>false,'points'=>$points,'unavailable'=>[]];
     invoke($module,'SetBuffer','SHICache',json_encode($cache));
     $p=visualizationPayload($module);
     check($p['controls']['warmWaterSetpoint']['configured'] && $p['controls']['heatingTemperatureCorrection']['configured'],'Shared SHI numeric controls unavailable');
     check(!$p['controls']['heating']['configured'] && !$p['controls']['hotwater']['configured'],'SHI modes misrepresented as Java enums');
+    check($p['controls']['roomTemperatureSetpoint']['configured'] && $p['controls']['roomTemperatureSetpoint']['min']===15.0
+        && $p['controls']['roomTemperatureSetpoint']['max']===30.0, 'SHI room setpoint missing or uses Java limits');
     check($p['data']['mixerActual1']['value']===31.5 && $p['data']['compressorRunning']['value']===true,'SHI internal values lost');
     check($module->GetIDForIdent('Mischkreis_1_Vorlauftemperatur')===false && $module->GetIDForIdent('Ausgang_Verdichter_1')===false,'SHI graphic creates measurements');
     $GLOBALS['testSHIVisualizationHtml']=$module->GetVisualizationTile();
@@ -942,6 +951,54 @@ $tests['hot gas defrost timer and fan speed read converted native points without
     check(!isset($p['config']['bufferReturnTemperature']),'External return exposed as a buffer measurement');
 };
 
+$tests['top controls follow all seven native configuration switches including retained variables'] = static function (): void {
+    $module = configuredVisualization();
+    visualizationVariable($module, 'Mode_Schwimmbad', 2, 'WPLUX.Wwhe');
+    $roomID = visualizationVariable($module, 'Anpassung_RBE', 21.5, 'WPLUX.Rset');
+    $module->EnableAction('Mode_Schwimmbad');
+    $module->EnableAction('Anpassung_RBE');
+    $switches = ['heating'=>'HeizungVisible', 'hotwater'=>'WarmwasserVisible', 'cooling'=>'KuehlungVisible',
+        'pool'=>'SchwimmbadVisible', 'warmWaterSetpoint'=>'WWsetVisible',
+        'heatingTemperatureCorrection'=>'TempsetVisible', 'roomTemperatureSetpoint'=>'RBEsetVisible'];
+    $module->properties['SchwimmbadVisible'] = true;
+    $module->properties['RBEsetVisible'] = true;
+    $module->properties['IPAddress'] = '127.0.0.1';
+    $GLOBALS['testAllControlsHtml'] = $module->GetVisualizationTile();
+    check(isset($module->messages[$roomID][VM_UPDATE]), 'Room setpoint not subscribed');
+    $GLOBALS['testControlsVariants'] = [];
+    foreach ([null, ...array_keys($switches)] as $only) {
+        foreach ($switches as $name=>$property) $module->properties[$property] = $only === $name;
+        $controls = invoke($module, 'BuildControlData');
+        foreach ($switches as $name=>$property) check($controls[$name]['configured'] === ($only === $name), 'Config switch ignored: '.$property);
+        $GLOBALS['testControlsVariants'][] = $controls;
+    }
+    // A retained but deactivated variable must neither show nor accept a graphic action.
+    $module->properties['RBEsetVisible'] = false;
+    try { $module->RequestAction('SetNumericControl', ['function'=>'roomTemperatureSetpoint', 'value'=>22.0]); }
+    catch (RuntimeException $expected) { return; }
+    throw new RuntimeException('Disabled room control accepted a graphic write');
+};
+
+$tests['room setpoint uses native Java readback with room limits and supports the old DHW profile'] = static function (): void {
+    $values = array_fill(0, 1149, 0); $values[1148] = 215;
+    withServer([[pack('N*',3002,1148,215),pack('N*',3002,1148)], [pack('N*',3003,0),frame(3003,$values)]], static function (Luxtronik $module): void {
+        invoke($module, 'CreateVariableProfiles');
+        $module->properties['RBEsetVisible'] = true;
+        $id = visualizationVariable($module, 'Anpassung_RBE', 20.0, 'WPLUX.Wset');
+        $module->EnableAction('Anpassung_RBE');
+        $control = invoke($module, 'BuildControlData')['roomTemperatureSetpoint'];
+        check($control['configured'] && $control['min']===0.0 && $control['max']===35.0, 'Room setpoint restricted to DHW temperatures');
+        $module->RequestAction('SetNumericControl', ['function'=>'roomTemperatureSetpoint','value'=>21.5]);
+        check($module->GetIDForIdent('Anpassung_RBE')===$id && GetValue($id)===21.5, 'Room action bypassed native readback');
+        $GLOBALS['testProfiles']['RoomWithoutRange'] = ['MinValue'=>0.0, 'MaxValue'=>0.0, 'Suffix'=>' °C'];
+        $GLOBALS['testVariables'][$id]['profile'] = 'RoomWithoutRange';
+        $control = invoke($module, 'BuildControlData')['roomTemperatureSetpoint'];
+        check($control['min']===0.0 && $control['max']===35.0, 'An unbounded profile replaces the room limits with zero');
+        $profile = IPS_GetVariableProfile('WPLUX.Rset');
+        check((float)$profile['MinValue']===0.0 && (float)$profile['MaxValue']===35.0, 'Room profile incorrect');
+    });
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
@@ -953,6 +1010,8 @@ if ($failed) exit(1);
 $dir=getenv('WP_TEST_ARTIFACT_DIR');
 if ($dir!==false && $dir!=='') {
     if(!is_dir($dir)) mkdir($dir,0777,true);
+    file_put_contents($dir.'/all-controls.html','<meta charset="utf-8">'.$GLOBALS['testAllControlsHtml']);
+    file_put_contents($dir.'/controls-variants.json',json_encode($GLOBALS['testControlsVariants']));
     file_put_contents($dir.'/service-values.html','<meta charset="utf-8">'.$GLOBALS['testServiceValuesHtml']);
     file_put_contents($dir.'/service-values-zero.json',json_encode($GLOBALS['testServiceValuesZero']));
     file_put_contents($dir.'/service-values-missing.json',json_encode($GLOBALS['testServiceValuesMissing']));

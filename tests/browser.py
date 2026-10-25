@@ -839,6 +839,53 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 service.close()
 
             # SHI has its own states, current measurements and shared numeric controls.
+            # All native config switches drive the bar, including room and pool controls.
+            for width in [1200,390]:
+                bar=browser.new_page(viewport={'width':width,'height':850})
+                bar.goto(f'http://127.0.0.1:{server.server_port}/all-controls.html')
+                bar.wait_for_timeout(100)
+                all_controls=bar.evaluate('''()=>{
+                    const s=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
+                    return JSON.parse(s.textContent.trim().slice('SymconHeatPump.init('.length,-2));
+                }''')
+                selectors={'hotwater':'#gHPStatusWW','heating':'#gHPStatusHeating','cooling':'#gHPStatusCooling',
+                    'pool':'#gHPStatusPool','warmWaterSetpoint':'#gSymconWarmWaterSetpoint',
+                    'heatingTemperatureCorrection':'#gSymconHeatingCorrection','roomTemperatureSetpoint':'#gSymconRoomTemperatureSetpoint'}
+                variants=json.loads(Path(artifacts,'controls-variants.json').read_text())
+                for compact in [False,True]:
+                    cfg={**all_controls['config'],'thermalSolarAvailable':not compact,'tankHP':not compact}
+                    for controls in [all_controls['controls'],*variants]:
+                        bar.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,controls:p.controls})',{'config':cfg,'controls':controls})
+                        for function,selector in selectors.items():
+                            assert bar.locator(selector).is_visible()==controls[function]['configured'],(width,function,controls)
+                        boxes=bar.evaluate('''(selectors)=>{
+                            const svg=document.querySelector('#wp-card svg').getBoundingClientRect();
+                            return [...selectors,'#gHeaterControlButton','#gSettings'].map(s=>document.querySelector(s))
+                                .filter(e=>getComputedStyle(e).display!=='none').map(e=>{
+                                    const b=e.querySelector('rect').getBoundingClientRect();
+                                    return {x:b.x,right:b.right,y:b.y,bottom:b.bottom,limit:svg.right};
+                                });
+                        }''',list(selectors.values()))
+                        for left,right in zip(boxes,boxes[1:]):
+                            assert left['right']<right['x'] and abs(left['y']-right['y'])<1,boxes
+                        assert boxes[-1]['right']<=boxes[-1]['limit']+1,boxes
+                bar.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,controls:p.controls})',all_controls)
+                bar.evaluate('''()=>{
+                    window.testActions=[];
+                    window.requestAction=(ident,value)=>window.testActions.push({ident,payload:JSON.parse(value)});
+                }''')
+                bar.locator('#gSymconRoomTemperatureSetpoint').dispatch_event('click')
+                field=bar.locator('#wp-mode-menu input')
+                assert field.get_attribute('min')=='0' and field.get_attribute('max')=='35'
+                field.fill('21.5')
+                bar.get_by_role('button',name='Übernehmen',exact=True).dispatch_event('click')
+                assert bar.evaluate('window.testActions.at(-1)')=={'ident':'SetNumericControl','payload':{'function':'roomTemperatureSetpoint','value':21.5}}
+                bar.locator('#gHPStatusPool').dispatch_event('click')
+                bar.locator('#wp-mode-menu [data-value="2"]').dispatch_event('click')
+                assert bar.evaluate('window.testActions.at(-1)')=={'ident':'SetControlMode','payload':{'function':'pool','value':2}}
+                bar.close()
+            print(json.dumps({'native_control_switches':'PASS','room_and_pool_actions':'PASS','dynamic_button_layout':'PASS'}))
+
             for width in [1200,390]:
                 shi=browser.new_page(viewport={'width':width,'height':850})
                 shi.goto(f'http://127.0.0.1:{server.server_port}/shi.html')

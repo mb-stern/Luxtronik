@@ -59,6 +59,7 @@ text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:
  <g transform="translate(245 25)" id="gHPStatusWW"><rect class="bt" width="225" height="105" rx="10" /><text class="hd" x="18" y="49">Warmwasser</text><text id="textControlHotWater" class="md" x="18" y="80">Auto</text></g>
  <g transform="translate(482 25)" id="gHPStatusHeating"><rect class="bt" width="190" height="105" rx="10" /><text class="hd" x="18" y="49">Heizung</text><text id="textControlHeating" class="md" x="18" y="80">Auto</text></g>
  <g transform="translate(684 25)" id="gHPStatusCooling"><rect class="bt" width="165" height="105" rx="10" /><text class="hd" x="18" y="49">Kühlen</text><text id="textControlCooling" class="md" x="18" y="80">Aus</text></g>
+ <g id="gHPStatusPool" display="none"><rect class="bt" width="205" height="105" rx="10" /><text class="hd" x="18" y="49">Schwimmbad</text><text id="textControlPool" class="md" x="18" y="80">—</text></g>
  <g transform="translate(1210 25)" id="gSettings"><rect class="bt" width="360" height="105" rx="10" /><text class="hd" x="22" y="62">Einstellungen</text><text x="320" y="68" font-size="38">›</text></g>
 </g>
 <g id="gSymconWarmWaterSetpoint" transform="translate(1000 25)" display="none">
@@ -72,6 +73,11 @@ text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:
  <text id="gSymconHeatingCorrectionValue" class="md" x="18" y="78">–</text>
 </g>
 
+<g id="gSymconRoomTemperatureSetpoint" display="none">
+ <rect class="bt" width="205" height="105" rx="10" />
+ <text class="hd" x="18" y="45">Raum Soll</text>
+ <text id="textRoomTemperatureSetpointValue" class="md" x="18" y="78">—</text>
+</g>
 <g id="gHeaterControlButton" transform="translate(0 25)" display="none" role="button" tabindex="0" aria-label="Heizstäbe öffnen">
  <rect class="bt" width="170" height="105" rx="10" />
  <text class="hd" x="18" y="45">Heizstäbe</text>

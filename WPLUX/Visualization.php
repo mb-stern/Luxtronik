@@ -41,6 +41,8 @@ trait LuxtronikVisualization
     ];
 
     private const VISUALIZATION_EXTRA_IDENT_MAP = [
+        'PoolControlVariable' => ['Mode_Schwimmbad'],
+        'RoomTemperatureSetpointVariable' => ['Anpassung_RBE'],
         'HeatPumpReturnTemperature' => ['Ruecklauftemperatur_Heizkreis'],
         'SupplyTemperatureHeating2' => ['Mischkreis_2_Vorlauftemperatur'],
         'SupplyTemperatureHeating3' => ['Mischkreis_3_Vorlauftemperatur'],
@@ -904,9 +906,11 @@ HTML;
             'heating'                      => $this->BuildControlInfo('HeatingControlVariable'),
             'hotwater'                     => $this->BuildControlInfo('HotWaterControlVariable'),
             'cooling'                      => $this->BuildControlInfo('CoolingControlVariable'),
+            'pool'                         => $this->BuildControlInfo('PoolControlVariable'),
             'power'                        => $this->BuildControlInfo('HeatingPumpStatusOnOff'),
             'warmWaterSetpoint'            => $this->GetNumericControlInfo('warmWaterSetpoint'),
-            'heatingTemperatureCorrection' => $this->GetNumericControlInfo('heatingTemperatureCorrection')
+            'heatingTemperatureCorrection' => $this->GetNumericControlInfo('heatingTemperatureCorrection'),
+            'roomTemperatureSetpoint'      => $this->GetNumericControlInfo('roomTemperatureSetpoint')
         ];
     }
 
@@ -978,6 +982,9 @@ HTML;
         return match ($function) {
             'warmWaterSetpoint' => $this->BuildNumericControlInfo('WarmWaterSetpointVariable', 30.0, 65.0, 0.5),
             'heatingTemperatureCorrection' => $this->BuildNumericControlInfo('HeatingTemperatureCorrectionVariable', -5.0, 5.0, 0.5),
+            'roomTemperatureSetpoint' => $this->BuildNumericControlInfo('RoomTemperatureSetpointVariable',
+                $this->ReadPropertyString('CommunicationMode') === 'modbus' ? 15.0 : 0.0,
+                $this->ReadPropertyString('CommunicationMode') === 'modbus' ? 30.0 : 35.0, 0.5),
             default => throw new InvalidArgumentException('Unbekannte numerische Steuerfunktion.')
         };
     }
@@ -1008,14 +1015,17 @@ HTML;
         $unit = $this->GetVariableUnit($variableId);
 
         $profileName = $this->GetVariableProfileName($variableId);
-        if ($profileName !== '' && IPS_VariableProfileExists($profileName)) {
+        // Older instances assigned the DHW range (30–65 °C) to the room setpoint.
+        if ($profileName !== '' && IPS_VariableProfileExists($profileName)
+            && !($property === 'RoomTemperatureSetpointVariable' && $profileName === 'WPLUX.Wset')) {
             $profile = IPS_GetVariableProfile($profileName);
 
-            if (isset($profile['MinValue']) && is_numeric($profile['MinValue'])) {
-                $min = (float) $profile['MinValue'];
-            }
-            if (isset($profile['MaxValue']) && is_numeric($profile['MaxValue'])) {
-                $max = (float) $profile['MaxValue'];
+            // A 0/0 profile has no range; keep the protocol's limits in that case.
+            if (isset($profile['MinValue'], $profile['MaxValue'])
+                && is_numeric($profile['MinValue']) && is_numeric($profile['MaxValue'])
+                && (float)$profile['MaxValue'] > (float)$profile['MinValue']) {
+                $min = (float)$profile['MinValue'];
+                $max = (float)$profile['MaxValue'];
             }
             if (isset($profile['StepSize']) && is_numeric($profile['StepSize'])
                 && (float) $profile['StepSize'] > 0.0) {
@@ -2094,7 +2104,8 @@ window.SymconHeatPump = {
             const titles = {
                 heating: 'Heizen',
                 hotwater: 'Warmwasser',
-                cooling: 'Kühlen'
+                cooling: 'Kühlen',
+                pool: 'Schwimmbad'
             };
 
             menu.innerHTML = '';
@@ -2205,7 +2216,8 @@ window.SymconHeatPump = {
 
             const titles = {
                 warmWaterSetpoint: 'Warmwasser-Solltemperatur',
-                heatingTemperatureCorrection: 'Heiztemperaturkorrektur'
+                heatingTemperatureCorrection: 'Heiztemperaturkorrektur',
+                roomTemperatureSetpoint: 'Raumtemperatur-Soll'
             };
 
             const min = Number(control.min);
@@ -2752,8 +2764,7 @@ window.SymconHeatPump = {
                 return found ? String(found.name) : String(current ?? '');
             };
 
-            // Kompakte obere Leiste: nur Warmwasser, Heizung, Kühlen,
-            // WW Soll und Heizkorrektur. Alte Roh-SVG-Statusfelder bleiben aus.
+            // Only activated native controls belong in the upper button bar.
             show('#gHPStatusOnOff', false);
             show('#gHPStatusOff', false);
             show('#gHPStatusParty', false);
@@ -2767,6 +2778,7 @@ window.SymconHeatPump = {
             setText('#textControlHeating', optionName(controls.heating));
             setText('#textControlHotWater', optionName(controls.hotwater));
             setText('#textControlCooling', optionName(controls.cooling));
+            setText('#textControlPool', optionName(controls.pool));
 
             // Betrieb/Party/Eco sind bewusst keine Elemente der oberen Bedienleiste.
             // Die spätere Event-Bindung erwartet diese Liste weiterhin.
@@ -2776,7 +2788,8 @@ window.SymconHeatPump = {
             [
                 ['heating', '#gHPStatusHeating'],
                 ['hotwater', '#gHPStatusWW'],
-                ['cooling', '#gHPStatusCooling']
+                ['cooling', '#gHPStatusCooling'],
+                ['pool', '#gHPStatusPool']
             ].forEach(([name, selector]) => {
                 const c = controls[name];
                 show(selector, previewAll || !!(c && c.configured && Array.isArray(c.options) && c.options.length));
@@ -2785,7 +2798,8 @@ window.SymconHeatPump = {
             // Numerische Bedienungen: nur anzeigen, wenn wirklich konfiguriert.
             [
                 ['warmWaterSetpoint', '#gSymconWarmWaterSetpoint', '#gSymconWarmWaterSetpointValue'],
-                ['heatingTemperatureCorrection', '#gSymconHeatingCorrection', '#gSymconHeatingCorrectionValue']
+                ['heatingTemperatureCorrection', '#gSymconHeatingCorrection', '#gSymconHeatingCorrectionValue'],
+                ['roomTemperatureSetpoint', '#gSymconRoomTemperatureSetpoint', '#textRoomTemperatureSetpointValue']
             ].forEach(([name, groupSel, valueSel]) => {
                 const c = controls[name];
                 const configured = !!(c && c.configured);
@@ -2831,8 +2845,10 @@ window.SymconHeatPump = {
                 '#gHPStatusWW',
                 '#gHPStatusHeating',
                 '#gHPStatusCooling',
+                '#gHPStatusPool',
                 '#gSymconWarmWaterSetpoint',
                 '#gSymconHeatingCorrection',
+                '#gSymconRoomTemperatureSetpoint',
                 '#gHeaterControlButton',
                 '#gSettings'
             ];
@@ -2911,7 +2927,7 @@ window.SymconHeatPump = {
             const circulationVisible = previewAll || (!!cfg.tankWW && !!cfg.circulation && !!cfg.circulatingPumpRunning);
             const activeMixers = mixers.some(item => [hk1,hk2,hk3][(item.circuit || item.number) - 1]);
             const storageClearance = hk3 && cfg.tankWW ? 1353 + dhwShift : 0;
-            const contentRight = narrowHydraulics ? Math.max(activeMixers ? 1335 : 1235,storageClearance,nextButtonX - buttonGap) : 1568;
+            const contentRight = Math.max(narrowHydraulics ? Math.max(activeMixers ? 1335 : 1235,storageClearance) : 1570,nextButtonX - buttonGap);
             const heatingShift = narrowHydraulics ? Math.min(0,contentRight - 1525) : 0;
             svg.querySelector('#gHeating')?.setAttribute('transform','translate(' + heatingShift + ' 0)');
             const hotHeaderX = Math.max(825,945 + heatingShift);
@@ -3344,7 +3360,8 @@ window.SymconHeatPump = {
             [
                 ['heating', '#gHPStatusHeating'],
                 ['hotwater', '#gHPStatusWW'],
-                ['cooling', '#gHPStatusCooling']
+                ['cooling', '#gHPStatusCooling'],
+                ['pool', '#gHPStatusPool']
             ].forEach(([name, selector]) => {
                 const el = svg.querySelector(selector);
                 const c = controls[name];
@@ -3527,7 +3544,7 @@ window.SymconHeatPump = {
                 );
             }
 
-            svg.setAttribute('viewBox','15 0 ' + (narrowHydraulics ? contentRight : 1570) + ' 925');
+            svg.setAttribute('viewBox','15 0 ' + contentRight + ' 925');
 
             // Live flow overlays use actual running variables; no idle animation.
             const heatingActive = [1,2,3].some(n => [hk1,hk2,hk3][n - 1] && binary(circuitPump(n)));
@@ -3798,22 +3815,24 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function VisualizationControlAvailable(string $property, int $id): bool
     {
-        if (!$this->ReadPropertyBoolean('InstanceStatus') || ($this->ReadPropertyString('CommunicationMode') === 'modbus'
-            && !in_array($property, ['WarmWaterSetpointVariable', 'HeatingTemperatureCorrectionVariable'], true))) {
-            return false;
-        }
-        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
-            $ident = $property === 'WarmWaterSetpointVariable' ? 'Anpassung_WW' : 'Anpassung_Temp';
-            if (!$this->SharedNumericControlEnabled($ident) || $this->GetSHIVisualizationPoint($ident) === null) return false;
-        }
-        $native = [
-            'HeatingControlVariable' => 'Mode_Heizung', 'HotWaterControlVariable' => 'Mode_WW',
-            'CoolingControlVariable' => 'Mode_Kuehlung', 'WarmWaterSetpointVariable' => 'Anpassung_WW',
-            'HeatingTemperatureCorrectionVariable' => 'Anpassung_Temp'
+        if (!$this->ReadPropertyBoolean('InstanceStatus')) return false;
+        $controls = [
+            'HeatingControlVariable' => ['Mode_Heizung', 'HeizungVisible'],
+            'HotWaterControlVariable' => ['Mode_WW', 'WarmwasserVisible'],
+            'CoolingControlVariable' => ['Mode_Kuehlung', 'KuehlungVisible'],
+            'PoolControlVariable' => ['Mode_Schwimmbad', 'SchwimmbadVisible'],
+            'WarmWaterSetpointVariable' => ['Anpassung_WW', 'WWsetVisible'],
+            'HeatingTemperatureCorrectionVariable' => ['Anpassung_Temp', 'TempsetVisible'],
+            'RoomTemperatureSetpointVariable' => ['Anpassung_RBE', 'RBEsetVisible']
         ];
-        if (!isset($native[$property]) || @$this->GetIDForIdent($native[$property]) !== $id) {
-            return false;
+        if (!isset($controls[$property])) return false;
+        [$ident, $visible] = $controls[$property];
+        $shared = in_array($ident, ['Anpassung_WW', 'Anpassung_Temp', 'Anpassung_RBE'], true);
+        if (!($shared ? $this->SharedNumericControlEnabled($ident) : $this->ReadPropertyBoolean($visible))) return false;
+        if ($this->ReadPropertyString('CommunicationMode') === 'modbus') {
+            if (!$shared || $this->GetSHIVisualizationPoint($ident) === null) return false;
         }
+        if (@$this->GetIDForIdent($ident) !== $id) return false;
         $variable = IPS_GetVariable($id);
         return in_array((int)$variable['VariableType'], [1, 2], true)
             && (int)($variable['VariableCustomAction'] ?: $variable['VariableAction']) > 0;
@@ -3984,9 +4003,11 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             throw new InvalidArgumentException('Ungültige Grafik-Steuerungsdaten.');
         }
         $modes = ['heating' => ['HeatingControlVariable', 'Mode_Heizung'],
-            'hotwater' => ['HotWaterControlVariable', 'Mode_WW'], 'cooling' => ['CoolingControlVariable', 'Mode_Kuehlung']];
+            'hotwater' => ['HotWaterControlVariable', 'Mode_WW'], 'cooling' => ['CoolingControlVariable', 'Mode_Kuehlung'],
+            'pool' => ['PoolControlVariable', 'Mode_Schwimmbad']];
         $numeric = ['warmWaterSetpoint' => ['WarmWaterSetpointVariable', 'Anpassung_WW'],
-            'heatingTemperatureCorrection' => ['HeatingTemperatureCorrectionVariable', 'Anpassung_Temp']];
+            'heatingTemperatureCorrection' => ['HeatingTemperatureCorrectionVariable', 'Anpassung_Temp'],
+            'roomTemperatureSetpoint' => ['RoomTemperatureSetpointVariable', 'Anpassung_RBE']];
         $function = $payload['function'] ?? '';
         if (!is_string($function)) {
             throw new InvalidArgumentException('Ungültige Grafik-Steuerfunktion.');
@@ -4036,7 +4057,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         $collect($this->BuildVisualizationData());
         $collect($this->BuildControlData());
         // Keep watching action availability even while an existing control is disabled.
-        foreach (array_keys(self::LUXTRONIK_IDENT_MAP) as $property) {
+        foreach (array_keys(self::LUXTRONIK_IDENT_MAP + self::VISUALIZATION_EXTRA_IDENT_MAP) as $property) {
             $id = $this->GetVisualizationVariableID($property);
             if ($id > 0) $ids[] = $id;
         }

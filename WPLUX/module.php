@@ -268,7 +268,7 @@ class Luxtronik extends IPSModuleStrict
 
         if ($rbesetVisible) 
         {
-            $this->RegisterVariableFloat('Anpassung_RBE', 'Raumtemperatur Soll', 'WPLUX.Wset', 6);
+            $this->RegisterVariableFloat('Anpassung_RBE', 'Raumtemperatur Soll', 'WPLUX.Rset', 6);
             $this->getParameter('Anpassung_RBE'); 
             $Value = $this->GetValue('Anpassung_RBE'); 
             $this->EnableAction('Anpassung_RBE');
@@ -2198,6 +2198,13 @@ class Luxtronik extends IPSModuleStrict
             IPS_SetVariableProfileValues("WPLUX.Wset", 30, 65, 0.5);
             IPS_SetVariableProfileDigits("WPLUX.Wset", 1);
             IPS_SetVariableProfileText("WPLUX.Wset", "", " °C");
+        }
+
+        if (!IPS_VariableProfileExists('WPLUX.Rset')) {
+            IPS_CreateVariableProfile('WPLUX.Rset', 2);
+            IPS_SetVariableProfileValues('WPLUX.Rset', 0, 35, 0.5);
+            IPS_SetVariableProfileDigits('WPLUX.Rset', 1);
+            IPS_SetVariableProfileText('WPLUX.Rset', '', ' °C');
         }
 
         // WPLUX.Std
