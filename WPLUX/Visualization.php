@@ -4390,6 +4390,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         $key=[$this->ReadPropertyString('CommunicationMode'), $this->ReadPropertyString('IPAddress'),
             $this->ReadPropertyInteger($modbus ? 'ModbusPort' : 'Port'), $modbus ? $this->ReadPropertyInteger('ModbusUnitID') : 0];
         if ($modbus) array_push($key,$this->ReadPropertyInteger('Port'),$this->ReadPropertyBoolean('ModbusJavaSupplement'));
+        else array_push($key,$this->ReadPropertyBoolean('ModbusReadSupplement'),$this->ReadPropertyInteger('ModbusPort'),$this->ReadPropertyInteger('ModbusUnitID'),$this->ReadPropertyInteger('ModbusTimeout'));
         return json_encode($key, JSON_THROW_ON_ERROR);
     }
 
@@ -4454,10 +4455,6 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             && !in_array($this->ReadPropertyString('IPAddress'),['','0.0.0.0','::'],true)) {
             return $this->GetWebEEVPoint($property==='EEVHeatingOpening'?'EEV_Heizen':'EEV_Kuehlen');
         }
-        if($this->ReadPropertyString('CommunicationMode')==='websocket') foreach($this->GetVisualizationIdents($property) as $ident) {
-            $web=$this->GetWebEEVPoint($ident);
-            if($web!==null) return $web;
-        }
         if ($property === 'InputPower') {
             $id = $this->ReadPropertyInteger('kwin');
             if ($id > 0 && IPS_VariableExists($id)) {
@@ -4486,6 +4483,10 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         foreach ($this->GetVisualizationIdents($property) as $ident) {
             $point = $this->GetCachedVisualizationPoint($ident);
             if ($point !== null) return $point;
+        }
+        if($this->ReadPropertyBoolean('ModbusReadSupplement')) foreach($this->GetVisualizationIdents($property) as $ident) {
+            $point=$this->GetSHIVisualizationPoint($ident);
+            if($point!==null) return $point;
         }
         foreach($this->GetVisualizationIdents($property) as $ident) {
             $web=$this->GetWebEEVPoint($ident);

@@ -13,7 +13,7 @@ final class LuxtronikWebEEVClient
 
     public function snapshot(): array { return $this->snapshot; }
 
-    public function read(string $password): array
+    public function read(string $password, ?array $requestedPages = null): array
     {
         $this->snapshot=[];
         if (!class_exists('DOMDocument')) throw new RuntimeException('PHP-XML-Erweiterung DOM fehlt.');
@@ -58,7 +58,8 @@ final class LuxtronikWebEEVClient
             $errors=[];
             $menus=[];
             foreach ($info->childNodes as $menu) if ($menu instanceof DOMElement && $menu->localName==='item'
-                && $this->child($menu,'name')!==null && $this->child($menu,'value')===null) $menus[]=$menu;
+                && $this->child($menu,'name')!==null && $this->child($menu,'value')===null
+                && ($requestedPages===null || in_array($this->key($this->child($menu,'name')->textContent),array_map($this->key(...),$requestedPages),true))) $menus[]=$menu;
             usort($menus,fn($a,$b)=> (int)!in_array($this->key($this->child($a,'name')->textContent),['ausgänge','ausgaenge','outputs'],true)
                 <=> (int)!in_array($this->key($this->child($b,'name')->textContent),['ausgänge','ausgaenge','outputs'],true));
             $outputs=null;
@@ -75,7 +76,10 @@ final class LuxtronikWebEEVClient
                     if (in_array($this->key($name),['ausgänge','ausgaenge','outputs'],true)) $outputs=$root;
                 } catch(RuntimeException $error) { $errors[]=['name'=>$name,'error'=>$error->getMessage()]; }
             }
-            $this->snapshot=['count'=>array_sum(array_column($groups,'count')),'groups'=>$groups,'errors'=>$errors,'complete'=>$errors===[]];
+            foreach($requestedPages??[] as $page) if(!array_filter($groups,fn($group)=>$this->key($group['name'])===$this->key($page)))
+                $errors[]=['name'=>$page,'error'=>'Benötigte Informationsseite nicht geliefert.'];
+            $this->snapshot=['count'=>array_sum(array_column($groups,'count')),'groups'=>$groups,'errors'=>$errors,'complete'=>$errors===[],
+                'fullScan'=>$requestedPages===null,'requestedPages'=>$requestedPages];
             if ($outputs===null) {
                 if ($groups!==[]) return [];
                 throw new RuntimeException('Keine Informationsseite konnte gelesen werden.');
@@ -244,7 +248,7 @@ trait LuxtronikWebEEV
         40=>['Ausgänge','Mischer 1 Auf','bool'],41=>['Ausgänge','Mischer 1 Zu','bool'],44=>['Ausgänge','Verdichter 1','bool'],
         46=>['Ausgänge','ZIP','bool'],47=>['Ausgänge','ZUP','bool'],48=>['Ausgänge','ZWE 1','bool'],50=>['Ausgänge','ZWE 3','bool'],
         51=>['Ausgänge','FUP 2','bool'],52=>['Ausgänge','SLP','bool'],140=>['Ausgänge','FUP 3','bool'],
-        56=>['Betriebsstunden','Betriebsstd. VD1','h'],57=>['Betriebsstunden','Impulse Verdichter 1','count'],
+        56=>['Betriebsstunden',['Betriebsstd. VD1','Betriebstund. VD1'],'h'],57=>['Betriebsstunden','Impulse Verdichter 1','count'],
         60=>['Betriebsstunden','Betriebsstunden ZWE1','h'],63=>['Betriebsstunden','Betriebsstunden WP','h'],
         64=>['Betriebsstunden','Betriebsstunden Heiz.','h'],65=>['Betriebsstunden','Betriebsstunden WW','h'],66=>['Betriebsstunden','Betriebsstunden Kuehl.','h'],
         67=>['Ablaufzeiten','WP Seit','duration'],68=>['Ablaufzeiten','ZWE1 seit','duration'],70=>['Ablaufzeiten','Netzeinschaltv.','duration'],
@@ -258,16 +262,31 @@ trait LuxtronikWebEEV
         231=>['Ausgänge','Freq. aktuell','rpm'],236=>['Ausgänge','Freq. Sollwert','rpm'],244=>['Temperaturen','Vorlauf max.','°C'],254=>['Eingänge','Durchfluss','l/h']
     ];
     private const WEB_ONLY_POINTS = [
-        400001 => ['ident'=>'EEV_Heizen','label'=>'EEV Heizen'],
-        400002 => ['ident'=>'EEV_Kuehlen','label'=>'EEV Kühlen'],
+        400001 => ['ident'=>'EEV_Heizen','label'=>'EEV Heizen','field'=>['Ausgänge','EEV Heizen','%'],'type'=>'float','min'=>0,'max'=>100],
+        400002 => ['ident'=>'EEV_Kuehlen','label'=>'EEV Kühlen','field'=>['Ausgänge','EEV Kühlen','%'],'type'=>'float','min'=>0,'max'=>100],
         400003 => ['ident'=>'Ventil_BOSUP','label'=>'Ventil.-BOSUP','field'=>['Ausgänge','Ventil.-BOSUP','bool'],'type'=>'bool','profile'=>'~Switch'],
         400004 => ['ident'=>'Analog_Ausgang_21','label'=>'AO 21','field'=>['Ausgänge','AO 21','V'],'type'=>'float','profile'=>'~Volt'],
-        400005 => ['ident'=>'Analog_Ausgang_22','label'=>'AO 22','field'=>['Ausgänge','AO 22','V'],'type'=>'float','profile'=>'~Volt']
+        400005 => ['ident'=>'Analog_Ausgang_22','label'=>'AO 22','field'=>['Ausgänge','AO 22','V'],'type'=>'float','profile'=>'~Volt'],
+        400006 => ['ident'=>'Freigabe_ZWE_Restzeit','label'=>'Freigabe ZWE Restzeit','field'=>['Ablaufzeiten','Freig. ZWE','duration'],'type'=>'string','profile'=>''],
+        400007 => ['ident'=>'Freigabe_Kuehlung_Restzeit','label'=>'Freigabe Kühlung Restzeit','field'=>['Ablaufzeiten','Freigabe Kühlung','duration'],'type'=>'string','profile'=>''],
+        400008 => ['ident'=>'Durchschnittliche_Laufzeit_Verdichter_1','label'=>'Laufzeit Ø Verdichter 1','field'=>['Betriebsstunden','Laufzeit Ø VD1','durationHM'],'type'=>'string','profile'=>''],
+        400009 => ['ident'=>'Softwarestand','label'=>'Softwarestand vollständig','field'=>['Anlagenstatus','Softwarestand','text'],'type'=>'string','profile'=>''],
+        400010 => ['ident'=>'Softwarestand_HZ_IO','label'=>'Softwarestand HZ/IO','field'=>['Anlagenstatus','HZ/IO','text'],'type'=>'string','profile'=>''],
+        400011 => ['ident'=>'Softwarestand_ASB','label'=>'Softwarestand ASB','field'=>['Anlagenstatus','ASB','text'],'type'=>'string','profile'=>''],
+        400012 => ['ident'=>'Hardware_Revision_ASB','label'=>'ASB Hardware-Revision','field'=>['Anlagenstatus','ASB HW Revision','text'],'type'=>'string','profile'=>''],
+        400013 => ['ident'=>'Softwarestand_Inverter','label'=>'Inverter Softwarestand','field'=>['Anlagenstatus','Inverter SW Version','text'],'type'=>'string','profile'=>''],
+        400014 => ['ident'=>'Abtaubedarf','label'=>'Abtaubedarf','field'=>['Anlagenstatus','Abtaubedarf','%'],'type'=>'float','min'=>0,'max'=>100],
+        400015 => ['ident'=>'Letzte_Abtauung','label'=>'Letzte Abtauung','field'=>['Anlagenstatus','Letzte Abt.','text'],'type'=>'string','profile'=>''],
+        400016 => ['ident'=>'Waermemengenzaehler_Zusatzwaermeerzeuger','label'=>'Wärmemenge Zusatzwärmeerzeuger','field'=>['Wärmemenge','Zus. Wärmeerz','kWh'],'type'=>'float','profile'=>'~Electricity'],
+        400017 => ['ident'=>'Waermemengenzaehler_Seit_Datum','label'=>'Wärmemenge seit Regler-Startdatum','field'=>['Wärmemenge','seit:','kWh'],'namePattern'=>'/^seit\s*:/iu','type'=>'float','profile'=>'~Electricity'],
+        400018 => ['ident'=>'Waermemengenzaehler_Seit_Reset','label'=>'Wärmemenge seit Regler-Reset','field'=>['Wärmemenge','seit Reset:','kWh'],'type'=>'float','profile'=>'~Electricity'],
+        400019 => ['ident'=>'GLT_Art','label'=>'GLT Art','field'=>['GLT','Art','text'],'type'=>'string','profile'=>'']
     ];
 
     private function WebFieldKey(string $value): string
     {
-        return preg_replace('/[\s_.-]+/u','',strtolower(strtr(trim($value),['Ä'=>'ä','Ö'=>'ö','Ü'=>'ü','ß'=>'ss'])));
+        $key=preg_replace('/[\s_.-]+/u','',strtolower(strtr(trim($value),['Ä'=>'ä','Ö'=>'ö','Ü'=>'ü','ß'=>'ss'])));
+        return str_replace('betriebstunden','betriebsstunden',$key);
     }
 
     private function WebDefinitions(): array
@@ -289,17 +308,26 @@ trait LuxtronikWebEEV
             foreach($snapshot['groups']??[] as $group) {
                 if($this->WebFieldKey($group['name'])!==$this->WebFieldKey($menu)) continue;
                 foreach($group['fields'] as $field) {
-                    if($this->WebFieldKey($field['name'])!==$this->WebFieldKey($name)) continue;
+                    if(isset($definition['namePattern']) ? !preg_match($definition['namePattern'],$field['name'])
+                        : !in_array($this->WebFieldKey($field['name']),array_map($this->WebFieldKey(...),(array)$name),true)) continue;
                     $text=str_replace([',',"\u{00a0}","\u{202f}"],['.',' ',' '],trim($field['raw']));
                     $value=null;
                     if($unit==='bool') $value=match(strtolower($text)) {'ein','on'=>true,'aus','off'=>false,default=>null};
+                    elseif($unit==='text') $value=trim($field['raw'])!==''?trim($field['raw']):null;
                     elseif($unit==='duration' && preg_match('/^(\d+):([0-5]\d):([0-5]\d)$/D',$text,$m)) {
-                        $value=$this->convertValueBasedOnID((int)$m[1]*3600+(int)$m[2]*60+(int)$m[3],$id);
-                    } elseif($unit!=='duration' && preg_match('/^(-?\d+(?:\.\d+)?)\s*'.($unit==='count'?'':preg_quote($unit,'/')).'$/iD',$text,$m)) {
+                        $value=isset($definition['native'])?$this->convertValueBasedOnID((int)$m[1]*3600+(int)$m[2]*60+(int)$m[3],$id):((int)$m[1].'h '.(int)$m[2].'m');
+                    } elseif($unit==='durationHM' && preg_match('/^(\d+):([0-5]\d)$/D',$text,$m)) {
+                        $value=(int)$m[1].'h '.(int)$m[2].'m';
+                    } elseif(!in_array($unit,['duration','durationHM','text'],true) && preg_match('/^(-?\d+(?:\.\d+)?)\s*'.($unit==='count'?'':preg_quote($unit,'/')).'$/iD',$text,$m)) {
                         $value=(float)$m[1];
                         if(($definition['type']??self::DATA_POINT_CONFIG[$id]['type'])==='int') $value=(int)$value;
+                        if((isset($definition['min']) && $value<$definition['min']) || (isset($definition['max']) && $value>$definition['max'])) $value=null;
                     }
-                    if($value!==null) $matches[]=['value'=>$value,'webId'=>$field['id'],'formatted'=>$unit==='duration'?(string)$value:$field['raw'],'unit'=>$unit==='bool'||$unit==='duration'||$unit==='count'?'':$unit];
+                    if($value!==null) {
+                        if($unit==='bool' && isset($definition['native']) && self::DATA_POINT_CONFIG[$id]['type']==='string') $value=(string)(int)$value;
+                        $matches[]=['value'=>$value,'webId'=>$field['id'],'formatted'=>str_starts_with($unit,'duration')?(string)$value:$field['raw'],
+                            'unit'=>in_array($unit,['bool','duration','durationHM','count','text'],true)?'':$unit];
+                    }
                 }
             }
             if(count($matches)===1) $values[$definition['ident']]=$matches[0];
@@ -309,7 +337,7 @@ trait LuxtronikWebEEV
 
     private function WebEEVSourceKey(): string
     {
-        return hash('sha256',json_encode([$this->ReadPropertyString('IPAddress'),$this->ReadPropertyString('CommunicationMode'),
+        return hash('sha256',json_encode([$this->VisualizationSourceKey(),
             $this->ReadPropertyBoolean('WebSocketSupplement'),$this->ReadPropertyString('WebSocketPassword')],JSON_THROW_ON_ERROR));
     }
 
@@ -324,26 +352,64 @@ trait LuxtronikWebEEV
         return is_array($cache) && ($cache['source']??'')===$this->WebEEVSourceKey() ? $cache : [];
     }
 
+    /** Availability is based on the complete Java frame, not only values retained for the graphic. */
+    private function WebPrimaryHasValue(array $definition): bool
+    {
+        $mode=$this->ReadPropertyString('CommunicationMode');
+        if($mode==='modbus') return $this->GetHybridVisualizationPoint($definition['ident'])!==null;
+        if($this->ReadPropertyBoolean('ModbusReadSupplement') && $this->GetSHIVisualizationPoint($definition['ident'])!==null) return true;
+        if(!isset($definition['native'])) return false;
+        $availability=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
+        if(($availability['source']??'')===$this->VisualizationSourceKey())
+            return empty($availability['failed']) && $definition['native']<($availability['count']??0);
+        return $this->GetCachedVisualizationPoint($definition['ident'])!==null;
+    }
+
+    /** Only requested objects and graphic readings that the preferred source cannot supply. */
+    private function WebRequestedDefinitions(): array
+    {
+        $needed=$this->GetVisualizationRequiredPointIDs();
+        $needed[400001]=true;
+        $needed[400002]=true;
+        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row)
+            if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
+        $requested=[];
+        foreach($this->WebDefinitions() as $id=>$definition)
+            if(isset($needed[$id]) && !$this->WebPrimaryHasValue($definition)) $requested[$definition['ident']]=$definition;
+        return $requested;
+    }
+
     private function UpdateWebEEV(): void
     {
-        if (!$this->ReadPropertyBoolean('InstanceStatus') || (!$this->ReadPropertyBoolean('WebSocketSupplement') && $this->ReadPropertyString('CommunicationMode')!=='websocket')
+        if (!$this->ReadPropertyBoolean('InstanceStatus') || !$this->ReadPropertyBoolean('WebSocketSupplement')
             || in_array($this->ReadPropertyString('IPAddress'),['','0.0.0.0','::'],true)) return;
         $source=$this->WebEEVSourceKey();
+        $requested=$this->WebRequestedDefinitions();
+        $idents=array_keys($requested);
+        $pages=array_values(array_unique(array_map(static fn($point)=>$point['field'][0],$requested)));
         $cache=$this->WebEEVCache();
-        if (microtime(true)<($cache['nextAttempt']??0)) {$this->PublishWebEEV();return;}
+        if (microtime(true)<($cache['nextAttempt']??0) && (!empty($cache['error']) || ($cache['requestedIdents']??null)===$idents)) {
+            $cache['values']=array_intersect_key($cache['values']??[],$requested);
+            $this->SetBuffer('WebEEVCache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+            $this->PublishWebEEV();return;
+        }
         $lock='WPLUX.WebEEV.'.$this->InstanceID;
         if (!IPS_SemaphoreEnter($lock,1)) return;
         try {
-            $cache=['source'=>$source,'updatedAt'=>time(),'values'=>[],'error'=>null];
+            $cache=['source'=>$source,'updatedAt'=>time(),'values'=>[],'error'=>null,'requestedIdents'=>$idents];
             try {
-                $client=$this->NewWebEEVClient();
-                $values=$client->read($this->ReadPropertyString('WebSocketPassword'));
-                $cache['discovery']=$client->snapshot();
-                $values+=$this->MapWebSnapshot($cache['discovery']);
+                $values=[];
+                if($requested!==[]) {
+                    $client=$this->NewWebEEVClient();
+                    $values=$client->read($this->ReadPropertyString('WebSocketPassword'),$pages);
+                    $cache['discovery']=$client->snapshot();
+                    $values+=$this->MapWebSnapshot($cache['discovery']);
+                } else $cache['discovery']=['count'=>0,'groups'=>[],'errors'=>[],'complete'=>true,'fullScan'=>false,'requestedPages'=>[]];
+                $values=array_intersect_key($values,$requested);
                 $cache['discovery']['mappedCount']=count($values);
                 if ($source!==$this->WebEEVSourceKey()) return;
                 $cache['values']=$values;
-                if ($values===[]) $cache['error']='Keine zugeordneten WebSocket-Messwerte geliefert.';
+                if ($values===[] && $requested!==[]) $cache['error']='Keine angeforderten WebSocket-Messwerte geliefert.';
             } catch (Throwable $error) {
                 if($error instanceof LuxtronikInstanceUnavailable) throw $error;
                 $cache['error']=$error->getMessage();
@@ -353,10 +419,7 @@ trait LuxtronikWebEEV
             $this->SetBuffer('WebEEVCache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
             if ($cache['error']!==null) $this->SendDebug('WebSocket',$cache['error'],0);
             foreach ($cache['values'] as $ident=>$row) {
-                $preferred=$this->ReadPropertyString('CommunicationMode')==='websocket'
-                    || (str_starts_with($ident,'EEV_'))
-                    || ($this->GetCachedVisualizationPoint($ident)===null && $this->GetSHIVisualizationPoint($ident)===null);
-                $this->SendDebug($preferred?'Datenquelle':'WebSocket verfügbar',$ident.': WebSocket ('.$row['webId'].') = '.json_encode($row['value']),0);
+                $this->SendDebug('Datenquelle',$ident.': WebSocket ('.$row['webId'].') = '.json_encode($row['value']),0);
             }
             $this->PublishWebEEV();
         } finally {
@@ -366,7 +429,7 @@ trait LuxtronikWebEEV
 
     private function GetWebEEVPoint(string $ident): ?array
     {
-        if ((!$this->ReadPropertyBoolean('WebSocketSupplement') && $this->ReadPropertyString('CommunicationMode')!=='websocket') || !$this->ReadPropertyBoolean('InstanceStatus')) return null;
+        if (!$this->ReadPropertyBoolean('WebSocketSupplement') || !$this->ReadPropertyBoolean('InstanceStatus')) return null;
         $cache=$this->WebEEVCache();
         $row=$cache['values'][$ident]??null;
         if ($row===null || time()-($cache['updatedAt']??0)>max(30,2*$this->ReadPropertyInteger('UpdateInterval')+5)) return null;
@@ -382,21 +445,15 @@ trait LuxtronikWebEEV
             if (!isset($selected[$id])) continue;
             $reading=$this->GetWebEEVPoint($point['ident']);
             if ($reading===null) continue;
-            if(!empty($point['sharedSHI']) && $this->ReadPropertyString('CommunicationMode')==='modbus' && $this->GetSHIVisualizationPoint($point['ident'])!==null) continue;
-            if(isset($point['native']) && $this->ReadPropertyString('CommunicationMode')!=='websocket') {
-                if($this->ReadPropertyString('CommunicationMode')==='modbus' && $this->GetHybridVisualizationPoint($point['ident'])!==null) continue;
-                $availability=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
-                if($this->ReadPropertyString('CommunicationMode')!=='modbus' && ($availability['source']??'')===$this->VisualizationSourceKey()
-                    && $point['native']<($availability['count']??0)) continue;
-            }
+            if($this->WebPrimaryHasValue($point)) continue;
             if (@$this->GetIDForIdent($point['ident'])===false) {
                 if(isset($point['native'])) {
                     $native=self::DATA_POINT_CONFIG[$point['native']];
                     $method=match($native['type']) {'bool'=>'RegisterVariableBoolean','int'=>'RegisterVariableInteger','float'=>'RegisterVariableFloat',default=>'RegisterVariableString'};
                     $this->$method($point['ident'],$point['label'],$native['profile'],$point['native']);
                 } elseif(isset($point['profile'])) {
-                    $method=$point['type']==='bool'?'RegisterVariableBoolean':'RegisterVariableFloat';
-                    $this->$method($point['ident'],$point['label'],$point['profile']);
+                    $method=match($point['type']) {'bool'=>'RegisterVariableBoolean','int'=>'RegisterVariableInteger','string'=>'RegisterVariableString',default=>'RegisterVariableFloat'};
+                    $this->$method($point['ident'],$point['label'],$point['profile'],$id);
                 } else {
                 if (!IPS_VariableProfileExists('WPLUX.EEV.Percent')) {
                     IPS_CreateVariableProfile('WPLUX.EEV.Percent',2);
@@ -404,9 +461,10 @@ trait LuxtronikWebEEV
                     IPS_SetVariableProfileDigits('WPLUX.EEV.Percent',1);
                     IPS_SetVariableProfileText('WPLUX.EEV.Percent','',' %');
                 }
-                $this->RegisterVariableFloat($point['ident'],$point['label'],'WPLUX.EEV.Percent');
+                $this->RegisterVariableFloat($point['ident'],$point['label'],'WPLUX.EEV.Percent',$id);
                 }
             }
+            if(isset(self::WEB_ONLY_POINTS[$id])) IPS_SetPosition($this->GetIDForIdent($point['ident']),$id);
             $this->SetValueIfChanged($point['ident'],$reading['value']);
         }
     }
@@ -434,14 +492,14 @@ trait LuxtronikWebEEV
     {
         $panel=['type'=>'ExpansionPanel','caption'=>'WebSocket / Messwerte','items'=>[
             ['type'=>'Label','caption'=>'Voraussetzung: Websockets-Webinterface ab Firmware 3.81, Port 8214 (Lux_WS). Umfang abhängig von Firmware und Anlagenkonfiguration.'],
-            ['type'=>'CheckBox','name'=>'WebSocketSupplement','caption'=>'Fehlende Messwerte zusätzlich über das Webinterface lesen'],
+            ['type'=>'CheckBox','name'=>'WebSocketSupplement','caption'=>'Benötigte fehlende Messwerte zusätzlich über das Webinterface lesen'],
             ['type'=>'PasswordTextBox','name'=>'WebSocketPassword','caption'=>'Webinterface-Passwort'],
-            ['type'=>'Label','caption'=>'Informationsseiten über Port 8214 lesen. WebSocket als Hauptquelle: fehlende Messwerte und bestätigte Bedienaktionen über Java.']
+            ['type'=>'Label','caption'=>'Zusätzlich werden nur die Seiten für fehlende Grafikwerte und ausgewählte Variablen gelesen. Gültige Werte der bevorzugten Quelle einschließlich 0 haben Vorrang. Der vollständige Lesetest im LUX-Bedienfeld bleibt separat verfügbar.']
         ]];
         $cache=$this->WebEEVCache();
         $discovery=$cache['discovery']??[];
         $panel['items'][]=['type'=>'Label','caption'=>isset($discovery['count'])
-            ? 'Letzte WebSocket-Abfrage: '.$discovery['count'].' Felder, '.($discovery['mappedCount']??0).' zugeordnet. '.(!empty($discovery['complete'])?'Alle angebotenen Informationsseiten gelesen.':'Teilabfrage; nicht alle Informationsseiten gelesen.')
+            ? 'Letzte WebSocket-Abfrage: '.$discovery['count'].' Felder auf gelesenen Seiten, '.($discovery['mappedCount']??0).' benötigte Messwerte übernommen. '.(!empty($discovery['complete'])?'Angeforderte Seiten vollständig gelesen.':'Teilabfrage; nicht alle angeforderten Seiten gelesen.')
             : 'Anzahl der verfügbaren Felder noch nicht ermittelt. LUX-Bedienfeld → Alle WebSocket-Werte testen.'];
         if(!empty($cache['error'])) $panel['items'][]=['type'=>'Label','caption'=>'WebSocket-Fehler: '.$cache['error']];
         foreach($discovery['errors']??[] as $error) $panel['items'][]=['type'=>'Label','caption'=>'WebSocket-Teilabfrage: '.$error['name'].': '.$error['error']];
@@ -451,7 +509,6 @@ trait LuxtronikWebEEV
         $saved=[];
         foreach (json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) $saved[(int)($row['id']??0)]=!empty($row['enabled']);
         foreach ($form['elements'] as $i=>&$element) {
-            if(($element['name']??'')==='CommunicationMode') $element['options'][]=['caption'=>'WebSocket ab FW 3.81 (Messwerte; Bedienung über Java)','value'=>'websocket'];
             if (($element['name']??'')!=='IDListe') continue;
             $index=$i;
             foreach($element['columns'] as &$column) if(($column['name']??'')==='interface') $column['width']='230';
@@ -463,11 +520,13 @@ trait LuxtronikWebEEV
                 'enabled'=>$saved[$id]??false,'id'=>$id,'name'=>$point['label'],'interface'=>'WebSocket'];
             foreach($element['values'] as &$row) {
                 $definition=$definitions[(int)$row['id']]??null;
-                $row['webAvailability']=$definition===null?'Nicht zugeordnet'
+                $row['webAvailability']=$definition===null?'Keine WebSocket-Zuordnung'
+                    : ($this->WebPrimaryHasValue($definition)?'Hauptquelle liefert Wert'
+                    : (isset($cache['requestedIdents']) && !in_array($definition['ident'],$cache['requestedIdents'],true)?'Nicht angefordert'
                     : (!empty($cache['error'])?'Abfrage fehlgeschlagen'
                     : (!isset($discovery['count'])?'Noch nicht geprüft'
                     : (array_key_exists($definition['ident'],$cache['values']??[])?'Messwert geliefert'
-                    : (!empty($discovery['complete'])?'Kein Messwert geliefert':'Teilabfrage: kein Messwert'))));
+                    : (!empty($discovery['complete'])?'Kein Messwert geliefert':'Teilabfrage: kein Messwert'))))));
             }
             unset($row);
         }

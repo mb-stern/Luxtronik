@@ -1,8 +1,8 @@
 # Abgleich des WebSocket-Berichts vom 25.10.2026
 
 Basis: 104 Einträge auf zehn Informationsseiten, Software V3.86.1 (r7762).
-Die Zahlen gelten für diesen Bericht und den aktuellen Ident-Katalog, nicht für
-alle Luxtronik-Modelle. Ein Eintrag ist nicht immer genau eine Symcon-Variable:
+Die erste Tabelle dokumentiert den Stand vor der gezielten Ergänzung. Die Zahlen
+gelten für diesen Bericht, nicht für alle Luxtronik-Modelle. Ein Eintrag ist nicht immer genau eine Symcon-Variable:
 Ein Fehlereintrag enthält beispielsweise Zeitstempel und Fehlercode.
 
 | Kategorie | Berichtseinträge | Vorhandene bzw. zusätzliche Idents |
@@ -15,7 +15,14 @@ Ein Fehlereintrag enthält beispielsweise Zeitstempel und Fehlercode.
 
 Damit sind 78 Einträge auf 83 bestehende Idents abbildbar. Darin enthalten sind
 die fünf bereits eingeführten WebSocket-Idents für EEV Heizen/Kühlen, Ventil BOSUP
-und AO 21/22. Die 14 zusätzlichen Idents sind noch nicht eingeführt.
+und AO 21/22. Die 14 zusätzlichen Idents sind inzwischen als 400006–400019
+unten in der Checkboxliste auswählbar. Bestehende Idents bleiben unverändert.
+
+Mit den bestätigten Beschriftungen der sechs Betriebsstundenzähler sind damit
+85 der 104 Berichtseinträge technisch zugeordnet. Zyklisch werden davon nur
+benötigte fehlende Werte übernommen. Bivalenzstufe, fünf Fehlereinträge und der
+leere Betriebszustand bleiben noch umzusetzen; die zwölf unten beschriebenen
+Zuordnungen bleiben offen. Die vollständige Diagnose liest weiterhin alle Seiten.
 
 Die 13 zusätzlich zuordenbaren Einträge sind sechs Betriebsstundenzähler,
 Bivalenzstufe, fünf Fehlereinträge (je Zeitstempel und Code) und Betriebszustand.
@@ -39,15 +46,15 @@ eindeutig bestätigt. Bei Abschaltungen müssen Reihenfolge und Codeübersetzung
 
 Die vorher gemeldeten 66 automatischen Zuordnungen enthielten einen Fehler:
 „Freig. ZWE“ wurde Java-ID 78 (`Waermepumpentyp`) zugewiesen. Diese Zuordnung
-ist entfernt. Es bleiben 65 korrekte automatische Zuordnungen; für die übrigen
-39 Berichtseinträge ist noch Umsetzung bzw. Prüfung erforderlich.
+ist entfernt. An diesem Ausgangsstand blieben 65 korrekte automatische Zuordnungen; für die übrigen
+39 Berichtseinträge war noch Umsetzung bzw. Prüfung erforderlich.
 
 ## Schreibbefehle
 
 Der Bericht enthält ausschließlich Informationen, keine Einstellparameter mit
 Schreiboptionen, Rohwerten, Grenzen und Schrittweiten. Er bestätigt deshalb null
 direkte WebSocket-Parameteraktionen; die Anzahl zusätzlich benötigter Schreib-Idents
-ist noch nicht bestimmbar. Der WebSocket-Messmodus verwendet weiterhin Java-Aktionen.
+ist noch nicht bestimmbar. WebSocket ergänzt Messwerte automatisch; Java/Modbus bestimmen den Schreibweg.
 
 Der vorhandene Katalog umfasst sieben Java-Hauptbedienwerte und 160 konkret in der
 Konfiguration angebotene Zeitprogrammfelder, zusammen 167 Java-Schreib-Idents.

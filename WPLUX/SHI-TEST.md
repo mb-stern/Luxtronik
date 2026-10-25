@@ -15,6 +15,10 @@ echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalt
 - `Kommunikation` auf `Modbus TCP / SHI (Testversion)` stellen und übernehmen.
 - Gleiche Geräte-IP wie Java; Modbus-Port **502**, Unit-ID **1**, Timeout **500 ms**
   pro Anfrage. Port, Unit-ID und Timeout (100–5000 ms) sind separat konfigurierbar.
+- Java bleibt auch mit aktivierter Option **Im Java-Betrieb fehlende benötigte
+  Messwerte zusätzlich über Modbus lesen** die bevorzugte Quelle und der Schreibweg.
+  Diese Option ist standardmäßig aus. Sie liest nur benötigte fehlende Register;
+  zusätzliche Holding-Werte bleiben in diesem Betrieb ohne Modbus-Schreibaktion.
 - **Fehlende Messwerte ergänzend über Java lesen** ist standardmäßig aktiv.
   Dafür wird der gespeicherte Java-Port (8888/8889) verwendet und eingeblendet.
   Für einen reinen Modbus-Test diese Ergänzung und die zusätzliche Abfrage unter
@@ -23,7 +27,9 @@ echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalt
 - Als anfänglichen Aktualisierungstakt beispielsweise **30 Sekunden** verwenden.
 - In der bestehenden Checkboxliste zeigt die Spalte **Schnittstelle**:
   `Java`, `Modbus` oder `Java + Modbus`. Variablennamen bekommen keinen Zusatz.
-- Alle 129 dokumentierten Punkte werden intern abgefragt. Nur als `aktiv` ausgewählte Zeilen
+- Im Modbus-Hauptbetrieb werden alle 129 dokumentierten Punkte intern abgefragt.
+  Die Leseergänzung im Java-Betrieb beschränkt sich auf fehlende benötigte Punkte.
+  Nur als `aktiv` ausgewählte Zeilen
   erzeugen zusätzliche Objekte. Die Grafik benötigt keine
   ausgewählten Messvariablen. Hohe IDs der SHI-Zeilen sind Auswahlschlüssel,
   keine Java-Indizes und keine Modbus-Adressen.

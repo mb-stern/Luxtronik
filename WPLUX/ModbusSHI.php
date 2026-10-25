@@ -123,6 +123,88 @@ trait LuxtronikModbusSHI
         return $this->DecodeModbusValue($words,$point['datatype'],(float)$point['factor']);
     }
 
+    private function JavaHasMeasurement(string $ident): bool
+    {
+        $availability=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
+        if(($availability['source']??'')===$this->VisualizationSourceKey()) {
+            if(!empty($availability['failed'])) return false;
+            foreach(self::DATA_POINT_CONFIG as $id=>$point) if($point['name']===$ident) return $id<($availability['count']??0);
+            return false;
+        }
+        return $this->GetCachedVisualizationPoint($ident)!==null;
+    }
+
+    /** Optional read-only Modbus fallback in Java mode; never enables SHI write actions. */
+    private function UpdateModbusSupplement(): void
+    {
+        if(!$this->ReadPropertyBoolean('InstanceStatus') || !$this->ReadPropertyBoolean('ModbusReadSupplement')
+            || $this->ReadPropertyString('CommunicationMode')==='modbus') return;
+        $needed=$this->HybridMeasurementIDs();
+        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
+        $requested=[];
+        foreach($this->SHISelections() as $id=>$point) {
+            if(!isset($needed[$id]) || !empty($point['shared']) || $this->JavaHasMeasurement($point['ident'])) continue;
+            $requested[$point['key']]=$this->SHICatalog()[$point['key']];
+        }
+        $keys=array_keys($requested);
+        $source=$this->VisualizationSourceKey();
+        $previous=$this->SHICache();
+        if(microtime(true)<($previous['nextAttempt']??0) && (!empty($previous['error']) || ($previous['requestedKeys']??null)===$keys)) {
+            $previous['points']=array_intersect_key($previous['points']??[],$requested);
+            $this->SetBuffer('SHICache',json_encode($previous,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+            $this->PublishModbusSupplement();
+            return;
+        }
+        $lock='WPLUX.SHI.'.$this->InstanceID;
+        if(!IPS_SemaphoreEnter($lock,1)) return;
+        $client=null;
+        $cache=['source'=>$source,'updatedAt'=>time(),'stale'=>false,'points'=>[],'requestedKeys'=>$keys,'supplement'=>true,'error'=>null];
+        try {
+            try {
+                if($requested!==[]) $client=$this->NewSHIClient();
+                foreach($requested as $key=>$point) {
+                    try {$value=$this->ReadSHIPoint($client,$point);}
+                    catch(LuxtronikModbusException $error) {
+                        if(!in_array($error->getCode(),[1,2,3],true)) throw $error;
+                        $value=null;
+                    }
+                    if($value===null) continue;
+                    $old=$previous['points'][$key]??null;
+                    $cache['points'][$key]=['value'=>$value,'changedAt'=>$old!==null && $old['value']!==$value?microtime(true):($old['changedAt']??0)];
+                }
+            } catch(Throwable $error) {
+                if($error instanceof LuxtronikInstanceUnavailable) throw $error;
+                $cache['points']=[];
+                $cache['stale']=true;
+                $cache['error']=$error->getMessage();
+                $this->SendDebug('Modbus-Ergänzung',$cache['error'],0);
+            }
+            $cache['nextAttempt']=microtime(true)+($cache['error']!==null?120:5);
+            if($source!==$this->VisualizationSourceKey()) return;
+            $this->SetBuffer('SHICache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+            $this->PublishModbusSupplement();
+        } finally {
+            $client?->close();
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
+    private function PublishModbusSupplement(): void
+    {
+        $selected=[];
+        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if(!empty($row['enabled'])) $selected[(int)$row['id']]=true;
+        foreach($this->SHISelections() as $id=>$point) {
+            if($this->JavaHasMeasurement($point['ident']) || !empty($point['shared'])) continue;
+            $value=$this->GetSHIVisualizationPoint($point['ident']);
+            if($value===null) continue;
+            $this->SendDebug('Datenquelle',$point['ident'].': Modbus ('.$point['key'].'): '.$value['formatted'],0);
+            if(!isset($selected[$id])) continue;
+            $this->EnsureSHIVariable($point);
+            $this->SetValueIfChanged($point['ident'],$value['value']);
+            if($point['bank']==='holding') $this->DisableAction($point['ident']);
+        }
+    }
+
     private function UpdateModbus(): void
     {
         if (!$this->ReadPropertyBoolean('InstanceStatus')) return;
@@ -295,6 +377,7 @@ trait LuxtronikModbusSHI
         $cache=$this->SHICache();
         $points=$cache['points']??[];
         if (!empty($cache['stale'])) return null;
+        if(!empty($cache['supplement']) && time()-($cache['updatedAt']??0)>max(30,2*$this->ReadPropertyInteger('UpdateInterval')+5)) return null;
         foreach ($this->SHISelections() as $point) {
             if ($point['ident']!==$ident) continue;
             $entry=$points[$point['key']]??null;
@@ -504,7 +587,9 @@ trait LuxtronikModbusSHI
             ['type'=>'NumberSpinner','name'=>'ModbusUnitID','caption'=>'Modbus-Geräteadresse (Unit-ID)'],
             ['type'=>'NumberSpinner','name'=>'ModbusTimeout','caption'=>'Modbus-Timeout (Millisekunden, 100–5000)'],
             ['type'=>'CheckBox','name'=>'ModbusJavaSupplement','caption'=>'Fehlende Messwerte ergänzend über Java lesen'],
-            ['type'=>'Label','caption'=>'Alle dokumentierten Werte werden intern gelesen. Zusätzliche Objekte und Bedienpunkte über die ID-Liste auswählen. Die Spalte Schnittstelle zeigt Java, Modbus oder beide Protokolle. Keine automatischen Schreibvorgaben.']]];
+            ['type'=>'CheckBox','name'=>'ModbusReadSupplement','caption'=>'Im Java-Betrieb fehlende benötigte Messwerte zusätzlich über Modbus lesen'],
+            ['type'=>'Label','caption'=>'Die Auswahl Java / Modbus bestimmt den Schreibweg. Ergänzende Leseabfragen führen keine Schreibbefehle aus. Im Java-Betrieb hat Java Vorrang; im Modbus-Betrieb hat Modbus Vorrang.'],
+            ['type'=>'Label','caption'=>'Im Modbus-Betrieb werden alle dokumentierten Werte intern gelesen; die Ergänzung im Java-Betrieb liest nur fehlende benötigte Werte. Zusätzliche Objekte und Bedienpunkte über die ID-Liste auswählen. Keine automatischen Schreibvorgaben.']]];
         $index=count($form['elements']);
         foreach ($form['elements'] as $i=>$element) if (($element['name']??'')==='IDListe') {$index=$i;break;}
         array_splice($form['elements'],$index,0,[$panel]);

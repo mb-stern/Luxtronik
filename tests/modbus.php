@@ -378,5 +378,60 @@ $tests['Java supplementation is optional source-bound and does not introduce Jav
     });
 };
 
+$tests['optional Modbus reads in Java mode fetch only missing selected fields and never enable SHI writes'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m):void {
+        $m->properties['CommunicationMode']='java';$m->properties['ModbusReadSupplement']=true;
+        $m->properties['IDListe']='[{"id":15,"enabled":true},{"id":110310,"enabled":true},{"id":310041,"enabled":true}]';
+        $outdoor=shiVariable($m,'Aussentemperatur',0.0,'Mein Außenfühler','~Temperature');
+        invoke($m,'StoreVisualizationPoints',[15=>0.0]);
+        invoke($m,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'count'=>276]));
+        invoke($m,'UpdateModbusSupplement');
+        check($m->GetIDForIdent('Aussentemperatur')===$outdoor && GetValue($outdoor)===0.0 && IPS_GetName($outdoor)==='Mein Außenfühler','Supplement replaced Java or object identity');
+        check(GetValue($m->GetIDForIdent('SHI_Elektrische_Energie_Gesamt'))===800.0,'Missing energy was not read');
+        $limit=$m->GetIDForIdent('SHI_PC_Limit');
+        check($limit!==false && IPS_GetVariable($limit)['VariableAction']===0,'Read supplement enabled Modbus writes');
+        check(count(array_filter(json_decode($m->GetSHIData(),true)['values'],static fn($point)=>$point['available']))===2,'Unneeded registers fetched');
+        $before=$m->status;invoke($m,'UpdateModbusSupplement');check($m->status===$before,'Supplement changed primary status');
+    },['input'=>[10310=>8000,10108=>650],'holding'=>[10041=>100]]);
+    check(count($requests)===2 && array_column($requests,'address')===[10310,10041],'Extra register requests');
+    check(array_unique(array_column($requests,'function'))===[0=>4,1=>3],'Supplement sent a write function');
+};
+
+$tests['Modbus fallback in Java mode yields to recovered Java without changing Idents'] = static function():void {
+    $m=new Luxtronik();$m->properties['ModbusReadSupplement']=true;
+    $requests=withSHI(static function(Luxtronik $m):void {
+        $m->properties['CommunicationMode']='java';$m->properties['IDListe']='[{"id":15,"enabled":true}]';
+        invoke($m,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'count'=>15]));
+        invoke($m,'UpdateModbusSupplement');
+        $point=invoke($m,'GetVisualizationPointData','OutdoorTemperature');
+        check($point['value']===-2.5 && $point['source']==='Modbus','Missing Java reading not supplemented');
+        $id=$m->GetIDForIdent('Aussentemperatur');
+        invoke($m,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'count'=>276]));
+        invoke($m,'StoreVisualizationPoints',[15=>0.0]);invoke($m,'SetValueIfChanged','Aussentemperatur',0.0);
+        invoke($m,'UpdateModbusSupplement');
+        check(invoke($m,'GetVisualizationPointData','OutdoorTemperature')['source']==='Java' && GetValue($id)===0.0,'Java recovery did not win');
+        check($m->GetIDForIdent('Aussentemperatur')===$id,'Recovery changed the object ID');
+        $m->properties['ModbusReadSupplement']=false;
+        check(invoke($m,'GetSHIVisualizationPoint','Aussentemperatur')===null,'Disabled supplement retained old readings');
+    },['input'=>[10108=>65511]],$m);
+    check(!array_filter($requests,static fn($r)=>!in_array($r['function'],[3,4,2],true)),'Read fallback sent writes');
+};
+
+$tests['a failed optional Modbus scan clears partial values backs off and preserves Java status and object identity'] = static function():void {
+    withSHI(static function(Luxtronik $m):void {
+        $m->properties['CommunicationMode']='java';$m->properties['ModbusReadSupplement']=true;
+        $m->properties['IDListe']='[{"id":15,"enabled":true}]';
+        $id=shiVariable($m,'Aussentemperatur',9.0,'Mein Außenfühler','~Temperature');
+        invoke($m,'SetStatus',102);
+        invoke($m,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'count'=>0,'failed'=>true]));
+        invoke($m,'UpdateModbusSupplement');
+        $cache=json_decode($m->buffers['SHICache'],true);
+        check($cache['stale'] && $cache['points']===[] && $cache['nextAttempt']>time()+100,'Failed supplement exposed a partial scan or immediately retried');
+        check($m->status===102 && $m->GetIDForIdent('Aussentemperatur')===$id && GetValue($id)===9.0,'Failure changed primary status object identity or stored value');
+        check(invoke($m,'GetSHIVisualizationPoint','Aussentemperatur')===null,'Failure revived a stale reading');
+        invoke($m,'UpdateModbusSupplement');
+    },['fault'=>['function'=>4,'address'=>10120,'kind'=>'identity']]);
+};
+
 $failed=0;foreach ($tests as $name=>$test) {try {$test();echo 'PASS '.$name."\n";}catch(Throwable $e){++$failed;fwrite(STDERR,'FAIL '.$name.': '.$e->getMessage()."\n");}}
 echo count($tests).' tests, '.$failed." failures\n";if ($failed) exit(1);

@@ -122,9 +122,10 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - EEV-Lesediagnose mit `WPLUX_GetEEVDiagnosticData($id, 3003)` für Parameter bzw. unverändert mit 3004 für Berechnungswerte; bekannte Zugangsdatenfelder im Parameterexport ausgeblendet.
 - Manueller EEV-Lesetest unter LUX-Bedienfeld → EEV-Diagnose: liest Informationen/Ausgänge über WebSocket und gibt Namen, Feldkennungen und Prozentwerte als kopierbares Ergebnis aus; keine automatische Übernahme oder Regleränderung.
 - EEV-Diagnose als direkt sichtbarer Button im LUX-Fenster; Dialogtexte bleiben auch bei transparentem Kartenhintergrund in hellen und dunklen Themes lesbar.
-- WebSocket als zusätzliche Messquelle und als auswählbare Hauptquelle; Java bleibt Standard. Informationsseiten werden per Name entdeckt, Quellen in der ID-Liste angezeigt, fehlende Werte ergänzt und gültige Nullen beibehalten. Vorhandene Bedienaktionen im WebSocket-Messmodus laufen über Java.
+- WebSocket als automatische Ergänzung und Reserve; Java bleibt Standard, Java/Modbus bestimmen den Schreibweg. Nur benötigte fehlende Werte und deren Informationsseiten werden abgefragt; gültige Nullen bleiben erhalten. Optionale lesende Modbus-Ergänzung auch im Java-Betrieb.
 - EEV Heizen/Kühlen aus bestätigten Webinterface-Feldern intern am Expansionsventil, ohne angelegte Messvariablen; optionale Variablen über die ID-Liste. Vollständiger WebSocket-Lesetest zählt alle angebotenen Informationsfelder. [Details](WEBSOCKET.md).
 - WebSocket-Zuordnung für „Freig. ZWE“ korrigiert: Die Wartezeit darf den bestehenden Wärmepumpentyp (Java-ID 78) nicht überschreiben.
+- 14 zusätzliche WebSocket-Messwerte mit IDs 400006–400019 unten in der Checkboxliste; Objektposition entspricht der ID. Bestehende Idents und Objekt-IDs bleiben erhalten. Automatischer Ersatz bei Java-Ausfall und Rückkehr zu Java nach Erholung; sechs Betriebsstundenzähler mit bestätigten Regler-Beschriftungen zugeordnet.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

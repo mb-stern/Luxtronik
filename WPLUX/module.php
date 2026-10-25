@@ -28,6 +28,7 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyInteger('ModbusUnitID', 1);
         $this->RegisterPropertyInteger('ModbusTimeout', 500);
         $this->RegisterPropertyBoolean('ModbusJavaSupplement', true);
+        $this->RegisterPropertyBoolean('ModbusReadSupplement', false);
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
         $this->RegisterPropertyInteger('Port', 8889);
@@ -1285,6 +1286,7 @@ class Luxtronik extends IPSModuleStrict
         $daten_raw = $this->ReadData(3004);
         if ($daten_raw === null) {
             $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>0,'failed'=>true],JSON_THROW_ON_ERROR));
+            $this->UpdateModbusSupplement();
             $this->UpdateWebEEV();
             $this->RefreshVisualization();
             return;
@@ -1363,6 +1365,7 @@ class Luxtronik extends IPSModuleStrict
          * neue Socket-Verbindung je Sollwert.
          */
         $this->RefreshControlValues();
+        $this->UpdateModbusSupplement();
         $this->UpdateWebEEV();
         $this->RefreshVisualization();
     }

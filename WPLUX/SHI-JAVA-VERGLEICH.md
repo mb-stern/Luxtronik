@@ -22,6 +22,18 @@ erhalten und können die angebotene Auswahl weiter einschränken. Java schreibt
 Reglerparameter; SHI setzt externe Vorgaben. Laut Handbuch setzt der Regler diese
 SHI-Vorgaben nach **15 Minuten ohne Kommunikation** auf Standard zurück.
 
+Das ist der dokumentierte Vorteil für temporäre externe Vorgaben (Handbuch,
+PDF-Seite 5, Abschnitt 3). Daraus folgt keine pauschale Aussage, dass jeder
+Java-/WebSocket-Schreibzugriff einen nichtflüchtigen Speicher beschreibt oder
+jeder Modbus-Zugriff intern garantiert ohne Speicherzugriff bleibt. Solche
+Firmwaredetails sind hier nicht belegt. Reine Messwertabfragen ändern keine
+Reglerparameter; Modbus bleibt auch für zusätzliche Messwerte sinnvoll.
+
+Java bleibt Standard. Optional können im Java-Betrieb fehlende benötigte Werte
+lesend über Modbus ergänzt werden. Diese Ergänzung aktiviert keinen Modbus-
+Schreibweg. Die Auswahl Java/Modbus bestimmt weiterhin die Bedienaktionen;
+WebSocket ergänzt lesend und dient bei Java-Ausfall als Reserve.
+
 ## Zusätzliche Modbus-Sollwerte ohne bisherige Java-Schreibaktion im Modul
 
 | Idents | Holding-Register | Bereich | Bedeutung und Unterschied |

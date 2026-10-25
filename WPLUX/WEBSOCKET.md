@@ -1,6 +1,9 @@
 # WebSocket-Messwerte in 5.0
 
-Unter **Kommunikation** sind Java (Standard), Modbus TCP/SHI und WebSocket wählbar.
+Unter **Kommunikation** sind Java (Standard) und Modbus TCP/SHI wählbar.
+Die Auswahl bestimmt die bevorzugte Quelle und den Schreibweg. WebSocket bleibt
+automatische Ergänzung und Reserve, ohne eigenen Auswahlpunkt. Ein früher gespeicherter
+WebSocket-Modus wird wie Java behandelt; bei der nächsten Auswahl Java speichern.
 Bestehende Idents und Objekt-IDs bleiben erhalten. Die Spalte **Schnittstelle** zeigt
 die für einen Datenpunkt zugeordneten Protokolle; das konkrete Gerät muss das Feld
 auch anbieten. **WebSocket: letzte Abfrage** zeigt zusätzlich, ob das Gerät einen
@@ -9,14 +12,16 @@ fehlgeschlagen ist. Nach einer Abfrage die Konfiguration neu öffnen. Die Auswah
 bleibt auch bei fehlenden Web-Werten für andere zugeordnete Quellen möglich.
 Ein Nullwert oder „Aus“ ist gültig und löst keinen Ersatz aus.
 
-- Java bevorzugt seine aktuellen Messwerte; WebSocket ergänzt fehlende Zuordnungen.
-- WebSocket bevorzugt seine zugeordneten Informationsfelder; fehlende Werte kommen
-  weiter über Java. Java wird deshalb in diesem Modus weiterhin lesend abgefragt.
+- Java bevorzugt seine aktuellen Messwerte. Optional ergänzt Modbus fehlende
+  benötigte Werte; anschließend ergänzt WebSocket die verbleibenden Lücken.
 - Modbus bevorzugt seine aktuellen Register. Die optionale Java-Ergänzung bleibt
   bestehen; zusätzlich können fehlende Werte über WebSocket kommen.
-- Direkte WebSocket-Schreibbefehle sind noch nicht implementiert. Die bisherigen
-  Bedienaktionen verwenden im WebSocket-Messmodus den bewährten Java-Schreibweg
-  mit Rückleseprüfung. Modbus-Bedienpunkte bleiben an den Modbus-Modus gebunden.
+- Ergänzende Modbus-Abfragen im Java-Betrieb sind ausschließlich lesend. Sie werden
+  unter **Modbus TCP / SHI → Im Java-Betrieb fehlende benötigte Messwerte zusätzlich
+  über Modbus lesen** aktiviert (Standard aus; SHI-Firmware erforderlich).
+- Bedienaktionen verwenden ausschließlich den ausgewählten Java- bzw. Modbus-
+  Schreibweg mit Rückleseprüfung. Direkte WebSocket-Parameterschreibbefehle werden
+  nicht verwendet. Die vorhandene LUX-Display-Fernbedienung bleibt verfügbar.
 
 ## Einrichtung und Abdeckung prüfen
 
@@ -28,7 +33,6 @@ Netzwerkeinstellungen können die Ursache sein.
 
 Im Bereich **WebSocket / Messwerte** das Webinterface-Passwort einstellen
 (Standard `999999`). Der zusätzliche Lesezugriff ist standardmäßig aktiviert.
-Bei WebSocket als Hauptquelle wird unabhängig vom Ergänzungsschalter gelesen.
 Die Verbindung läuft vom Symcon-Server auf Port 8214; damit benötigt die normale
 Grafik keinen direkten Browserzugriff auf die Wärmepumpe und funktioniert auch
 in einer HTTPS-Visu.
@@ -36,7 +40,16 @@ in einer HTTPS-Visu.
 Die Informationsseiten werden über ihre Namen und die aktuell gelieferten
 Menükennungen gesucht. Hex-Adressen werden nicht fest gespeichert. Zuordnungen
 prüfen Seitenname, Feldname und Einheit; etwa HUP Ein/Aus und HUP Prozent sind
-getrennte Messwerte. Nicht zugeordnete Informationsfelder bleiben im Diagnosebericht
+getrennte Messwerte. Ein vollständiger Java-Datensatz gilt auch für nicht eigens
+im Grafikpuffer gespeicherte Felder als verfügbar; Null und Aus sind keine Lücken.
+Zyklisch werden nur fehlende Werte für Grafik und ausgewählte Variablen angefordert.
+Es werden nur deren Informationsseiten gelesen. Weil der Regler ganze Seiten liefert,
+können weitere Felder in der Antwort enthalten sein; diese werden nicht als zusätzliche
+Messwerte übernommen. Der Debug nennt nur tatsächlich verwendete Ergänzungen.
+
+Wenn Java ausfällt, werden automatisch auch die benötigten, zugeordneten Ersatzfelder
+angefordert. Nach Erholung übernimmt wieder Java mit denselben Idents und Objekt-IDs.
+Nicht zugeordnete Informationsfelder bleiben im Diagnosebericht
 sichtbar und erzeugen keine erfundenen Java-IDs oder Variablen.
 
 Eine allgemeine Anzahl lässt sich nicht angeben: Modell, Firmware und Konfiguration
@@ -44,8 +57,8 @@ bestimmen die angebotenen Seiten. Im **LUX-Bedienfeld → Alle WebSocket-Werte t
 werden alle angebotenen Informationsseiten gelesen. Das Ergebnis enthält die
 Gesamtzahl unter `count` und die Felder je Seite unter `groups`. Der bekannte
 EEV-Einzellesetest umfasst lediglich die Ausgänge; im bestätigten Gerät waren
-das 25 Felder, die alle zugeordnet sind. Die Gesamtzahl der übrigen Seiten ist
-noch nicht am Gerät ermittelt. Erfasst werden lesbare Informationsfelder; dies
+das 25 Felder, die alle zugeordnet sind. Der erste vollständige Bericht enthält
+104 Einträge auf zehn Seiten. Erfasst werden lesbare Informationsfelder; dies
 ist keine vollständige Erfassung aller Einstellparameter.
 
 Die angebotenen Felder können sich mit der Anlagenkonfiguration ändern. Ein
@@ -56,7 +69,38 @@ anzeigen. Deshalb wird aus der Feldliste keine Anlagenkonfiguration abgeleitet.
 Der optionale Browsertest benötigt eine über HTTP geöffnete Visu und ihr
 Webinterface-Passwort. Die reguläre Serverabfrage benötigt diesen Browsertest nicht.
 Sie verwendet PHP DOM zum XML-Lesen. Unter **Datenquelle** erscheint im Debug die
-verwendete Herkunft; zusätzliche verfügbare Web-Werte werden getrennt gemeldet.
+verwendete Herkunft. „Hauptquelle liefert Wert“ und „Nicht angefordert“ unterscheiden
+bewusst ausgelassene Ergänzungen von fehlgeschlagenen Abfragen. Die zyklische Anzahl
+bezieht sich auf gelesene Seiten, nicht auf alle Informationsseiten des Reglers.
+
+## Zusätzliche auswählbare IDs und Positionen
+
+Die bestehenden Idents, Objekt-IDs und Java-IDs bleiben erhalten. Die bisherigen
+WebSocket-IDs 400001–400005 bleiben ebenfalls unverändert. Zusätzliche Zeilen werden
+unten angehängt; nur ausgewählte Zeilen erzeugen Messobjekte. Die Position eines
+WebSocket-Zusatzobjekts entspricht seiner Auswahl-ID, auch bei bereits vorhandenen
+WebSocket-Objekten mit bisheriger Position 0. Namen und Profile bestehender Objekte
+werden dabei nicht verändert.
+
+| ID | Ident | Wert |
+| --- | --- | --- |
+| 400006 | `Freigabe_ZWE_Restzeit` | Restzeit Freigabe ZWE |
+| 400007 | `Freigabe_Kuehlung_Restzeit` | Restzeit Freigabe Kühlung, kein boolescher Freigabestatus |
+| 400008 | `Durchschnittliche_Laufzeit_Verdichter_1` | Laufzeit Ø VD1 |
+| 400009 | `Softwarestand` | Vollständiger Softwarestand einschließlich Revision |
+| 400010 | `Softwarestand_HZ_IO` | HZ/IO |
+| 400011 | `Softwarestand_ASB` | ASB |
+| 400012 | `Hardware_Revision_ASB` | ASB HW Revision |
+| 400013 | `Softwarestand_Inverter` | Inverter SW Version |
+| 400014 | `Abtaubedarf` | Prozent |
+| 400015 | `Letzte_Abtauung` | Datum/Uhrzeit wie im Regler, ohne angenommene Zeitzone |
+| 400016 | `Waermemengenzaehler_Zusatzwaermeerzeuger` | kWh |
+| 400017 | `Waermemengenzaehler_Seit_Datum` | kWh seit angegebenem Reglerdatum |
+| 400018 | `Waermemengenzaehler_Seit_Reset` | kWh seit Regler-Reset |
+| 400019 | `GLT_Art` | Art der GLT-Anbindung |
+
+Die bestätigten unterschiedlichen Schreibweisen der sechs Betriebsstundenzähler
+werden bestehenden Java-Idents zugeordnet; dafür entstehen keine neuen Idents.
 
 ```php
 // Normale Abfrage über die gewählte Hauptquelle und aktivierte Ergänzungen.

@@ -36,7 +36,8 @@ function IPS_InstanceExists(int $id): bool { return isset($GLOBALS['testInstance
 function IPS_LogMessage(string $sender, string $message): bool { $GLOBALS['testGlobalLogs'][] = [$sender,$message]; return true; }
 function IPS_GetKernelRunlevel(): int { return KR_READY; }
 function IPS_GetName(int $id): string { return $GLOBALS['testVariables'][$id]['name'] ?? ''; }
-function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '']; }
+function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '', 'ObjectPosition' => $GLOBALS['testVariables'][$id]['position'] ?? 0]; }
+function IPS_SetPosition(int $id, int $position): bool { $GLOBALS['testVariables'][$id]['position']=$position; return true; }
 function IPS_GetParent(int $id): int { return $GLOBALS['testVariables'][$id]['instance'] ?? 0; }
 function IPS_GetVariablePresentation(int $id): array { return $GLOBALS['testVariables'][$id]['presentation'] ?? []; }
 function GetValueFormatted(int $id): string {
@@ -150,21 +151,21 @@ class IPSModuleStrict
 
     protected function RegisterVariableBoolean(string $ident, string $name, string $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_BOOLEAN, false, $name, $profile);
+        return $this->register($ident, VARIABLETYPE_BOOLEAN, false, $name, $profile, $position);
     }
     public function RegisterVariableInteger(string $ident, string $name, string $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_INTEGER, 0, $name, $profile);
+        return $this->register($ident, VARIABLETYPE_INTEGER, 0, $name, $profile, $position);
     }
     public function RegisterVariableFloat(string $ident, string $name, string $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_FLOAT, 0.0, $name, $profile);
+        return $this->register($ident, VARIABLETYPE_FLOAT, 0.0, $name, $profile, $position);
     }
     public function RegisterVariableString(string $ident, string $name, string $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_STRING, '', $name, $profile);
+        return $this->register($ident, VARIABLETYPE_STRING, '', $name, $profile, $position);
     }
-    private function register(string $ident, int $type, mixed $initial, string $name, string $profile): bool
+    private function register(string $ident, int $type, mixed $initial, string $name, string $profile, int $position = 0): bool
     {
         $id = $this->GetIDForIdent($ident);
         if ($id !== false && IPS_GetVariable($id)['VariableType'] === $type) {
@@ -176,7 +177,7 @@ class IPSModuleStrict
         }
         $GLOBALS['testVariables'][++$GLOBALS['testNextID']] = [
             'ident' => $ident, 'instance' => $this->InstanceID, 'type' => $type, 'value' => $initial,
-            'name' => $name, 'profile' => $profile
+            'name' => $name, 'profile' => $profile, 'position' => $position
         ];
         return true;
     }
