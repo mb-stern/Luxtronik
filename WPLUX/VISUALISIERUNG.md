@@ -30,8 +30,8 @@ ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
   und die zugeordneten Mischerventile. Separate Heizkreispumpen und doppelte
   Temperaturbeschriftungen an den Mischern entfallen in der vereinfachten Grafik.
 - Bis zu drei optionale Raumtemperaturen mit frei wählbarer Bezeichnung
-  (leer = Variablenname). Ein Einzelwert wird größer dargestellt. Auf Wunsch
-  wird das Variablensymbol verwendet, sonst ein Haus. Je Raum sind Name, Icon
+  (leer = Variablenname). Ein Einzelwert wird größer dargestellt. Für Icons
+  wird das Variablensymbol verwendet, ersatzweise ein Haus. Je Raum sind Name, Icon
   oder beides wählbar; eine zusätzliche Überschrift „Innentemperatur“ entfällt.
 - Unter **Heizstäbe** bis zu drei Ist-Leistungsvariablen (W oder kW laut Profil;
   ohne Einheit W) und jeweils eine optionale Schaltvariable mit Aktion und
@@ -100,8 +100,10 @@ und FP3 (140) für Mischkreis 3. Nur HUP hat hier den bestätigten Prozentwert 1
 Der BUP-Ausgang wird nicht als Pufferspeicher-Ladepumpe dargestellt.
 
 Der externe Rücklauffühler `Ruecklauftemperatur_im_Trennspeicher` (Java-ID 13,
-SHI-IR 10102) dient je nach Hydraulikschema der Regelung. Er wird nicht pauschal
-als Puffertemperatur angezeigt; der Datenpunkt bleibt über die ID-Liste verfügbar.
+SHI-IR 10102) dient je nach Hydraulikschema der Regelung. Bei aktiviertem Heizpuffer
+steht dieser Fühlerwert mittig im Speicher; der Tooltip nennt seine Herkunft.
+Die Platzierung bezeichnet keine zusätzliche Messung in der Speichermitte.
+Obere und untere Speicherwerte erscheinen nur mit separat zugeordneten Fühlern.
 Solarthermie nutzt
 `Fuehler_Solarkollektor` (26), `Fuehler_Solarspeicher` (27) und
 `Ausgang_Solarladepumpe` (52). Die Komponenten-Schalter steuern die Darstellung

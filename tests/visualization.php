@@ -95,6 +95,7 @@ $tests['visualization settings expose only external additions and layout without
     $panel = array_values(array_filter($form['elements'], fn($e) => ($e['caption'] ?? '') === 'HTML-SDK / Visualisierung'));
     check(count($panel) === 1, 'HTML-SDK settings missing');
     $sdkFields = fields($panel[0]);
+    check(!isset($sdkFields['VisualizationRoomIcons']),'Redundant global room icon switch retained');
     foreach (['VisualizationMixedCircuit1', 'VisualizationMixedCircuit2', 'VisualizationMixedCircuit3', 'VisualizationDirectCircuit'] as $removed) {
         check(!isset($sdkFields[$removed]), 'Obsolete mixer configuration retained');
     }
@@ -290,6 +291,7 @@ $tests['old circuit settings migrate once while preserving configuration and att
 
 $tests['three named room sources keep duplicate IDs zero values and safe variable icons'] = static function (): void {
     $module = roomVisualization(3);
+    $module->properties['VisualizationRoomIcons'] = false; // Removed global switch must not override per-room display.
     $payload = visualizationPayload($module);
     check(count($payload['config']['roomTemperatures']) === 3, 'Missing room sources');
     check($payload['config']['roomTemperatures'][0]['label'] === 'Wohnzimmer', 'Variable name fallback missing');
@@ -548,13 +550,17 @@ $tests['buffer solar circulation and pump data are internal and component-contro
     foreach ([13,26,27,46,52] as $id) check(!isset($points[$id]),'Disabled component requests data');
     $module->properties['TankHP']=true; $module->properties['ThermalSolarAvailable']=true; $module->properties['VisualizationCirculation']=true;
     $points=invoke($module,'GetVisualizationRequiredPointIDs');
-    foreach ([26,27,46,52] as $id) check(isset($points[$id]),'Enabled component data not requested');
-    check(!isset($points[13]),'External return automatically treated as a buffer sensor');
+    foreach ([13,26,27,46,52] as $id) check(isset($points[$id]),'Enabled component data not requested');
     invoke($module,'StoreVisualizationPoints',[13=>28.5,26=>65.0,27=>42.0,46=>true,52=>true,183=>31.7]);
     $data=invoke($module,'BuildVisualizationData');
-    check(!isset($data['bufferReturnTemperature']) && $data['solarStorageTemperature']['value']===42.0,'Storage data rescaled or external return shown at buffer');
+    check(!isset($data['bufferReturnTemperature']) && $data['solarStorageTemperature']['value']===42.0,'Storage data rescaled or obsolete separate return label retained');
     check($data['thermalSolarPump']['value']===true && $data['circulatingPumpRunning']['value']===true,'Pump state missing');
     check($data['heatingCircuitPumpValue']['value']===31.7,'HUP control missing');
+    check($data['tankTempHPMiddle']['ident']==='Ruecklauftemperatur_im_Trennspeicher'
+        && $data['tankTempHPMiddle']['value']===28.5,'Existing buffer Ident not connected');
+    check(!isset($data['tankTempHPUp']) && !isset($data['tankTempHPDown']),'A single buffer sensor invented additional levels');
+    invoke($module,'StoreVisualizationPoints',[13=>0.0,11=>35.0,27=>42.0]);
+    check(invoke($module,'BuildVisualizationData')['tankTempHPMiddle']['value']===0.0,'Zero buffer reading replaced with another temperature');
     check(!isset($data['heatingPumpSpeed']),'Pump rpm invented from percentage');
     check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Component values created objects');
 };

@@ -44,6 +44,7 @@ trait LuxtronikVisualization
         'PoolControlVariable' => ['Mode_Schwimmbad'],
         'RoomTemperatureSetpointVariable' => ['Anpassung_RBE'],
         'HeatPumpReturnTemperature' => ['Ruecklauftemperatur_Heizkreis'],
+        'TankTempHPMiddle' => ['Ruecklauftemperatur_im_Trennspeicher'],
         'SupplyTemperatureHeating2' => ['Mischkreis_2_Vorlauftemperatur'],
         'SupplyTemperatureHeating3' => ['Mischkreis_3_Vorlauftemperatur'],
         'MixerActual1' => ['Mischkreis_1_Vorlauftemperatur'], 'MixerTarget1' => ['Mischkreis_1_Vorlauf_Soll_Temperatur'],
@@ -94,7 +95,7 @@ trait LuxtronikVisualization
             $this->RegisterPropertyString('VisualizationHeaterOnValue' . $i, '');
             $this->RegisterPropertyString('VisualizationHeaterOffValue' . $i, '');
         }
-        $this->RegisterPropertyBoolean('VisualizationRoomIcons', true);
+        $this->RegisterPropertyBoolean('VisualizationRoomIcons', true); // Legacy saved setting; display is now selected per room.
         $this->RegisterPropertyInteger('VisualizationWeatherCode', 0);
         $this->RegisterPropertyBoolean('VisualizationCirculation', false);
         $this->RegisterPropertyString('VisualizationSolarTarget', 'hotwater');
@@ -3098,9 +3099,11 @@ window.SymconHeatPump = {
             });
 
 
-            const waterSupplyY = 592.5;
-            const waterReturnY = 762.5;
-            const dhwLift = -45.5;
+            const waterSupplyY = 640;
+            const waterReturnY = 847;
+            const boilerValveX = 850;
+            // Tank base and WP enclosure share the same baseline (y=910).
+            const dhwLift = 39;
             const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0,3) : [];
             const narrowHydraulics = !previewAll && !cfg.tankHP && !cfg.thermalSolarAvailable;
             const dhwShift = previewAll || cfg.thermalSolarAvailable || cfg.circulation ? 24 : 80;
@@ -3111,9 +3114,12 @@ window.SymconHeatPump = {
             const coldHeaderX = cfg.tankHP ? 955 : 790;
             const coldHeaderLocalX = coldHeaderX - heatingShift;
             const branchSupplyX = n => hk2 ? (n === 1 ? 730 : 825) : 825;
-            const internalMixerY = 505;
-            const supplyHeaderY = cfg.tankHP ? 545 : 565;
+            const internalMixerY = 550;
+            const supplyHeaderY = 575;
             svg.querySelector('#heatPumpPanel')?.setAttribute('width','862');
+            svg.querySelector('#main > path.hot')?.setAttribute('d','M650 680H670V'+waterSupplyY+'H'+boilerValveX);
+            svg.querySelector('#main > path.cold')?.setAttribute('d','M790 '+waterReturnY+'H670V705H650');
+            svg.querySelector('#switchValve')?.setAttribute('transform','translate('+boilerValveX+' '+waterSupplyY+')');
 
             // Separate supply/return headers feed each independently mixed branch.
             const lastCircuit = hk3 ? 3 : (hk2 ? 2 : 1);
@@ -3125,7 +3131,7 @@ window.SymconHeatPump = {
                 const y = 245 + (n - 1) * 120;
                 const mixedBranch = mixers.some(item => (item.circuit || item.number) === n);
                 const startY = mixedBranch ? internalMixerY - 18 : supplyHeaderY;
-                const route = cfg.tankHP ? 'V'+(n===1?435:425)+'H'+((n===1?935:975)-heatingShift) : '';
+                const route = cfg.tankHP ? 'V'+(n===1?440:480)+'H'+((n===1?935:975)-heatingShift) : '';
                 svg.querySelector('#gHK' + n + ' > path.hot')?.setAttribute('d','M' + (branchSupplyX(n) - heatingShift) + ' ' + startY + route + 'V' + y + 'H1260');
                 svg.querySelector('#gHK' + n + ' > path.cold')?.setAttribute('d','M1260 ' + (y + 50) + 'H' + coldHeaderLocalX);
                 svg.querySelector('#gHKPumpIcon' + n)?.setAttribute('transform','translate(-25 0)');
@@ -3136,14 +3142,14 @@ window.SymconHeatPump = {
             }).join(' ');
             const supplyLeft = hk1 ? branchSupplyX(1) : branchSupplyX(2);
             const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
-            const bufferGeometry = ['M825 ' + (waterSupplyY - 25) + 'V555H690V245H720','M720 380H705V440H790V' + waterReturnY,
+            const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25) + 'V590H690V245H720','M720 380H705V450H790V' + waterReturnY,
                 'M890 245H905V'+supplyHeaderY+'H'+supplyLeft+' '+inputs,
                 'M955 '+lastReturn+'V440H790 M955 '+lastReturn+'V380H890'];
             bufferPaths.forEach((path,index) => {
                 path.setAttribute('d',bufferGeometry[index]);
                 path.setAttribute('id',['pathBufferChargeSupply','pathBufferChargeReturn','pathBufferManifoldSupply','pathBufferManifoldReturn'][index]);
             });
-            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M825 ' + (waterSupplyY - 25) + 'V'+supplyHeaderY+'H'+supplyLeft+' '+inputs);
+            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M'+boilerValveX+' ' + (waterSupplyY - 25) + 'V'+supplyHeaderY+'H'+supplyLeft+' '+inputs);
             svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M' + coldHeaderX + ' ' + firstReturn + 'H790V' + waterReturnY);
 
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
@@ -3152,15 +3158,19 @@ window.SymconHeatPump = {
             const solarHotWater = !!cfg.thermalSolarAvailable && !solarBuffer;
             show('#gDHW', previewAll || !!cfg.tankWW || solarHotWater);
             svg.querySelector('#gDHW')?.setAttribute('transform','translate(' + dhwShift + ' ' + dhwLift + ')');
-            svg.querySelector('#gDHW > path.hot')?.setAttribute('d','M' + (850 - dhwShift) + ' ' + (waterSupplyY - dhwLift) + 'H900');
+            svg.querySelector('#gDHW > path.hot')?.setAttribute('d','M' + (boilerValveX + 25 - dhwShift) + ' ' + (waterSupplyY - dhwLift) + 'H900');
             svg.querySelector('#gDHW > path.cold')?.setAttribute('d','M900 ' + (waterReturnY - dhwLift) + 'H' + (790 - dhwShift));
+            svg.querySelector('#gCirculatingPumpVisual')?.setAttribute('transform','translate(-16 70)');
             show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? heating : true)));
+            // Paint solar behind the hydraulic pipes; its overhead routes stay above the buffer.
+            const solar = svg.querySelector('#gSolar');
+            if (solar) svg.insertBefore(solar,svg.querySelector('#heatPump'));
             const solarPipe = svg.querySelector('#gSolar > path.sol');
             if (solarPipe) solarPipe.setAttribute('d', solarBuffer
-                ? 'M884 300H910V155H1230V680H1260M1260 820H1245V140H900V330H884'
+                ? 'M884 255H915V155H1230V680H1260M1260 820H1245V140H900V225H884'
                 : 'M' + (1064 + dhwShift) + ' ' + (790 + dhwLift) + 'H1185V680H1260M1260 820H1185V' + (835 + dhwLift) + 'H' + (1064 + dhwShift));
             const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
-            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : 'translate(0 ' + dhwLift + ')');
+            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : 'translate(35 -75)');
 
             // Optional DHW circulation uses its confirmed native output.
             show(
@@ -3298,7 +3308,7 @@ window.SymconHeatPump = {
                 const mixer = mixers.find(item => (item.circuit || item.number) === n);
                 if (!mixer || n>2 || ![hk1,hk2][n - 1]) return;
                 const x = branchSupplyX(n);
-                const returnPath = x<790 ? 'M790 550H700V'+internalMixerY+'H'+(x-18) : 'M790 '+internalMixerY+'H'+(x-18);
+                const returnPath = x<790 ? 'M790 510H700V'+internalMixerY+'H'+(x-18) : 'M790 '+internalMixerY+'H'+(x-18);
                 node(hydraulic, 'path', {id:'pathHKMixingReturn' + n,class:'cold',d:returnPath});
                 mixerSymbol(hydraulic, mixer, x, internalMixerY, 18);
                 const readings = node(mixerReadings, 'g', {id:'gMixerReading' + n,transform:'translate(' + (x-45) + ' 470)'});
@@ -3415,6 +3425,10 @@ window.SymconHeatPump = {
                 ['#textTankTempHPMiddle', cfg.tankTempHPMiddle, 128],
                 ['#textTankTempHPDown', cfg.tankTempHPDown, 190]
             ]);
+            const bufferReading = svg.querySelector('#textTankTempHPMiddle');
+            if (bufferReading && data[cfg.tankTempHPMiddle]?.ident === 'Ruecklauftemperatur_im_Trennspeicher') {
+                node(bufferReading,'title',{},'Externer Rücklauffühler im Trennspeicher (Luxtronik ID 13)');
+            }
             const solarReading = group('gSolarStorageReading', svg.querySelector('#gSolar'));
             if (formatted(cfg.solarStorageTemperature)) {
                 fittedText(solarReading, {id:'textSolarStorageTemperature', class:'sm', x:1295, y:900,
@@ -3573,12 +3587,12 @@ window.SymconHeatPump = {
                     visibleStatus=visibleStatus.slice(0,-1);status.textContent=visibleStatus+'…';
                 }
             }
-            const waterLineGap = 12;
+            const waterLineGap = 24;
             const flow = formatted(cfg.heatingFlow);
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:waterSupplyY - waterLineGap,
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:waterSupplyY - 22,
                     'dominant-baseline':'text-after-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 110);
             }
@@ -3595,7 +3609,7 @@ window.SymconHeatPump = {
                 fittedText(wpTemperatures,{id,class:'sm',x:0,
                     y:lineY + (below ? waterLineGap : -waterLineGap),
                     'dominant-baseline':below ? 'text-before-edge' : 'text-after-edge'},
-                    label + ': ' + reading,below ? 155 : 105);
+                    label + ': ' + reading,id === 'textWPReturnTarget' ? 155 : 105);
             });
 
             // Touch handling. Bind once per SVG element.
@@ -3788,15 +3802,15 @@ window.SymconHeatPump = {
             if(!primaryPumpSymbol) {
                 primaryPumpSymbol = node(svg.querySelector('#main'),'g',{id:'gPrimaryWaterPump'});
                 node(primaryPumpSymbol,'title',{},'Gemeinsame Heizwasserumwälzpumpe (HUP) vor der Boiler-/Heizungsumschaltung; schematische Anordnung');
-                node(primaryPumpSymbol,'circle',{cx:670,cy:660,r:18,fill:'var(--wp-button)',stroke:'var(--wp-icon)','stroke-width':2});
-                const pumpCenter = node(primaryPumpSymbol,'g',{transform:'translate(670 660)'});
+                node(primaryPumpSymbol,'circle',{cx:750,cy:waterSupplyY,r:18,fill:'var(--wp-button)',stroke:'var(--wp-icon)','stroke-width':2});
+                const pumpCenter = node(primaryPumpSymbol,'g',{transform:'translate(750 '+waterSupplyY+')'});
                 node(pumpCenter,'circle',{r:12,fill:'none',stroke:'var(--wp-icon)','stroke-width':1.5});
                 const rotor = node(pumpCenter,'g',{id:'primaryPumpRotor',class:'hk-pump-rotor',fill:'var(--wp-icon)'});
                 [0,120,240].forEach(angle=>node(rotor,'path',{
                     d:'M-2-10C5-9 9-5 9-1C5-3 1-3-2-2C0-5 0-8-2-10Z',transform:'rotate('+angle+')'}));
                 node(rotor,'circle',{r:3.5});
-                node(primaryPumpSymbol,'text',{id:'textPrimaryPumpValue',class:'sm',x:700,y:660,
-                    'dominant-baseline':'middle',style:'font-size:18px'});
+                node(primaryPumpSymbol,'text',{id:'textPrimaryPumpValue',class:'sm',x:750,y:712,
+                    'text-anchor':'middle','dominant-baseline':'middle',style:'font-size:18px'});
             }
             show('#gPrimaryWaterPump',hasPrimaryPump);
             const primaryRotor = svg.querySelector('#primaryPumpRotor');
@@ -4043,7 +4057,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         }
         if ($property === 'InputPower') return 0;
         if (isset(self::VISUALIZATION_EXTRA_IDENT_MAP[$property])
-            && !in_array($property, ['ThermalSolarPump','HeatPumpReturnTemperature','SupplyTemperatureHeating2','SupplyTemperatureHeating3'], true)) return 0;
+            && !in_array($property, ['ThermalSolarPump','HeatPumpReturnTemperature','TankTempHPMiddle','SupplyTemperatureHeating2','SupplyTemperatureHeating3'], true)) return 0;
         $configured = $this->ReadPropertyInteger($property);
         if ($configured <= 0 || !IPS_VariableExists($configured)) return 0;
         // A legacy binding to the common WP sensor is no longer a circuit measurement.
@@ -4559,6 +4573,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             if ($property === 'ThermalSolarPanelTemp' && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
             if (in_array($property, ['SolarStorageTemperature', 'ThermalSolarPump'], true) && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
             if ($property === 'CirculatingPumpRunning' && !$this->ReadPropertyBoolean('VisualizationCirculation')) continue;
+            if ($property === 'TankTempHPMiddle' && !$this->ReadPropertyBoolean('TankHP')) continue;
             foreach ($this->GetVisualizationIdents($property) as $ident) $idents[$ident] = true;
         }
         $result = [];
@@ -4616,20 +4631,17 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             $id = $this->ReadPropertyInteger('VisualizationRoomVariable' . $i);
             if ($id <= 0 || !IPS_VariableExists($id)) continue;
             $label = trim($this->ReadPropertyString('VisualizationRoomLabel' . $i));
-            $icon = '';
-            if ($this->ReadPropertyBoolean('VisualizationRoomIcons')) {
-                $icon = (string)(IPS_GetObject($id)['ObjectIcon'] ?? '');
-                if ($icon === '') {
-                    $presentation = $this->VisualizationPresentation($id);
-                    $icon = (string)($presentation['ICON'] ?? '');
-                    foreach ($this->VisualizationAssociations($id) as $option) {
-                        if (GetValue($id) === $option['value'] && !empty($option['icon'])) { $icon = $option['icon']; break; }
-                    }
+            $icon = (string)(IPS_GetObject($id)['ObjectIcon'] ?? '');
+            if ($icon === '') {
+                $presentation = $this->VisualizationPresentation($id);
+                $icon = (string)($presentation['ICON'] ?? '');
+                foreach ($this->VisualizationAssociations($id) as $option) {
+                    if (GetValue($id) === $option['value'] && !empty($option['icon'])) { $icon = $option['icon']; break; }
                 }
-                if ($icon === '') {
-                    $profile = $this->GetVariableProfileName($id);
-                    if ($profile !== '' && IPS_VariableProfileExists($profile)) $icon = (string)(IPS_GetVariableProfile($profile)['Icon'] ?? '');
-                }
+            }
+            if ($icon === '') {
+                $profile = $this->GetVariableProfileName($id);
+                if ($profile !== '' && IPS_VariableProfileExists($profile)) $icon = (string)(IPS_GetVariableProfile($profile)['Icon'] ?? '');
             }
             $display = $this->ReadPropertyString('VisualizationRoomDisplay' . $i);
             $sources[] = ['key' => 'roomTemperature' . $i, 'variableId' => $id,
@@ -4652,7 +4664,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function VisualizationRoomFields(): array
     {
-        $fields = [['type' => 'CheckBox', 'name' => 'VisualizationRoomIcons', 'caption' => 'Variablensymbole verwenden (sonst Haus)']];
+        $fields = [];
         for ($i = 1; $i <= 3; ++$i) {
             $fields[] = ['type' => 'RowLayout', 'items' => [
                 ['type' => 'ValidationTextBox', 'name' => 'VisualizationRoomLabel' . $i, 'caption' => 'Raum ' . $i . ' (leer = Variablenname)'],

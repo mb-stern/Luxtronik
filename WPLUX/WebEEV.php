@@ -238,6 +238,7 @@ trait LuxtronikWebEEV
     // Selection IDs refer to existing native Idents, not to WebSocket memory addresses.
     private const WEB_NATIVE_FIELDS = [
         10=>['Temperaturen','Vorlauf','°C'],11=>['Temperaturen','Rücklauf','°C'],12=>['Temperaturen','Rückl.-Soll','°C'],
+        13=>['Temperaturen',['Rückl.-Extern','Rücklauf extern','Rücklauf-Extern'],'°C'],
         14=>['Temperaturen','Heissgas','°C'],15=>['Temperaturen','Außentemperatur','°C'],16=>['Temperaturen','Mitteltemperatur','°C'],
         17=>['Temperaturen','Warmwasser-Ist','°C'],18=>['Temperaturen','Warmwasser-Soll','°C'],19=>['Temperaturen','Wärmequelle-Ein','°C'],
         21=>['Temperaturen','Mischkreis1-Vorlauf','°C'],22=>['Temperaturen','Mischkreis1 VL-Soll','°C'],
