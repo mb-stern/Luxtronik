@@ -24,10 +24,11 @@ ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
 - Komponenten-Checkboxen für Puffer, Warmwasserspeicher und Solarthermie.
 - Optionale Warmwasser-Zirkulation mit Pumpe, Leitung und Hahn; ihr Zustand
   stammt intern von `Ausgang_Zirkulationspumpe` (ID 46).
-- Checkboxen für die drei Heizkreisplätze der ursprünglichen Grafik.
-- Mischkreis 1 erscheint standardmäßig mit Ist/Soll und Ventilsymbol nahe der
-  Wärmepumpe. Weitere Mischerdaten erscheinen automatisch bei vorhandenen Idents;
-  dafür gibt es keine Konfigurationsschalter.
+- Zwei Heizkreisplätze: HK1 als Standard, HK2 optional. Je Platz Name und
+  Direktanbindung oder Zuordnung zu einem der bestehenden Mischkreise 1–3 wählen.
+- Eine gemeinsame HUP mit Prozentwert im Gerätebereich, dazu Boiler-Umschaltventil
+  und die zugeordneten Mischerventile. Separate Heizkreispumpen und doppelte
+  Temperaturbeschriftungen an den Mischern entfallen in der vereinfachten Grafik.
 - Bis zu drei optionale Raumtemperaturen mit frei wählbarer Bezeichnung
   (leer = Variablenname). Ein Einzelwert wird größer dargestellt. Auf Wunsch
   wird das Variablensymbol verwendet, sonst ein Haus. Je Raum sind Name, Icon
@@ -51,23 +52,26 @@ interne Heizkreiswerte. Ein umfassendes Zuordnungsformular, Zuordnungsdiagnosen,
 Tabellen, ein Importbutton und ein manueller Modus entfallen.
 
 Die Warmwasserbereitung bleibt ein eigener Speicher-/Ladekreis und belegt keinen
-der drei Heizkreisplätze. Vom Luxtronik-Regler gelieferte Mischkreiswerte
+der zwei Heizkreisplätze. Vom Luxtronik-Regler gelieferte Mischkreiswerte
 sind interne Werte, auch wenn Mischer und Pumpen außerhalb des Wärmepumpengehäuses
 montiert sind. Fremdvariablen stammen beispielsweise von separaten Symcon-Zählern.
 
 Je Heizkreis lässt sich eine **Bezeichnung** vergeben. Unter **Anbindung** wird zwischen **Direkt** und **Mischkreis 1–3**
-gewählt. Standardmäßig gehört Mischer 1 zu Heizkreis 1, entsprechend 2 und 3.
+gewählt. Standardmäßig ist Mischkreis 1 Heizkreis 1 zugeordnet und Mischkreis 2 dem optionalen Heizkreis 2. Der dritte Regler-Mischkreis bleibt als Datenquelle und in der ID-Liste erhalten; ein dritter Grafikabgang wird nicht gezeichnet.
 Nur aktivierte Heizkreisplätze zeigen ihre ausgewählten Mischer. Messwerte allein
 beweisen nicht, dass ein Mischkreis tatsächlich verbaut ist.
 
-Der optionale Parallelpuffer sitzt links beim Infobereich, vor dem Verteiler.
-Jeder gemischte Abgang erhält rechts davon sein eigenes Ventil mit
-Rücklaufbeimischung, Pumpe und Heizfläche. Ohne Puffer führen die Leitungen direkt
-von der Wärmepumpe zu den Abgängen; direkte Heizkreise zeigen kein Mischerventil.
-Die Heizfläche steht stellvertretend für die angeschlossenen Verbraucher. Ohne
-Puffer und Solarthermie rücken die Heizkreisabgänge automatisch nach links;
-die Zeichenfläche passt sich bis zur Bedienleiste an. Mindestabstände
-für Mischer und Pumpen bleiben erhalten. Dies ist keine separate Kompaktansicht.
+Das Schema enthält eine gemeinsame HUP vor dem Boiler-Umschaltventil. Dahinter
+zweigt die Boilerladung ab; im Heizungszweig folgen der optionale Puffer und die
+zugeordneten Mischer. Die HUP, das Umschaltventil und bis zu zwei Mischer sind zur
+kompakten Darstellung im Gerätebereich angeordnet. Bei Puffer führen die Leitungen
+zuerst zum Speicher und danach zu den Mischern zurück. Außen stehen nur die beiden
+Heizkreisabgänge mit ihren Temperaturen. Die Grafik ist kein vollständiger
+Installationsplan: Bei hydraulischer Trennung können weitere reale Pumpen nötig sein,
+die in diesem vereinfachten Bild nicht zusätzlich gezeichnet werden. Eine Reihe von
+Fußbodenheizungsschleifen ist nicht automatisch eine Reihe eigener Mischkreise.
+Ohne Puffer und Solarthermie rücken die Abgänge nach links; die Zeichenfläche passt
+sich bis zur Bedienleiste an. Direkte Heizkreise erhalten kein Mischerventil.
 
 Der allgemeine Vorlauf nutzt `Vorlauftemperatur_Heizkreis` (ID 10). Ein separater
 allgemeiner Sekundärvorlauf ist in der verwendeten Schnittstelle nicht bestätigt.
@@ -116,12 +120,14 @@ Instanzvariablen `copfaktor` und `jazfaktor`, sobald sie vorhanden sind. Die Gra
 deren berechnete Werte und Live-Änderungen; Berechnung und Zählerkonfiguration
 bleiben im bestehenden Luxtronik-Modul.
 Beschriftungen und Werte verwenden dieselben Schriftstile wie die anderen
-Leistungsfelder; COP/JAZ werden nicht horizontal verkleinert.
+Leistungsfelder. COP, JAZ und der anklickbare Link **Fehler: Anzahl** stehen in einer
+gemeinsamen Zeile. Bei längeren Werten wird die Zeile innerhalb ihres verfügbaren
+Platzes eingepasst; der Betriebsstatus steht darüber ohne Fehlerlink.
 
 Heizleistung und Eingangsleistung stehen ebenfalls im Infobereich. Die allgemeinen Werte für Vorlauf, Rücklauf und Rücklauf-Soll stehen direkt
 an der Wärmepumpe vor der Aufteilung für Warmwasser und Heizung. Die Heizkreise
 zeigen ausschließlich den Vorlauf des zugeordneten Mischkreises, ohne Ersatz
-durch WP-Temperaturen. Ohne Ventilzuordnung gilt Heizkreis 1–3 → Mischkreis 1–3.
+durch WP-Temperaturen. Die Regler-Mischkreise 1–3 bleiben den beiden Grafikplätzen zuordenbar.
 Fehlende Heizkreisfühler werden ausgeblendet.
 Der Durchfluss liest ausschließlich `Flow_Rate` (ID 254, l/h) und steht am
 gemeinsamen Wärmepumpenausgang. WMZ-Durchfluss (155) und Wärmequellendurchfluss
@@ -234,7 +240,7 @@ Die Grafik benötigt dafür keine angelegten Messvariablen. Diagnose und JSON-Do
 stehen unter WebSocket-Ergänzung in der Instanzkonfiguration; das LUX-Fenster enthält
 nur die bisherige Geräteanzeige mit Bedienung.
 
-Im Statusfeld öffnet „Fehlerspeicher: Anzahl“ die gespeicherte Historie mit Datum,
+In der COP-/JAZ-Zeile öffnet „Fehler: Anzahl“ die gespeicherte Historie mit Datum,
 Fehlercode und vollständigem Meldungstext. WebSocket wird für diese Daten bevorzugt;
 Java bleibt die Reserve. Die Historie stellt keine aktuellen Alarmzustände dar.
 Die vorhandenen IDs 95–105 werden wiederverwendet, die zusätzliche Auswahl-ID 400020
@@ -246,9 +252,33 @@ Durchgang: BUP (38) ein führt nach rechts zum Warmwasserspeicher, aus nach oben
 zur Heizung. Bei unbekanntem Ausgang wird keine Stellung gezeichnet. Der Tooltip
 weist darauf hin, dass keine mechanische Positionsrückmeldung vorliegt.
 
+Der Heizungszweig erhält seinen Vorlauf nach der Boilerumschaltung. Während
+Warmwasserladung ohne Puffer wird er blasser und nicht als durchströmt animiert.
+Die angezeigten Heizkreistemperaturen werden auf dem letzten Heizwert gehalten,
+mit ⏸ markiert und auch beim erneuten Öffnen beibehalten. Nach Ladeende bleiben sie
+gehalten, bis der WP-Vorlauf wieder auf seinen letzten Heizwert oder darunter
+gefallen ist. Erst dann erscheinen wieder aktuelle Heizkreistemperaturen.
+Der WP-Vorlauf selbst und alle Messvariablen bleiben live und unverändert. Ohne
+vorherigen Heizwert wird keine Temperatur erfunden. Ein hydraulisch getrennter
+Puffer kann die Heizkreise unabhängig versorgen; dort bleiben deren Messwerte live.
+
+Der Boilerzweig animiert nur bei angewähltem Warmwasserweg und vorhandenem
+Primärdurchfluss. Ein gemessener Durchfluss von 0 stoppt die Primäranimation auch
+bei aktivem BUP. Ohne verfügbaren BUP-Wert dient der Warmwasser-Betriebszustand als
+Darstellungsersatz; die Ventilstellung bleibt dabei ausdrücklich unbekannt.
+Mit Puffer bleibt die unabhängig gepumpte Heizungsseite darstellbar. Die Leitungen
+von der WP zum Puffer werden während Boilerladung nicht als durchströmt gezeichnet.
+Die Grafik stellt die konfigurierte Umschalthydraulik schematisch dar; sie bestimmt
+nicht den tatsächlichen Einbauort von Pumpe oder Ventil im konkreten Gerät.
+
 Die Heißgastemperatur (`Heisgastemperatur`, Java-ID 14) steht nach dem Verdichter
 vor dem Kondensator. Die Lüfterdrehzahl (`Ventilator_Drehzahl`, ID 184) steht
 über dem Lüfterrad. Unter dem Gerätebild ergänzt `Zeit_bis_Abtauen` (ID 141)
 die Lauf-/Standzeit, sofern der Regler den Wert liefert. Im SHI-Betrieb können
 beide Werte über die vorhandene optionale Java-Ergänzung kommen. Es werden keine
 zusätzlichen Messwertobjekte und kein eigener Abtau-Countdown erzeugt.
+
+Das LUX-Fenster übernimmt Hintergrund, Text und Buttons aus dem Symcon-Design,
+unabhängig von der Hell-/Dunkel-Voreinstellung des Browsers. Es verwendet das
+Webinterface-Passwort der Instanzkonfiguration (Standard 999999); ein zweites
+Passwortfeld entfällt. **Erneut verbinden** bleibt für getrennte Sitzungen erhalten.

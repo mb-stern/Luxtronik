@@ -253,7 +253,7 @@ $tests['graphic is full-view only and labels and payload are safely embedded'] =
     $form = json_decode($module->GetConfigurationForm(), true, 512, JSON_THROW_ON_ERROR);
     check(isset(fields($form)['IDListe']), 'Native configuration lost');
 };
-$tests['three heating places and mixer readings remain independent and use existing Idents'] = static function (): void {
+$tests['two heating places keep native mixer measurements and retain third-circuit data without drawing it'] = static function (): void {
     check(count(invoke(new Luxtronik(), 'BuildCardConfig')['mixers']) === 1, 'Mixer 1 not shown by default');
     $module = mixedCircuitVisualization();
     $payload = visualizationPayload($module);
@@ -263,7 +263,7 @@ $tests['three heating places and mixer readings remain independent and use exist
         check($payload['data']['mixerActual' . $i]['value'] === 25.0 + $i * 5, 'Wrong mixed-circuit actual Ident');
         check($payload['data']['mixerTarget' . $i]['value'] === 15.0 + $i * 5, 'Wrong mixed-circuit target Ident');
     }
-    check(count($payload['config']['mixers']) === 3, 'Mixer readings incomplete');
+    check(count($payload['config']['mixers']) === 2 && $payload['config']['heatingCircuitType3']==='off', 'Display is not limited to two circuits');
     check($payload['data']['supplyTemperatureHeating']['value'] === 30.0, 'HK1 does not use MK1 sensor');
     check($payload['data']['heatPumpReturnTemperature']['value'] === 40.0, 'Heat pump return lost');
     check($payload['data']['supplyTemperatureHeating2']['value'] === 35.0, 'HK2 does not use MK2 sensor');
@@ -272,7 +272,7 @@ $tests['three heating places and mixer readings remain independent and use exist
     check($payload['data']['mixerOpen2']['value'] === false && $payload['data']['mixerClose2']['value'] === false, 'Idle signals changed');
     $module->properties['VisualizationHeatingCircuit1'] = false;
     check(invoke($module, 'BuildCardConfig')['heatingCircuitType1'] === 'off', 'Disabled HK1 shown');
-    check(count(invoke($module, 'BuildCardConfig')['mixers']) === 2, 'Disabled branch retains a mixer');
+    check(count(invoke($module, 'BuildCardConfig')['mixers']) === 1, 'Disabled branch retains a mixer');
 };
 
 $tests['old circuit settings migrate once while preserving configuration and attributes'] = static function (): void {
@@ -670,7 +670,7 @@ $tests['configured mixers resolve their branch sensors outputs and pumps without
     check($payload['data'][$mixer['pump']]['value']===false,'Pump signal not associated with selected mixer');
     check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Mixer creates measurement objects');
     $form=fields(json_decode($module->GetConfigurationForm(),true));
-    foreach ([1,2,3] as $n) check(array_column($form['VisualizationHeatingCircuitMixer'.$n]['options'],'value')===[0,1,2,3],'Direct or mixer choice missing');
+    foreach ([1,2] as $n) check(array_column($form['VisualizationHeatingCircuitMixer'.$n]['options'],'value')===[0,1,2,3],'Direct or mixer choice missing');
     $module->properties['VisualizationHeatingCircuitMixer1']=0;
     check(invoke($module,'BuildCardConfig')['mixers']===[],'Direct branch retains mixer');
 };
@@ -770,7 +770,7 @@ $tests['each graphic field has exactly one fixed Ident and never chooses another
 
 $tests['each circuit exposes its existing saved name beside activation and mixer selection'] = static function (): void {
     $module=new Luxtronik();$form=fields(json_decode($module->GetConfigurationForm(),true));
-    foreach ([1,2,3] as $n) {
+    foreach ([1,2] as $n) {
         check($form['HeatingCircuitName'.$n]['type']==='ValidationTextBox','Circuit name field missing');
         $module->properties['HeatingCircuitName'.$n]='Etage '.$n;
         check(invoke($module,'BuildCardConfig')['heatingCircuitName'.$n]==='Etage '.$n,'Saved name not passed to the graphic');
@@ -1056,6 +1056,48 @@ $tests['external OpenWeather codes remain live in Java and Modbus without native
     }
 };
 
+$tests['heating temperature display holds through DHW and cooldown without changing measurements'] = static function():void {
+    $m=configuredVisualization();$m->properties['TankHP']=false;
+    $wp=visualizationVariable($m,'Vorlauftemperatur_Heizkreis',31.5,'~Temperature');
+    $mk1=visualizationVariable($m,'Mischkreis_1_Vorlauftemperatur',31.6,'~Temperature');
+    $mk2=visualizationVariable($m,'Mischkreis_2_Vorlauftemperatur',28.5,'~Temperature');
+    $status=$m->GetIDForIdent('Betriebszustand');$GLOBALS['testVariables'][$status]['value']=0;
+    visualizationVariable($m,'Steuersignal_Umwaelzpumpe',24.4);
+    visualizationVariable($m,'Flow_Rate',678.0);
+    visualizationVariable($m,'Warmwasser_Ist_Temperatur',50.4,'~Temperature');
+    $valve=$m->GetIDForIdent('Ausgang_Brauchwasserpumpe_Umstellventil');
+    $GLOBALS['testVariables'][$valve]['value']=false;
+    $normal=visualizationPayload($m);
+    check($normal['data']['supplyTemperatureHeating']['value']===31.6,'Initial heating measurement missing');
+    $GLOBALS['testVariables'][$valve]['value']=true;
+    $GLOBALS['testVariables'][$status]['value']=1;
+    foreach([$wp,$mk1,$mk2] as $id) $GLOBALS['testVariables'][$id]['value']=51.1;
+    $hotwater=visualizationPayload($m);
+    check($hotwater['data']['supplyTemperatureHeating']['value']===31.6 && $hotwater['data']['supplyTemperatureHeating2']['value']===28.5,'DHW spike replaced the last heating temperatures');
+    check($hotwater['data']['supplyTemperature']['value']===51.1 && GetValue($mk1)===51.1,'Display hold changed the WP reading or actual measurement object');
+    check($hotwater['data']['mixerActual1']['displayHold'] && $hotwater['data']['mixerActual1']['measuredValue']===51.1,'Internal mixer reading was not held or lost its actual value');
+    $m->GetVisualizationTile();
+    check(visualizationPayload($m)['data']['supplyTemperatureHeating']['value']===31.6,'Opening another tile reset the hold');
+    $GLOBALS['testVariables'][$valve]['value']=false;$GLOBALS['testVariables'][$status]['value']=0;$GLOBALS['testVariables'][$wp]['value']=40.0;
+    $cooldown=visualizationPayload($m);
+    check($cooldown['data']['supplyTemperatureHeating']['displayHold'] && $cooldown['data']['supplyTemperatureHeating']['holdReason']==='cooldown','Switching back released heating temperatures before cooldown');
+    $GLOBALS['testVariables'][$wp]['value']=31.4;$GLOBALS['testVariables'][$mk1]['value']=31.3;$GLOBALS['testVariables'][$mk2]['value']=28.7;
+    $released=visualizationPayload($m);
+    check($released['data']['supplyTemperatureHeating']['value']===31.3 && !isset($released['data']['supplyTemperatureHeating']['displayHold']),'Cooled WP supply did not release live heating readings');
+    check($released['data']['supplyTemperatureHeating2']['value']===28.7,'Second circuit did not recover its own temperature');
+    $m->properties['TankHP']=true;$GLOBALS['testVariables'][$valve]['value']=true;
+    $GLOBALS['testVariables'][$wp]['value']=51.1;$GLOBALS['testVariables'][$mk1]['value']=29.4;
+    $buffered=visualizationPayload($m);
+    check($buffered['data']['supplyTemperatureHeating']['value']===29.4 && !isset($buffered['data']['supplyTemperatureHeating']['displayHold']),'Independent buffered heating was frozen');
+    $GLOBALS['testHeatingHoldFrames']=compact('normal','hotwater','cooldown','released','buffered');
+};
+
+$tests['cold start during DHW does not invent a previously displayed heating temperature'] = static function():void {
+    $m=configuredVisualization();$m->properties['TankHP']=false;
+    $first=visualizationPayload($m);
+    check($first['data']['supplyTemperatureHeating']['value']===null && $first['data']['supplyTemperatureHeating']['displayHold'],'Initial hot-water reading was invented as a heating baseline');
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
@@ -1067,6 +1109,7 @@ if ($failed) exit(1);
 $dir=getenv('WP_TEST_ARTIFACT_DIR');
 if ($dir!==false && $dir!=='') {
     if(!is_dir($dir)) mkdir($dir,0777,true);
+    file_put_contents($dir.'/heating-hold.json',json_encode($GLOBALS['testHeatingHoldFrames']));
     file_put_contents($dir.'/all-controls.html','<meta charset="utf-8">'.$GLOBALS['testAllControlsHtml']);
     file_put_contents($dir.'/controls-variants.json',json_encode($GLOBALS['testControlsVariants']));
     file_put_contents($dir.'/service-values.html','<meta charset="utf-8">'.$GLOBALS['testServiceValuesHtml']);

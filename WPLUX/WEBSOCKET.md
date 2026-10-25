@@ -48,7 +48,9 @@ liest alle Informationsseiten vom Symcon-Server und liefert eine JSON-Datei.
 Die gespeicherten Verbindungseinstellungen werden verwendet. Die Diagnose erstellt
 keine Variablen und schreibt keine Reglerparameter. Sie benötigt keine geöffnete Visu
 und funktioniert auch bei HTTPS, weil der Browser keine Diagnose-Verbindung aufbaut.
-In der Visu bleibt ausschließlich das bisherige LUX-Gerätedisplay mit Bedienung.
+In der Visu bleibt das LUX-Gerätedisplay mit Bedienung und Erneut verbinden.
+Die Anmeldung verwendet das in der Instanz gespeicherte Webinterface-Passwort;
+eine erneute Passworteingabe in der Visu entfällt. Das LUX-Fenster folgt dem Symcon-Design.
 
 Der erste Gerätebericht enthielt 104 Einträge auf zehn Informationsseiten. `count`
 ist die Zahl der Roh-Einträge, `mappedCount` die Zahl der daraus zugeordneten
@@ -105,7 +107,7 @@ leere Historie leert ihren Meldungstext. Codes oder Zeitstempel, die sich nicht 
 erraten. Unter Diagnose kann die Zeitzone des Reglers angegeben werden; leer verwendet
 Symcon seine PHP-Zeitzone. Historische Sommerzeit wird bei der Umrechnung berücksichtigt.
 
-In der Grafik öffnet **Fehlerspeicher: Anzahl** im Statusfeld die Historie mit Datum,
+In der Grafik öffnet **Fehler: Anzahl** in der COP-/JAZ-Zeile die Historie mit Datum,
 Code und Meldung. Die Anzeige beschreibt gespeicherte Meldungen, keine Liste aktuell
 anstehender Störungen. Bei WebSocket-Ausfall sind die Java-Codes eine Reserve.
 

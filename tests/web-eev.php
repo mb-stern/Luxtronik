@@ -173,7 +173,8 @@ $tests['live graphics use internal WebSocket percentages with no selected measur
             'data'=>invoke($module,'BuildVisualizationData'),'controls'=>invoke($module,'BuildControlData')];
         $module->properties['WebSocketPassword']='another-password';
         check(invoke($module,'GetWebEEVPoint','EEV_Heizen')===null,'Credentials reused stale values');
-        check(!str_contains($module->GetVisualizationTile(),'another-password'),'WebSocket password exposed to browser');
+        check(invoke($module,'BuildCardConfig')['luxtronikWebSocketPassword']==='another-password','LUX display does not use its configured login password');
+        check(!str_contains($module->GetWebSocketData(),'another-password'),'Read diagnostic exposed the configured password');
     });
 };
 $tests['failed web reads clear current openings and back off without changing primary status'] = static function():void {

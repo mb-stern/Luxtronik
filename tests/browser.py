@@ -213,6 +213,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 web_payload=json.loads(json.dumps(payload))
                 web_url=f'http://127.0.0.1:{server.server_port}/luxtronik-test.html'
                 web_payload['config']['luxtronikWebInterfaceURL']=web_url
+                web_payload['config']['luxtronikWebSocketPassword']='123456'
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',web_payload)
                 assert page.locator('#gSettings').is_visible()
                 assert page.locator('#gSettings text').all_text_contents()==['LUX','Bedienfeld']
@@ -227,7 +228,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#wp-luxtronik-dialog').is_visible()
                 page.wait_for_function('!document.querySelector("#wp-luxtronik-controls").disabled')
                 assert page.evaluate('document.activeElement.id')=='wp-luxtronik-display'
-                assert luxtronik.commands[:3]==['LOGIN;999999','REFRESH','GET;remote-1'],luxtronik.commands
+                assert luxtronik.commands[:3]==['LOGIN;123456','REFRESH','GET;remote-1'],luxtronik.commands
                 assert page.evaluate('window.testSocketRequests[0]')=={'url':'ws://127.0.0.1:8214/','protocols':'Lux_WS'}
                 pixels=page.locator('#wp-luxtronik-display').evaluate('''e=>{
                     const ctx=e.getContext('2d');
@@ -293,11 +294,14 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert 'nicht gelesen' in page.locator('#wp-luxtronik-help').text_content()
                 assert page.locator('#wp-luxtronik-display').evaluate('e=>e.getContext("2d").getImageData(0,0,1,1).data[3]')==0
                 # A reconnect uses the current input, while protocol separators are rejected.
-                page.locator('#wp-luxtronik-password').fill('bad;password')
+                assert page.locator('#wp-luxtronik-password').count()==0
+                web_payload['config']['luxtronikWebSocketPassword']='bad;password'
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',web_payload)
                 page.get_by_role('button',name='Erneut verbinden',exact=True).click()
-                page.wait_for_function('document.querySelector("#wp-luxtronik-help").textContent.includes("Semikolons")')
+                page.wait_for_function('document.querySelector("#wp-luxtronik-help").textContent.includes("unzulässige")')
                 assert 'LOGIN;bad;password' not in luxtronik.commands
-                page.locator('#wp-luxtronik-password').fill('999999')
+                web_payload['config']['luxtronikWebSocketPassword']='123456'
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',web_payload)
                 page.get_by_role('button',name='Erneut verbinden',exact=True).click()
                 page.wait_for_function('!document.querySelector("#wp-luxtronik-controls").disabled')
                 luxtronik.connections[-1]['route'].send('<Navigation><item id="info"><name>Informationen</name></item></Navigation>')
@@ -534,14 +538,14 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     sample['config']['heatingFlow']='testFlowSpeed'
                     sample['data']['testFlowSpeed']={'value':flow,'formatted':f'{flow} l/h'}
                     page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
-                    return page.locator(f'#hkPumpRotor{target}').evaluate('''e=>({
+                    return page.locator('#primaryPumpRotor').evaluate('''e=>({
                         name:getComputedStyle(e).animationName,duration:parseFloat(getComputedStyle(e).animationDuration)})''')
 
                 assert pump_reading(25)=={'name':'symcon-modern-rotate','duration':2.39}
                 slow_flow=page.locator('#gHK1 > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')
-                assert slow_flow==5.6
+                assert slow_flow==2.8
                 assert pump_reading(75)=={'name':'symcon-modern-rotate','duration':1.16}
-                assert page.locator('#gHK1 > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')<slow_flow
+                assert page.locator('#gHK1 > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')==slow_flow
                 # The primary flow follows its actual measurement, independently of %.
                 assert page.locator('#main > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')==2.8
                 pump_reading(25,flow=300)
@@ -549,7 +553,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 pump_reading(25,flow=1200)
                 assert page.locator('#main > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')==1.4
                 assert pump_reading(0)['name']=='none'
-                assert page.locator('#gHK1 > .wp-live-flow').count()==0
+                assert page.locator('#gHK1 > .wp-live-flow').count()==2  # Its independent FUP still runs from the buffer.
                 assert pump_reading(75,running=False)['name']=='none'
                 assert page.locator('#gHK1 > .wp-live-flow').count()==0
                 for missing in [None,'','unavailable',False,-1]:
@@ -578,6 +582,43 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#main > .wp-live-flow').count()==0
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
 
+                # Server-held temperatures survive DHW loading and the return to heating.
+                hold=json.loads(Path(artifacts,'heating-hold.json').read_text())
+                for stage in ['normal','hotwater','cooldown','released','buffered']:
+                    sample=hold[stage]
+                    page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
+                    assert page.locator('#gPrimaryWaterPump').is_visible()
+                    assert page.locator('#textPrimaryPumpValue').text_content()=='24.4 %'
+                    assert page.locator('#primaryPumpRotor').evaluate('e=>getComputedStyle(e).animationName')=='symcon-modern-rotate'
+                    assert not page.locator('#gHKPumpIcon1').is_visible()
+                    assert not page.locator('#gHKPumpIcon2').is_visible()
+                    assert not page.locator('#gHK3').is_visible()
+                    if stage in ['hotwater','cooldown']:
+                        assert page.locator('#textSupplyTemperatureHeating').text_content()=='VL: 31.6 °C ⏸'
+                        assert page.locator('#textSupplyTemperatureHeating2').text_content()=='VL: 28.5 °C ⏸'
+                        assert page.locator('#textSupplyTemperatureHeating').get_attribute('data-held')=='true'
+                    if stage=='hotwater':
+                        assert page.locator('#textWPSupplyTemperature').text_content()=='VL: 51.1 °C'
+                        assert page.locator('#switchValveFlow').get_attribute('data-target')=='hotwater'
+                        assert page.locator('#gNoBuffer .wp-live-flow,#gHeating .wp-live-flow').count()==0
+                        assert page.locator('#main > .wp-live-flow').count()==2
+                        assert page.locator('#gDHW > .wp-live-flow').count()==2
+                        screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
+                        if screenshot_dir: page.screenshot(path=str(Path(screenshot_dir)/f'dhw-priority-{width}.png'))
+                    if stage=='cooldown':
+                        assert re.fullmatch(r'VL: 40(?:\.0)? °C',page.locator('#textWPSupplyTemperature').text_content())
+                        assert page.locator('#gDHW > .wp-live-flow').count()==0
+                    if stage=='released':
+                        assert page.locator('#textSupplyTemperatureHeating').text_content()=='VL: 31.3 °C'
+                        assert page.locator('#textSupplyTemperatureHeating').get_attribute('data-held')=='false'
+                        assert page.locator('#gHK1 > .wp-live-flow').count()==2
+                    if stage=='buffered':
+                        assert page.locator('#textSupplyTemperatureHeating').text_content()=='VL: 29.4 °C'
+                        assert page.locator('#pathBufferChargeSupply + .wp-live-flow,#pathBufferChargeReturn + .wp-live-flow').count()==0
+                        assert page.locator('#pathBufferManifoldSupply + .wp-live-flow,#pathBufferManifoldReturn + .wp-live-flow').count()==2
+                        assert page.locator('#gDHW > .wp-live-flow').count()==2
+                page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
+
                 # Actual running variables drive overlays; updates keep their identity.
                 assert page.locator('.wp-live-flow').count() > 0
                 page.evaluate("document.querySelector('.wp-live-flow').dataset.testIdentity='retained'")
@@ -594,6 +635,17 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     }""",theme)
                     page.evaluate('(p) => window.handleMessage({type:"update",data:p.data,controls:p.controls})',payload)
                     page.wait_for_timeout(250)  # Allow the theme transition to finish.
+                    page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',web_payload)
+                    page.locator('#gSettings').dispatch_event('click')
+                    page.wait_for_function('!document.querySelector("#wp-luxtronik-controls").disabled')
+                    palette=page.locator('#wp-luxtronik-dialog').evaluate('e=>({background:getComputedStyle(e).backgroundColor,color:getComputedStyle(e).color})')
+                    assert palette==({'background':'rgb(24, 34, 47)','color':'rgb(230, 237, 244)'} if theme=='dark'
+                                     else {'background':'rgb(248, 250, 252)','color':'rgb(31, 41, 55)'}),palette
+                    assert page.locator('#wp-luxtronik-password').count()==0
+                    screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
+                    if screenshot_dir: page.screenshot(path=str(Path(screenshot_dir)/f'lux-theme-{theme}-{width}.png'))
+                    page.locator('#wp-luxtronik-close').click()
+                    page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',payload)
                     screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                     if screenshot_dir:
                         Path(screenshot_dir).mkdir(parents=True,exist_ok=True)
@@ -616,207 +668,58 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert not errors,errors
                 print(json.dumps({'viewport':width,**result,'updates':'PASS'}))
                 page.close()
-            # Three original heating places remain separate from the native mixer telemetry.
+            # Two heating outlets, one primary pump, internal mixers downstream of BUP.
             for width in [1200,390]:
                 mixed=browser.new_page(viewport={'width':width,'height':850})
                 errors=[]
                 mixed.on('pageerror',lambda e: errors.append(str(e)))
                 mixed.goto(f'http://127.0.0.1:{server.server_port}/mixed-circuits.html')
-                assert mixed.locator('#wp-error').text_content()==''
-                for index in [1,2,3]:
-                    assert mixed.locator('#textHeatingCircuitName'+str(index)).text_content()=='HK'+str(index)
-                    assert str(25+index*5) in mixed.locator('#textMixerActual'+str(index)).text_content()
-                    assert str(15+index*5) in mixed.locator('#textMixerTarget'+str(index)).text_content()
-                    assert mixed.locator('#gMixerValveSymbol'+str(index)).get_attribute('data-state')==['opening','stopped','closing'][index-1]
-                assert mixed.locator('[id^="textMixerState"]').count()==0
-                assert mixed.locator('#gMixerValveSymbol1 circle[stroke="#ffc51b"]').count()==0
-                assert mixed.locator('#gMixerValveSymbol1 text').last.text_content()=='↑'
-                assert mixed.locator('.wp-valve-recent').count()==0
-                assert '30' in mixed.locator('#textSupplyTemperatureHeating').text_content()
-                assert '50' in mixed.locator('#textWPSupplyTemperature').text_content()
-                assert '35' in mixed.locator('#textSupplyTemperatureHeating2').text_content()
-                assert '40' in mixed.locator('#textWPReturnTemperature').text_content()
-                assert mixed.locator('[id^="textRefluxTemperatureHeating"]').count()==0
-                assert mixed.locator('#gMixerReadings').count()==0
-                assert mixed.locator('[id^="gHKMixer"]').count()==3
-                for n in [1,2,3]:
-                    clearance=mixed.evaluate("""n=>{
-                        const reading=document.getElementById('gMixerReading'+n).getBoundingClientRect();
-                        const valve=document.getElementById('gMixerValveSymbol'+n).getBoundingClientRect();
-                        return {readingBottom:reading.bottom,valveTop:valve.top};
-                    }""",n)
-                    assert clearance['readingBottom']<clearance['valveTop'],clearance
-
-                assert mixed.locator('[id^="pathHKMixingReturn"]').count()==3
-                assert mixed.locator('#textComputedCOP').text_content()=='4.25'
-                assert mixed.locator('#textComputedJAZ').text_content()=='3.75'
-                fonts=mixed.evaluate("()=>['textComputedCOP','textComputedJAZ','textPowerValue','textInputPower'].map(id=>getComputedStyle(document.querySelector('#'+id)).fontSize)")
-                assert len(set(fonts))==1,fonts
-                assert mixed.locator('#textComputedCOP').get_attribute('textLength') is None
-                assert mixed.locator('#textComputedJAZ').get_attribute('textLength') is None
-                label_fonts=mixed.evaluate("()=>['textLabelCOP','textLabelJAZ','textHeatingPowerLabel'].map(id=>getComputedStyle(document.querySelector('#'+id)).fontSize)")
-                assert len(set(label_fonts))==1,label_fonts
-                geometry=mixed.evaluate("""()=>{
-                    const box=(id)=>{const b=document.querySelector('#'+id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom};};
-                    return Object.fromEntries(['gMixerValveReadings','gHeatingHeaders','heatPumpPanel','switchValve','gHPUnitCabinet','gEfficiency','gRefrigerantCircuit','info'].map(id=>[id,box(id)]));
-                }""")
-                assert mixed.locator('#gMixerValveSymbol1').bounding_box()['x']>geometry['info']['right'],geometry
-                assert geometry['gMixerValveReadings']['x']>geometry['gHeatingHeaders']['right'],geometry
-                assert geometry['switchValve']['x']>geometry['heatPumpPanel']['x'],geometry
-                assert geometry['switchValve']['right']<geometry['heatPumpPanel']['right'],geometry
-                assert geometry['gEfficiency']['y']<geometry['info']['bottom'],geometry
-                assert mixed.locator('#info #gEfficiency').count()==1
-                assert mixed.locator('#gPrimaryMixerValve').count()==0
-                for n in [1,2,3]:
-                    assert mixed.locator('#gHKMixer'+str(n)+' #gMixerValveSymbol'+str(n)).count()==1
                 original=mixed.evaluate("""()=>{
                     const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
                     return JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
                 }""")
-                renamed=json.loads(json.dumps(original))
-                renamed['config'].update(heatingCircuitName1='Fußboden Erdgeschoss',heatingCircuitName2='Heizkörper Obergeschoss',heatingCircuitName3='Sehr langer Name für den dritten Heizkreis im Dachgeschoss')
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',renamed)
-                assert mixed.locator('#textHeatingCircuitName1').text_content().endswith('…')
-                assert mixed.locator('#gHeatingCircuitName1 title').text_content()=='Fußboden Erdgeschoss'
-                assert mixed.locator('#gHeatingCircuitName2 title').text_content()=='Heizkörper Obergeschoss'
-                assert mixed.locator('#textHeatingCircuitName3').get_attribute('textLength') is None
-                assert mixed.locator('#textHeatingCircuitName3').text_content().endswith('…')
-                # Buffer precedes all mixer branches; removing it retains connected pipes.
-                for has_buffer in [True,False]:
-                    layout=json.loads(json.dumps(original))
-                    layout['config']['tankHP']=has_buffer
-                    mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',layout)
-                    assert mixed.locator('#gBuffer').evaluate('e=>getComputedStyle(e).display')==('inline' if has_buffer else 'none')
-                    assert mixed.locator('#gNoBuffer').evaluate('e=>getComputedStyle(e).display')==('none' if has_buffer else 'inline')
-                    for n in [1,2,3]:
-                        assert mixed.locator('#gHK'+str(n)+' > path.hot').get_attribute('d').endswith('H1260')
-                        assert mixed.evaluate("n=>{const p=document.querySelector('#gHK'+n+' > path.cold'),h=document.querySelector('#gHeatingHeaders > path.cold');return Math.abs(p.getPointAtLength(p.getTotalLength()).x-h.getPointAtLength(0).x)<.1;}",n)
-                        assert mixed.locator('#pathHKMixingReturn'+str(n)).get_attribute('d').endswith('V'+str(263+(n-1)*120))
-                    placement=mixed.evaluate("""()=>{
-                        const box=id=>{const b=document.querySelector('#'+id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom};};
-                        return Object.fromEntries(['info','gBufferTankBody','gMixerValveSymbol1','gHKPumpIcon1','gHK1','heatPumpPanel'].map(id=>[id,box(id)]));
-                    }""")
-                    if has_buffer:
-                        assert placement['gBufferTankBody']['x']>placement['info']['right'],placement
-                        assert placement['gBufferTankBody']['right']<placement['gMixerValveSymbol1']['x'],placement
-                        assert placement['gBufferTankBody']['bottom']<placement['heatPumpPanel']['y'],placement
-                    assert placement['gMixerValveSymbol1']['right']<placement['gHKPumpIcon1']['x'],placement
+                for has_buffer in [False,True]:
+                    sample=json.loads(json.dumps(original));sample['config']['tankHP']=has_buffer
+                    sample['config']['heatingFlow']='mixFlow';sample['data']['mixFlow']={'value':612,'formatted':'612 l/h'}
+                    mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
+                    assert mixed.locator('#gHK1').is_visible() and mixed.locator('#gHK2').is_visible()
+                    assert not mixed.locator('#gHK3').is_visible()
+                    assert not mixed.locator('#gHKPumpIcon1').is_visible() and not mixed.locator('#gHKPumpIcon2').is_visible()
+                    for n in [1,2]:
+                        assert mixed.locator('#textHeatingCircuitName'+str(n)).text_content()=='HK'+str(n)
+                        assert str(25+n*5) in mixed.locator('#textMixerActual'+str(n)).text_content()
+                        geometry=mixed.evaluate("""n=>{
+                            const box=id=>{const b=document.getElementById(id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom};};
+                            return {device:box('heatPumpPanel'),mixer:box('gMixerValveSymbol'+n),valve:box('switchValve')};
+                        }""",n)
+                        assert geometry['mixer']['x']>=geometry['device']['x'] and geometry['mixer']['right']<=geometry['device']['right'],geometry
+                        assert geometry['mixer']['y']>geometry['device']['y'] and geometry['mixer']['bottom']<geometry['device']['bottom'],geometry
+                        assert geometry['mixer']['bottom']<geometry['valve']['y'],geometry
+                        assert not mixed.locator('#gMixerValveReadings').is_visible()
+                    assert mixed.locator('#textComputedCOP').text_content()=='4.25'
+                    assert mixed.locator('#textComputedJAZ').text_content()=='3.75'
                     screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
-                    if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'mixed-buffer-{has_buffer}-{width}.png'))
-                # Without buffer and solar, the circuit moves left and the canvas shrink together.
-                slim=json.loads(json.dumps(original))
-                slim['config'].update(tankHP=False,thermalSolarAvailable=False)
-                slim['config']['heatingFlow']='testFlowPosition'
-                slim['data']['testFlowPosition']={'value':612,'formatted':'612 l/h'}
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',slim)
-                assert mixed.locator('#textHeatingFlow').get_attribute('y')=='580.5'
-                assert mixed.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.width')<1570
-                slim_x=mixed.locator('#gHK1').bounding_box()['x']
-                full=json.loads(json.dumps(slim));full['config']['tankHP']=True
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',full)
-                assert mixed.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.width')==1570
-                # SVG coordinates, independent of the changed viewport scale.
-                assert mixed.locator('#gHeating').get_attribute('transform')=='translate(0 0)'
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',slim)
-                assert float(mixed.locator('#gHeating').get_attribute('transform').split('(')[1].split()[0])<0
-                screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
-                if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'no-buffer-no-solar-{width}.png'))
-                single_flow=json.loads(json.dumps(slim))
-                single_flow['config'].update(heatingCircuitType2='off',heatingCircuitType3='off')
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',single_flow)
-                assert mixed.locator('#textHeatingFlow').get_attribute('x')=='680'
-                assert mixed.locator('#textHeatingFlow').get_attribute('y')=='580.5'
-                if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'flow-upper-supply-{width}.png'))
-                # Circuit temperatures remain MK measurements even without a drawn mixer valve.
-                direct=json.loads(json.dumps(original))
-                direct['config'].update(mixers=[],tankHP=True)
-                direct['config']['returnTemperatureSetpoint']='testDirectReturnTarget'
-                direct['data']['testDirectReturnTarget']={'value':27,'formatted':'27.0 °C'}
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',direct)
+                    if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'two-internal-mixers-{has_buffer}-{width}.png'))
+                sample['config']['tankHP']=False
+                sample['config']['heatingCircuitType2']='off'
+                sample['config']['mixers']=[m for m in sample['config']['mixers'] if m['circuit']==1]
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
+                assert not mixed.locator('#gHK2').is_visible()
+                assert mixed.locator('#gMixerValveSymbol2').count()==0
+                assert mixed.locator('#gMixerValveSymbol1').count()==1
+                sample['config']['mixers']=[]
+                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
                 assert mixed.locator('[id^="gMixerValveSymbol"]').count()==0
-                assert mixed.locator('#gNoBuffer > path.hot').get_attribute('d').startswith('M825 567.5V245H')
-                assert 'H790V762.5' in mixed.locator('#gNoBuffer > path.cold').get_attribute('d')
-                assert 'V550' not in mixed.locator('#gNoBuffer > path.hot').get_attribute('d')
-                clearances=mixed.evaluate("""()=>{
-                    const branch=document.querySelector('#gHK1 > path.hot').getBoundingClientRect();
-                    const pump=document.querySelector('#gHKPumpIcon1').getBoundingClientRect();
-                    return {start:branch.x,end:branch.right,pumpLeft:pump.x,pumpRight:pump.right};
-                }""")
-                assert clearances['start']<clearances['pumpLeft']<clearances['pumpRight']<clearances['end'],clearances
-
-
-                for n in [1,2,3]:
-                    selector='#textSupplyTemperatureHeating'+('' if n==1 else str(n))
-                    assert str(25+n*5) in mixed.locator(selector).text_content()
-                    assert mixed.locator(selector).text_content().startswith('VL: ')
-                assert mixed.locator('#textWPReturnTarget').text_content()=='RL Soll: 27.0 °C'
-
-                missing=json.loads(json.dumps(original))
-                missing['data'].pop('mixerActual1')
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',missing)
-                assert mixed.locator('#textMixerActual1').text_content()=='MK1: —'
-                assert mixed.locator('#textSupplyTemperatureHeating').is_hidden()
-                assert '50' in mixed.locator('#textWPSupplyTemperature').text_content()
-                # DHW charging changes WP temperatures, never the measured mixed circuit supplies.
-                hotwater=json.loads(json.dumps(original))
-                for key,value in [('supplyTemperature',60),('heatPumpReturnTemperature',55)]:
-                    hotwater['data'][hotwater['config'][key]].update(value=value,formatted=str(value)+'.0 °C')
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',hotwater)
-                assert mixed.locator('#textWPSupplyTemperature').text_content()=='VL: 60.0 °C'
-                assert mixed.locator('#textWPReturnTemperature').text_content()=='RL: 55.0 °C'
-                assert '30' in mixed.locator('#textSupplyTemperatureHeating').text_content()
-                # Missing relays are unknown; both inactive relays mean neither direction is driven.
-                updated=json.loads(json.dumps(original))
-                updated['data'].pop('mixerOpen1')
-                updated['data']['computedCOP'].update(value=0,formatted='0.00')
-                updated['data']['computedJAZ'].update(value=4.1,formatted='4.10')
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
-                assert mixed.locator('#gMixerValveSymbol1').get_attribute('data-state')=='unknown'
-                assert mixed.locator('#textComputedCOP').text_content()=='0.00'
-                assert mixed.locator('#textComputedJAZ').text_content()=='4.10'
-                updated['data']['mixerOpen1']={'value':True,'binary':True}
-                updated['data']['mixerClose1']={'value':True,'binary':True}
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
-                assert mixed.locator('#gMixerValveSymbol1').get_attribute('data-state')=='conflict'
-                assert 'Auf und Zu aktiv' in mixed.locator('#gMixerValveSymbol1').get_attribute('aria-label')
-                # Output changes blink for at most a minute, including a stop command.
-                mixed.clock.install()
-                changed=mixed.evaluate('Date.now()/1000')
-                updated['data']['mixerOpen1'].update(value=False,changedAt=changed)
-                updated['data']['mixerClose1'].update(value=True,changedAt=changed)
-                updated['config']['wwHeatingValve']='testValve'
-                updated['data']['testValve']={'value':True,'binary':True,'changedAt':changed}
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
-                assert mixed.locator('#gMixerValveSymbol1 .wp-valve-recent').count()==1
-                assert mixed.locator('#switchValveFlow.wp-valve-recent').count()==1
-                assert 'Ansteuerung Zu' in mixed.locator('#gMixerValveSymbol1').get_attribute('aria-label')
-                assert mixed.locator('#switchValveFlow').get_attribute('data-target')=='hotwater'
-                assert mixed.locator('#switchValveFlow').get_attribute('d')=='M-16 0H16'
-                mixed.clock.fast_forward(60100)
-                assert mixed.locator('.wp-valve-recent').count()==0
-                assert mixed.locator('#gMixerValveSymbol1').get_attribute('data-state')=='closing'
-                updated['data']['mixerClose1'].update(value=False,changedAt=mixed.evaluate('Date.now()/1000'))
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
-                assert mixed.locator('#gMixerValveSymbol1').get_attribute('data-state')=='stopped'
-                assert mixed.locator('#gMixerValveSymbol1 .wp-valve-recent').count()==1
-                mixed.clock.fast_forward(60100)
-                assert mixed.locator('.wp-valve-recent').count()==0
-                # A sole third heating place still has a connected distributor.
-                updated['config'].update(heatingCircuitType1='off',heatingCircuitType2='off')
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
-                assert mixed.locator('#gHeatingHeaders').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert mixed.locator('#gNoBuffer > path.cold').get_attribute('d').endswith('V762.5')
-                assert mixed.locator('#gNoBuffer > path.hot').get_attribute('d').startswith('M825 567.5V485H')
-                assert mixed.locator('#gHKMixer1 > g,#gHKMixer2 > g').count()==0
-                updated['config']['tankHP']=True
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',updated)
-                assert mixed.locator('#gBuffer > path.cold').first.get_attribute('d')=='M720 380H705V440H790V762.5'
-                assert mixed.locator('#gBuffer > path.cold').last.get_attribute('d')=='M965 380H890'
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',original)
-                screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
-                if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'mixed-{width}.png'))
+                # Relay states remain directional commands, never valve positions.
+                sample=json.loads(json.dumps(original))
+                for opening,closing,state in [(True,False,'opening'),(False,True,'closing'),(False,False,'stopped'),(True,True,'conflict')]:
+                    sample['data']['mixerOpen1']={'value':opening,'binary':True}
+                    sample['data']['mixerClose1']={'value':closing,'binary':True}
+                    mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
+                    assert mixed.locator('#gMixerValveSymbol1').get_attribute('data-state')==state
                 assert not errors,errors
                 mixed.close()
+            print(json.dumps({'two_heating_outlets':'PASS','internal_mixers':'PASS','single_primary_pump':'PASS','DHW_temperature_hold':'PASS'}))
 
             # Selected room count controls the layout and scales a sole reading up.
             for width in [1200,390]:
@@ -1057,10 +960,10 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert comp.locator('#textBufferReturnTemperature').count()==0
                 assert '42.0' in comp.locator('#textSolarStorageTemperature').text_content()
                 assert comp.locator('#textThermalSolarPumpSpeed').text_content()=='Ein'
-                assert '31.7' in comp.locator('#textHeatingPump1').text_content()
+                assert '31.7' in comp.locator('#textPrimaryPumpValue').text_content()
                 assert comp.locator('#textHeatingPumpSpeed').count()==0
                 assert comp.locator('#gCirculatingPumpVisual').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert comp.locator('#pathHKMixingReturn1').get_attribute('d')=='M1045 295V263'
+                assert comp.locator('#pathHKMixingReturn1').get_attribute('d')=='M790 505H807'
                 original=comp.evaluate("""()=>JSON.parse([...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init(')).textContent.trim().slice('SymconHeatPump.init('.length,-2))""")
                 changed=json.loads(json.dumps(original))
                 changed['config'].update(circulation=False,solarTarget='buffer',tankWW=False)
@@ -1151,7 +1054,16 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 history={'available':True,'source':'WebSocket','entries':[
                     {'date':'16.02.24 14:35:19','code':718,'text':'Max. Aussentemp. (718)'},
                     {'date':'16.02.24 14:27:33','code':711,'text':'<img src=x onerror="window.faultInjected=true"> (711)'}]}
+                row=json.loads(json.dumps(payload))
+                row['config'].update(computedCOP='rowCOP',computedJAZ='rowJAZ')
+                row['data']['rowCOP']={'value':5.7,'formatted':'5.7'}
+                row['data']['rowJAZ']={'value':3.3,'formatted':'3.3'}
+                faults.evaluate('(p)=>window.handleMessage({config:p.config,data:p.data})',row)
                 faults.evaluate('(history)=>window.handleMessage({controls:{faultHistory:history}})',history)
+                assert faults.locator('#textFaultHistory').text_content()=='Fehler: 2'
+                assert faults.locator('#gEfficiency #buttonFaultHistory').count()==1
+                assert faults.locator('#textHPStatus').get_attribute('y')=='185'
+                assert faults.locator('#textFaultHistory').get_attribute('y')==faults.locator('#textComputedCOP').get_attribute('y')==faults.locator('#textComputedJAZ').get_attribute('y')
                 faults.locator('#buttonFaultHistory').click()
                 assert faults.locator('#wp-fault-dialog').is_visible()
                 assert faults.locator('#wp-fault-list li').count()==2

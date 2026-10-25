@@ -650,8 +650,7 @@ trait LuxtronikWebEEV
             unset($row);
         }
         unset($element);
-        array_splice($form['elements'],$index,0,[$panel,
-            ['type'=>'Label','caption'=>'Bevorzugte Quelle gilt für die unter Verfügbar über zugeordneten Schnittstellen. Ohne passende Zuordnung wird die Auswahl übersprungen. Bei fehlenden Werten ergänzen die übrigen Quellen automatisch; 0 und Aus sind gültige Werte. Die Auswahl einer Lesequelle sendet keine Schreibbefehle.']]);
+        array_splice($form['elements'],$index,0,[$panel]);
         return $form;
     }
 }
