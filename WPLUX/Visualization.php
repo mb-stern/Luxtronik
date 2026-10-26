@@ -666,6 +666,8 @@ HTML;
             $config['heatingCircuitMixed' . $i] = false;
         }
         $config['mixers'] = [];
+        // Retain saved sensor/pump bindings internally; mixer hardware is no longer
+        // drawn or configurable in the simplified hydraulic view.
         for ($circuit = 1; $circuit <= 2; ++$circuit) {
             if (!$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $circuit)) continue;
             $i = $this->ReadPropertyInteger('VisualizationHeatingCircuitMixer' . $circuit);
@@ -2105,6 +2107,7 @@ window.SymconHeatPump = {
                     || (element.classList && element.classList.contains('hk-pump-rotor'))
                     || element.id === 'symconThemeBackground'
                     || element.id === 'pathHPFan'
+                    || element.closest('mask')
                 ) {
                     return;
                 }
@@ -3166,17 +3169,16 @@ window.SymconHeatPump = {
             const contentRight = Math.max(narrowHydraulics ? 1235 : 1570,nextButtonX - buttonGap);
             const heatingShift = narrowHydraulics ? Math.min(0,contentRight - 1525) : 0;
             svg.querySelector('#gHeating')?.setAttribute('transform','translate(' + heatingShift + ' 0)');
-            const coldHeaderX = cfg.tankHP ? 955 : 790;
+            const buffered = previewAll || !!cfg.tankHP;
+            const coldHeaderX = buffered ? 1040 : 790;
             const coldHeaderLocalX = coldHeaderX - heatingShift;
-            const branchSupplyX = n => hk2 ? (n === 1 ? 730 : 825) : 825;
-            const internalMixerY = 550;
-            const supplyHeaderY = 575;
+            const heatingSupplyX = buffered ? 1000 : boilerValveX;
             svg.querySelector('#heatPumpPanel')?.setAttribute('width','862');
             svg.querySelector('#main > path.hot')?.setAttribute('d','M650 680H670V'+waterSupplyY+'H'+boilerValveX);
             svg.querySelector('#main > path.cold')?.setAttribute('d','M790 '+waterReturnY+'H670V705H650');
             svg.querySelector('#switchValve')?.setAttribute('transform','translate('+boilerValveX+' '+waterSupplyY+')');
 
-            // Separate supply/return headers feed each independently mixed branch.
+            // Short shared supply/return trunks feed the two heating outlets.
             const lastCircuit = hk3 ? 3 : (hk2 ? 2 : 1);
             const lastReturn = 295 + (lastCircuit - 1) * 120;
             const firstReturn = 295 + Math.max(0,[hk1,hk2,hk3].findIndex(Boolean)) * 120;
@@ -3184,28 +3186,38 @@ window.SymconHeatPump = {
             node(headers, 'path', {class:'cold',d:'M' + coldHeaderLocalX + ' ' + firstReturn + 'V' + lastReturn});
             [1,2,3].forEach(n => {
                 const y = 245 + (n - 1) * 120;
-                const mixedBranch = mixers.some(item => (item.circuit || item.number) === n);
-                const startY = mixedBranch ? internalMixerY - 18 : supplyHeaderY;
-                const route = cfg.tankHP ? 'V'+(n===1?440:480)+'H'+((n===1?935:975)-heatingShift) : '';
-                svg.querySelector('#gHK' + n + ' > path.hot')?.setAttribute('d','M' + (branchSupplyX(n) - heatingShift) + ' ' + startY + route + 'V' + y + 'H1260');
+                svg.querySelector('#gHK' + n + ' > path.hot')?.setAttribute('d','M' + (heatingSupplyX - heatingShift) + ' ' + y + 'H1260');
                 svg.querySelector('#gHK' + n + ' > path.cold')?.setAttribute('d','M1260 ' + (y + 50) + 'H' + coldHeaderLocalX);
                 svg.querySelector('#gHKPumpIcon' + n)?.setAttribute('transform','translate(-25 0)');
             });
-            const inputs = [1,2].filter(n=>[hk1,hk2][n-1]).map(n=>{
-                const mixer = mixers.find(item => (item.circuit || item.number) === n);
-                return 'M'+branchSupplyX(n)+' '+supplyHeaderY+'V'+(mixer?internalMixerY+18:supplyHeaderY);
-            }).join(' ');
-            const supplyLeft = hk1 ? branchSupplyX(1) : branchSupplyX(2);
             const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
-            const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25) + 'V590H690V245H720','M720 380H705V450H790V' + waterReturnY,
-                'M890 245H905V'+supplyHeaderY+'H'+supplyLeft+' '+inputs,
-                'M955 '+lastReturn+'V440H790 M955 '+lastReturn+'V380H890'];
+            // Four-port separator: primary left, secondary right, no return bypass.
+            const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25) + 'V570H690V245H720',
+                'M720 380H705V' + waterReturnY,
+                'M890 245H1000V'+(lastReturn-50),
+                lastReturn <= 380 ? 'M1040 '+lastReturn+'V380H890' : 'M1040 '+lastReturn+'H930V380H890'];
             bufferPaths.forEach((path,index) => {
                 path.setAttribute('d',bufferGeometry[index]);
                 path.setAttribute('id',['pathBufferChargeSupply','pathBufferChargeReturn','pathBufferManifoldSupply','pathBufferManifoldReturn'][index]);
             });
-            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M'+boilerValveX+' ' + (waterSupplyY - 25) + 'V'+supplyHeaderY+'H'+supplyLeft+' '+inputs);
-            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M' + coldHeaderX + ' ' + firstReturn + 'H790V' + waterReturnY);
+            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M'+boilerValveX+' ' + (waterSupplyY - 25) + 'V'+(firstReturn-50));
+            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M790 '+lastReturn+'V' + waterReturnY);
+            // Gaps mark crossings without creating apparent hydraulic junctions.
+            let crossings = svg.querySelector('#maskHydraulicCrossings');
+            if (!crossings) crossings = node(svg.querySelector('defs'),'mask',{
+                id:'maskHydraulicCrossings',maskUnits:'userSpaceOnUse',x:0,y:0,width:1600,height:1000});
+            crossings.replaceChildren();
+            node(crossings,'rect',{x:0,y:0,width:1600,height:1000,fill:'#fff'});
+            if (buffered) {
+                node(crossings,'rect',{x:695,y:561,width:20,height:18,fill:'#000'});
+                node(crossings,'rect',{x:695,y:631,width:20,height:18,fill:'#000'});
+                if (hk1 && hk2) node(crossings,'rect',{x:1030-heatingShift,y:356,width:20,height:18,fill:'#000'});
+            } else {
+                [1,2].filter(n=>[hk1,hk2][n-1]).forEach(n=>node(crossings,'rect',{
+                    x:boilerValveX-10,y:295+(n-1)*120-9,width:20,height:18,fill:'#000'}));
+            }
+            ['#main > path.hot','#pathBufferChargeSupply','#gNoBuffer > path.hot','#gHK1 > path.hot','#gHK2 > path.hot']
+                .forEach(selector=>svg.querySelector(selector)?.setAttribute('mask','url(#maskHydraulicCrossings)'));
 
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
             show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
@@ -3305,8 +3317,7 @@ window.SymconHeatPump = {
                     formatted(room.key), single ? (showIcon ? 175 : 250) : 94);
             });
 
-            // Each mixer belongs to its selected branch, downstream of the optional buffer.
-            // Auf/Zu are independent relay signals, not valve position measurements.
+            // Existing controller assignments remain the source of heating pump telemetry.
             const circuitPump = n => {
                 const mixer = mixers.find(item => (item.circuit || item.number) === n);
                 return mixer ? mixer.pump : cfg[n === 1 ? 'heatingCircuitPumpRunning' : 'heatingCircuitPumpRunning' + n];
@@ -3324,54 +3335,9 @@ window.SymconHeatPump = {
                 const active = (!relayKnown || binary(runningKey)) && (percent !== null ? percent > 0 : binary(runningKey));
                 return {active, percent};
             };
-            const relay = (key) => raw(key) === null || raw(key) === undefined ? '—' : (binary(key) ? 'Ein' : 'Aus');
-            const mixerSymbol = (parent, mixer, x, y, radius) => {
-                const known = raw(mixer.open) !== null && raw(mixer.open) !== undefined && raw(mixer.close) !== null && raw(mixer.close) !== undefined;
-                const state = !known ? 'unknown' : binary(mixer.open) && binary(mixer.close) ? 'conflict'
-                    : binary(mixer.open) ? 'opening' : binary(mixer.close) ? 'closing' : 'stopped';
-                const labels = {unknown:'Status unbekannt',conflict:'Auf und Zu aktiv',opening:'Ansteuerung Auf',closing:'Ansteuerung Zu',stopped:'Keine Ansteuerung'};
-                const symbol = node(parent, 'g', {id:'gMixerValveSymbol' + (mixer.circuit || mixer.number), 'data-mixer':mixer.number, role:'img',
-                    'aria-label':'Mischer ' + mixer.number + ': ' + labels[state], 'data-state':state,
-                    transform:'translate(' + x + ' ' + y + ')'});
-                node(symbol, 'title', {}, 'Mischer ' + mixer.number + ': ' + labels[state] + '. Auf ' + relay(mixer.open) + ', Zu ' + relay(mixer.close) + '. Keine Positionsrückmeldung.');
-                node(symbol, 'circle', {r:radius, fill:'var(--wp-button)', stroke:state === 'conflict' ? '#f04444' : 'var(--wp-icon)', 'stroke-width':2});
-                node(symbol, 'path', {d:'M-6-14L0-5L6-14Z M-6 14L0 5L6 14Z M-14-6L-5 0L-14 6Z',
-                    fill:'var(--wp-icon)', stroke:'var(--wp-icon)', 'stroke-width':1, transform:'scale(' + radius / 18 + ')'});
-                const recent = recentlyChanged(mixer.open, mixer.close);
-                node(symbol, 'circle', {r:2,fill:'var(--wp-icon)'});
-                const scale = radius / 18;
-                const actuator = node(symbol, 'g', {transform:'scale(' + scale + ')'});
-                node(actuator, 'path', {d:'M18 0H23',fill:'none',stroke:'var(--wp-icon)','stroke-width':1.5});
-                node(actuator, 'rect', {x:23,y:-24,width:compact ? 30 : 26,height:48,rx:3,fill:'var(--wp-button)',
-                    stroke:state === 'conflict' ? '#f04444' : 'var(--wp-icon)','stroke-width':1.5});
-                node(actuator, 'text', {x:compact ? 38 : 36,y:-4,'text-anchor':'middle',style:'font-size:18px;font-weight:bold'}, 'M'+mixer.number);
-                node(actuator, 'text', {x:compact ? 38 : 36,y:16,'text-anchor':'middle',class:recent ? 'wp-valve-recent' : '',
-                    style:'font-size:18px;font-weight:bold'},
-                    {opening:'↑',closing:'↓',stopped:'•',unknown:'?',conflict:'!'}[state]);
-                return symbol;
-            };
-            let mixerStyle = svg.querySelector('#mixerMotionStyle');
-            if (!mixerStyle) {
-                mixerStyle = node(svg, 'style', {id:'mixerMotionStyle'});
-                mixerStyle.textContent = '@keyframes valveRecentChange{0%,100%{opacity:1}50%{opacity:.45}}.wp-valve-recent{animation:valveRecentChange 1.5s ease-in-out infinite}@media(prefers-reduced-motion:reduce){.wp-valve-recent{animation:none}}';
-            }
-            const mixerReadings = group('gMixerValveReadings', svg.querySelector('#main'));
-            show('#gMixerValveReadings',false);
-            [1,2,3].forEach(n => {
-                const branch = svg.querySelector('#main');
-                const hydraulic = group('gHKMixer' + n, branch);
-                const mixer = mixers.find(item => (item.circuit || item.number) === n);
-                if (!mixer || n>2 || ![hk1,hk2][n - 1]) return;
-                const x = branchSupplyX(n);
-                const returnPath = x<790 ? 'M790 510H700V'+internalMixerY+'H'+(x-18) : 'M790 '+internalMixerY+'H'+(x-18);
-                node(hydraulic, 'path', {id:'pathHKMixingReturn' + n,class:'cold',d:returnPath});
-                mixerSymbol(hydraulic, mixer, x, internalMixerY, 18);
-                const readings = node(mixerReadings, 'g', {id:'gMixerReading' + n,transform:'translate(' + (x-45) + ' 470)'});
-                node(readings, 'title', {}, 'Mischer ' + mixer.number + ': Vorlauf Ist und Soll');
-                fittedText(readings, {id:'textMixerActual' + n,class:'sm',x:0,y:0,'dominant-baseline':'text-after-edge',style:'font-size:18px'},'MK' + mixer.number + ': ' + (temperature(mixer.actual) || '—'),90);
-                fittedText(readings, {id:'textMixerTarget' + n,class:'sm',x:0,y:20,'dominant-baseline':'text-after-edge',style:'font-size:18px'},'Soll: ' + (temperature(mixer.target) || '—'),90);
-            });
-
+            const relay = key => raw(key) === null || raw(key) === undefined ? '—' : (binary(key) ? 'Ein' : 'Aus');
+            // Mixer hardware is deliberately omitted. Saved mappings still supply
+            // each heating circuit's measured temperature and pump telemetry.
             // The information panel keeps its size; operating data replaces VL/RL.
             const info = svg.querySelector('#info');
             const infoLeft = 363;
@@ -3612,6 +3578,9 @@ window.SymconHeatPump = {
             // Heizung    = von links kommend nach oben
             // Warmwasser = von links nach rechts durchgehend
             const switchValveFlow = svg.querySelector('#switchValveFlow');
+            if (!svg.querySelector('#valveMotionStyle')) {
+                node(svg,'style',{id:'valveMotionStyle'},'@keyframes valveRecentChange{0%,100%{opacity:1}50%{opacity:.45}}.wp-valve-recent{animation:valveRecentChange 1.5s ease-in-out infinite}@media(prefers-reduced-motion:reduce){.wp-valve-recent{animation:none}}');
+            }
             if (switchValveFlow) {
                 switchValveFlow.setAttribute(
                     'd',
@@ -3776,7 +3745,7 @@ window.SymconHeatPump = {
 
             // Command percentage controls schematic speed; an explicit off relay stops it.
             const pumpStates = [1,2,3].map(n => pumpState(circuitPump(n), circuitPumpValue(n)));
-            ['#gHeating','#gNoBuffer','#gHKMixer1','#gHKMixer2','#gMixerValveReadings'].forEach(selector => {
+            ['#gHeating','#gNoBuffer'].forEach(selector => {
                 const element = svg.querySelector(selector);
                 if(element) element.style.opacity = directHeatingInterrupted ? '.45' : '';
             });
@@ -3900,9 +3869,9 @@ window.SymconHeatPump = {
                 ['#pathBufferManifoldSupply, #pathBufferManifoldReturn', heatingActive, headerFlowDuration],
                 ['#gNoBuffer path.hot, #gNoBuffer path.cold', directHeatingFlow, headerFlowDuration],
                 ['#gHeatingHeaders path.hot, #gHeatingHeaders path.cold', secondaryHeatingFlow, headerFlowDuration],
-                ['#gHK1 > path.hot, #gHK1 > path.cold, #pathHKMixingReturn1', hk1 && secondaryHeatingFlow, cfg.tankHP ? circuitFlowDurations[0] : primaryFlowDuration],
-                ['#gHK2 > path.hot, #gHK2 > path.cold, #pathHKMixingReturn2', hk2 && secondaryHeatingFlow, cfg.tankHP ? circuitFlowDurations[1] : primaryFlowDuration],
-                ['#gHK3 > path.hot, #gHK3 > path.cold, #pathHKMixingReturn3', false],
+                ['#gHK1 > path.hot, #gHK1 > path.cold', hk1 && secondaryHeatingFlow, cfg.tankHP ? circuitFlowDurations[0] : primaryFlowDuration],
+                ['#gHK2 > path.hot, #gHK2 > path.cold', hk2 && secondaryHeatingFlow, cfg.tankHP ? circuitFlowDurations[1] : primaryFlowDuration],
+                ['#gHK3 > path.hot, #gHK3 > path.cold', false],
                 ['#gDHW > path.hot, #gDHW > path.cold', !!cfg.tankWW && hotWaterRoute && primaryWaterActive, primaryFlowDuration],
                 ['#gSolar path.sol', solarActive]
             ];
@@ -3917,6 +3886,8 @@ window.SymconHeatPump = {
                         || document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     overlay.setAttribute('d', path.getAttribute('d') || '');
                     overlay.setAttribute('class', 'wp-live-flow');
+                    if (path.hasAttribute('mask')) overlay.setAttribute('mask',path.getAttribute('mask'));
+                    else overlay.removeAttribute('mask');
                     overlay.style.setProperty('--wp-flow-duration', duration.toFixed(2) + 's');
                     if (path.hasAttribute('transform')) overlay.setAttribute('transform', path.getAttribute('transform'));
                     if (!overlay.isConnected) path.after(overlay);
@@ -4509,10 +4480,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 'visible' => $this->ReadPropertyBoolean('ThermalSolarAvailable') && $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer' && !$this->ReadPropertyBoolean('TankHP')],
             ...array_map(static fn(int $i): array => ['type'=>'RowLayout','items'=>[
                 ['type'=>'CheckBox','name'=>'VisualizationHeatingCircuit' . $i,'caption'=>$i===1?'Heizkreis 1 (Standard)':'Heizkreis 2 (optional)'],
-                ['type'=>'ValidationTextBox','name'=>'HeatingCircuitName' . $i,'caption'=>'Bezeichnung'],
-                ['type'=>'Select','name'=>'VisualizationHeatingCircuitMixer' . $i,'caption'=>'Anbindung',
-                    'options'=>[['caption'=>'Direkt','value'=>0],['caption'=>'Mischkreis 1','value'=>1],
-                        ['caption'=>'Mischkreis 2','value'=>2],['caption'=>'Mischkreis 3','value'=>3]]]
+                ['type'=>'ValidationTextBox','name'=>'HeatingCircuitName' . $i,'caption'=>'Bezeichnung']
             ]],range(1,2)),
             ['type' => 'ExpansionPanel', 'caption' => 'Heizstäbe', 'items' => [
                 ['type' => 'Label', 'caption' => 'Ist-Leistungsvariablen werden mit ihrer Einheit W/kW summiert. Schaltvariablen und deren Assoziationen dienen ausschließlich der Bedienung.'],

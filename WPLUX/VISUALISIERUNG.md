@@ -34,11 +34,10 @@ ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
 - Komponenten-Checkboxen für Puffer, Warmwasserspeicher und Solarthermie.
 - Optionale Warmwasser-Zirkulation mit Pumpe, Leitung und Hahn; ihr Zustand
   stammt intern von `Ausgang_Zirkulationspumpe` (ID 46).
-- Zwei Heizkreisplätze: HK1 als Standard, HK2 optional. Je Platz Name und
-  Direktanbindung oder Zuordnung zu einem der bestehenden Mischkreise 1–3 wählen.
-- Eine gemeinsame HUP mit Prozentwert im Gerätebereich, dazu Boiler-Umschaltventil
-  und die zugeordneten Mischerventile. Separate Heizkreispumpen und doppelte
-  Temperaturbeschriftungen an den Mischern entfallen in der vereinfachten Grafik.
+- Zwei Heizkreisplätze: HK1 als Standard, HK2 optional, jeweils mit eigener Bezeichnung.
+- Eine gemeinsame HUP mit Prozentwert im Gerätebereich und Boiler-Umschaltventil.
+  Mischersymbole und Mischereinstellungen entfallen; die bisherigen
+  Mischkreis-Vorlauftemperaturen bleiben an den Heizkreisabgängen erhalten.
 - Bis zu drei optionale Raumtemperaturen mit frei wählbarer Bezeichnung
   (leer = Variablenname). Ein Einzelwert wird größer dargestellt. Für Icons
   wird das Variablensymbol verwendet, ersatzweise ein Haus. Je Raum sind Name, Icon
@@ -66,22 +65,25 @@ der zwei Heizkreisplätze. Vom Luxtronik-Regler gelieferte Mischkreiswerte
 sind interne Werte, auch wenn Mischer und Pumpen außerhalb des Wärmepumpengehäuses
 montiert sind. Fremdvariablen stammen beispielsweise von separaten Symcon-Zählern.
 
-Je Heizkreis lässt sich eine **Bezeichnung** vergeben. Unter **Anbindung** wird zwischen **Direkt** und **Mischkreis 1–3**
-gewählt. Standardmäßig ist Mischkreis 1 Heizkreis 1 zugeordnet und Mischkreis 2 dem optionalen Heizkreis 2. Der dritte Regler-Mischkreis bleibt als Datenquelle und in der ID-Liste erhalten; ein dritter Grafikabgang wird nicht gezeichnet.
-Nur aktivierte Heizkreisplätze zeigen ihre ausgewählten Mischer. Messwerte allein
-beweisen nicht, dass ein Mischkreis tatsächlich verbaut ist.
+Je Heizkreis lässt sich eine **Bezeichnung** vergeben. Standardmäßig stammt der
+Vorlauf für HK1 aus Mischkreis 1 und für HK2 aus Mischkreis 2. Frühere abweichende
+Sensorzuordnungen bleiben intern erhalten; eine zusätzliche Mischerauswahl entfällt.
+Der dritte Regler-Mischkreis bleibt als Datenquelle und in der ID-Liste erhalten.
 
 Das Schema enthält eine gemeinsame HUP vor dem Boiler-Umschaltventil. Dahinter
-zweigt die Boilerladung ab; im Heizungszweig folgen der optionale Puffer und die
-zugeordneten Mischer. Die HUP, das Umschaltventil und bis zu zwei Mischer sind zur
-kompakten Darstellung im Gerätebereich angeordnet. Bei Puffer führen die Leitungen
-zuerst zum Speicher und danach zu den Mischern zurück. Außen stehen nur die beiden
-Heizkreisabgänge mit ihren Temperaturen. Die Grafik ist kein vollständiger
-Installationsplan: Bei hydraulischer Trennung können weitere reale Pumpen nötig sein,
-die in diesem vereinfachten Bild nicht zusätzlich gezeichnet werden. Eine Reihe von
-Fußbodenheizungsschleifen ist nicht automatisch eine Reihe eigener Mischkreise.
+zweigt die Boilerladung ab; der Heizungszweig führt direkt zum optionalen Puffer
+und von dort zu den Heizkreisen. Der Puffer ist als parallel eingebundener
+Vieranschluss-Trennspeicher gezeichnet: WP-Vorlauf/Rücklauf links,
+Heizkreis-Vorlauf/Rücklauf rechts. Zwischen den beiden Rückläufen gibt es keine
+zusätzliche äußere Verbindung. Kurze gemeinsame Leitungen verteilen das Wasser
+auf die Heizkreisabgänge; kleine Unterbrechungen kennzeichnen Kreuzungen ohne
+Verbindung. Ein Reihenpuffer entspricht diesem Schema nicht.
+
+Die Grafik ist kein vollständiger Installationsplan: Bei hydraulischer Trennung
+können weitere reale Pumpen nötig sein, die hier nicht zusätzlich gezeichnet werden.
+Ohne Puffer führt der Heizungszweig vom Umschaltventil direkt nach oben.
 Ohne Puffer und Solarthermie rücken die Abgänge nach links; die Zeichenfläche passt
-sich bis zur Bedienleiste an. Direkte Heizkreise erhalten kein Mischerventil.
+sich bis zur Bedienleiste an.
 
 Der allgemeine Vorlauf nutzt `Vorlauftemperatur_Heizkreis` (ID 10). Ein separater
 allgemeiner Sekundärvorlauf ist in der verwendeten Schnittstelle nicht bestätigt.
@@ -90,20 +92,11 @@ bleibt die Heizkreisanzeige leer. Ein eigener Rücklauf je Mischer ist nicht
 bestätigt; die allgemeinen Temperaturen bleiben im Gerätebereich vor dem
 Boiler-Umschaltventil. Es werden keine zusätzlichen Messwerte errechnet.
 
-Die separaten Mischerdaten nutzen `Mischkreis_N_Vorlauftemperatur`,
-`Mischkreis_N_Vorlauf_Soll_Temperatur`, `Ausgang_Mischkreis_N_Auf` und
-`Ausgang_Mischkreis_N_Zu` (N = 1–3). Auf/Zu zeigt die Ansteuerung des Motors,
-keine gemessene Ventilposition: beide Ausgänge aus bedeutet keine Ansteuerung.
-Das Ventilsymbol zeigt im kleinen Antrieb den Auf-Befehl (↑), Zu-Befehl (↓), keine Ansteuerung (•),
-unbekannten Zustand (?) oder widersprüchliche Auf-/Zu-Ansteuerung (!). Der Pfeil
-blinkt dezent für eine Minute nach einer beobachteten Ausgangsänderung; ein gelber Ring entfällt.
-Danach bleibt auch ein dauerhaft aktiver Befehl ruhig. Die erste Abfrage löst kein
-Blinken aus. Dasselbe gilt für die angeforderte Richtung Heizung/Warmwasser am
-Umschaltventil. Eine tatsächliche Ventilstellung wird nicht errechnet.
-Ist/Soll stehen unmittelbar neben dem Ventil;
-der frühere Mischkreis-Kasten entfällt. Für Mischkreis 1 werden die IDs 21, 22, 40
-und 41 automatisch verarbeitet. Für weitere aktivierte Heizkreisplätze werden
-die zugeordneten Mischerdaten automatisch eingebunden, unabhängig von der ID-Liste.
+Mischkreis-Sollwerte und Auf-/Zu-Ausgänge bleiben als native Datenpunkte in der
+ID-Liste verfügbar, werden aber nicht mehr an zusätzlichen Ventilen dargestellt.
+Das Boiler-Umschaltventil zeigt weiterhin seine angeforderte Richtung. Nach einer
+beobachteten Ausgangsänderung blinkt die Anzeige für eine Minute; die erste Abfrage
+löst kein Blinken aus. Eine tatsächliche Ventilstellung wird nicht errechnet.
 
 Die Pumpenausgänge sind HUP (ID 39) für Mischkreis 1, FP2 (51) für Mischkreis 2
 und FP3 (140) für Mischkreis 3. Nur HUP hat hier den bestätigten Prozentwert 183.
@@ -140,7 +133,7 @@ Platzes eingepasst; der Betriebsstatus steht darüber ohne Fehlerlink.
 Heizleistung und Eingangsleistung stehen ebenfalls im Infobereich. Die allgemeinen Werte für Vorlauf, Rücklauf und Rücklauf-Soll stehen direkt
 an der Wärmepumpe vor der Aufteilung für Warmwasser und Heizung. Die Heizkreise
 zeigen ausschließlich den Vorlauf des zugeordneten Mischkreises, ohne Ersatz
-durch WP-Temperaturen. Die Regler-Mischkreise 1–3 bleiben den beiden Grafikplätzen zuordenbar.
+durch WP-Temperaturen. Früher gespeicherte Zuordnungen der Regler-Mischkreise 1–3 bleiben erhalten.
 Fehlende Heizkreisfühler werden ausgeblendet.
 Der Durchfluss liest ausschließlich `Flow_Rate` (ID 254, l/h) und steht am
 gemeinsamen Wärmepumpenausgang. WMZ-Durchfluss (155) und Wärmequellendurchfluss
@@ -244,7 +237,7 @@ python3 tests/browser.py
 PHP-Prüfungen nutzen eine Symcon-Nachbildung und lokale Protokollsimulatoren.
 Die optionalen Browsertests benötigen Playwright und Chromium. Sie prüfen Desktop
 und Mobilansicht, Live-Aktualisierung, Speicherfühler, Bedienpopups,
-Raumquellen, Mischerdaten, COP/JAZ und das simulierte LUX-Bedienfeld.
+Raumquellen, Heizkreistemperaturen, COP/JAZ und das simulierte LUX-Bedienfeld.
 Die echte Symbolbibliothek wird von Symcon bereitgestellt; lokal werden Bindung
 und sichere Symbolklassen geprüft. Eine echte Symcon-Instanz mit Wärmepumpe
 wurde in dieser Cloud-Umgebung nicht verwendet.

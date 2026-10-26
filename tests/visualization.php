@@ -101,7 +101,7 @@ $tests['visualization settings expose only external additions and layout without
     check(count($panel) === 1, 'HTML-SDK settings missing');
     $sdkFields = fields($panel[0]);
     check(!isset($sdkFields['VisualizationRoomIcons']),'Redundant global room icon switch retained');
-    foreach (['VisualizationMixedCircuit1', 'VisualizationMixedCircuit2', 'VisualizationMixedCircuit3', 'VisualizationDirectCircuit'] as $removed) {
+    foreach (['VisualizationMixedCircuit1', 'VisualizationMixedCircuit2', 'VisualizationMixedCircuit3', 'VisualizationDirectCircuit', 'VisualizationHeatingCircuitMixer1', 'VisualizationHeatingCircuitMixer2'] as $removed) {
         check(!isset($sdkFields[$removed]), 'Obsolete mixer configuration retained');
     }
     $pickers = array_filter($sdkFields, fn($e) => ($e['type'] ?? '') === 'SelectVariable');
@@ -667,7 +667,7 @@ $tests['valve change times distinguish first observation stable commands and sou
     check(invoke($module,'BuildVisualizationData')['mixerOpen1']['changedAt']===0,'Change times leaked across devices');
 };
 
-$tests['configured mixers resolve their branch sensors outputs and pumps without object creation'] = static function (): void {
+$tests['saved mixer sensor bindings survive removal of mixer configuration without object creation'] = static function (): void {
     $module = new Luxtronik();
     $module->properties['VisualizationHeatingCircuitMixer1']=3;
     $required=invoke($module,'GetVisualizationRequiredPointIDs');
@@ -681,7 +681,8 @@ $tests['configured mixers resolve their branch sensors outputs and pumps without
     check($payload['data'][$mixer['pump']]['value']===false,'Pump signal not associated with selected mixer');
     check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Mixer creates measurement objects');
     $form=fields(json_decode($module->GetConfigurationForm(),true));
-    foreach ([1,2] as $n) check(array_column($form['VisualizationHeatingCircuitMixer'.$n]['options'],'value')===[0,1,2,3],'Direct or mixer choice missing');
+    foreach ([1,2] as $n) check(!isset($form['VisualizationHeatingCircuitMixer'.$n]),'Removed mixer setting still exposed');
+    check($payload['data']['supplyTemperatureHeating']['value']===30.0,'Saved circuit temperature assignment lost');
     $module->properties['VisualizationHeatingCircuitMixer1']=0;
     check(invoke($module,'BuildCardConfig')['mixers']===[],'Direct branch retains mixer');
 };
