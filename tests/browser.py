@@ -198,7 +198,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#textExpansionValveOpening').text_content()=='—'
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
                 assert page.locator('#gFooter').count()==0
-                assert page.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.height')==870
+                assert page.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.height')==895
                 # The narrow layout leaves enough room for straight pipes and the shared pump.
                 narrow=json.loads(json.dumps(payload))
                 narrow['config'].update(tankHP=False,thermalSolarAvailable=False,luxtronikWebInterfaceURL=f'http://127.0.0.1:{server.server_port}/luxtronik-test.html')
@@ -698,7 +698,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                         assert str(25+n*5) in mixed.locator('#textSupplyTemperatureHeating'+('' if n==1 else str(n))).text_content()
                         assert mixed.locator('[id^="gMixerValveSymbol"],#gMixerValveReadings,[id^="pathHKMixingReturn"]').count()==0
                     if has_buffer:
-                        assert mixed.locator('#pathBufferChargeReturn').get_attribute('d')=='M840 380H810V760'
+                        assert mixed.locator('#pathBufferChargeReturn').get_attribute('d')=='M840 380H810V785'
                         assert mixed.locator('#pathBufferManifoldReturn').get_attribute('d')=='M1100 415H1040V380H1010'
                         shift=mixed.locator('#gHeating').evaluate('e=>e.transform.baseVal.getItem(0).matrix.e')
                         assert mixed.locator('#gHK1 > path.hot').get_attribute('d')==f'M{1060-int(shift)} 245H1260'
@@ -976,7 +976,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gCirculatingPumpVisual').evaluate('e=>getComputedStyle(e).display')=='none'
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M920 410V445H1230V680H1260M1260 820H1245V435H960V410'
+                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M920 385V445H1218V640H1260M1260 820H1250V435H960V385'
                 screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                 if screenshot_dir: comp.screenshot(path=str(Path(screenshot_dir)/f'solar-buffer-{width}.png'))
                 changed['config'].update(tankHP=False,tankWW=False,solarTarget='buffer')

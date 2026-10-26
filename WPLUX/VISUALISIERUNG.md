@@ -93,7 +93,9 @@ Verbindung. Ein Reihenpuffer entspricht diesem Schema nicht. Der Speicher und di
 Solarthermie wird die Zeichenfläche entsprechend schmaler. Der rote Steigstrang läuft gerade ab dem Umschaltventil nach oben, der
 blaue Rücklauf parallel daneben außerhalb der WP-Temperaturbeschriftungen. Beide
 Solarleitungen führen auf kurzem Weg unterhalb der Heizkreise an die Unterseite
-des Puffers; die Schleife über dem Speicher und Kreuzungen mit den Heizkreisen entfallen. Bei Solarwärme an den
+des Puffers; die Schleife über dem Speicher und Kreuzungen mit den Heizkreisen entfallen.
+Die beiden gelben Steigleitungen haben auch am Pumpensymbol Abstand voneinander;
+der obere Anschluss an der Solar-Kachel bleibt oberhalb des Wasserhahns. Bei Solarwärme an den
 Warmwasserspeicher verlaufen Vor- und Rücklauf getrennt waagerecht auf Höhe der
 Solaranschlüsse; der Wasserhahn liegt dazwischen. Ein gemeinsames Leitungsstück entfällt.
 
@@ -338,8 +340,8 @@ passt sich auch der verfügbaren Höhe an, damit die Bedienpfeile sichtbar bleib
 
 Der Wärmepumpenrahmen hat oben und unten am Kältekreis denselben Innenabstand
 von 15 SVG-Einheiten. Der gesamte untere
-Diagrammbereich steht höher; auch zwischen Infokachel und Gehäuse bleiben nur
-15 SVG-Einheiten. Boiler und Verbindungsleitungen ziehen mit, die Anordnung
+Diagrammbereich steht wieder etwas tiefer, mit 40 SVG-Einheiten Abstand
+zwischen Infokachel und Gehäuse. Boiler und Verbindungsleitungen ziehen mit, die Anordnung
 von Pumpe, Ventil und Messwerten bleibt erhalten. Die Solar-Kachel zeigt unter
 dem Panel zwei kompakte Zeilen für Kollektor und Solarspeicher, ohne eigenes
 großes Wertefeld. Ihr unterer Rand liegt auf der Gehäuseunterkante der WP. Ein
