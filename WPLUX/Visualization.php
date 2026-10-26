@@ -2561,7 +2561,7 @@ window.SymconHeatPump = {
             luxtronikReady = true;
             luxtronikControls.disabled = false;
             if (firstFrame && document.activeElement?.tagName !== 'INPUT') luxtronikCanvas.focus({preventScroll: true});
-            luxtronikHelp.textContent = 'Verbunden. Das Display mit Pfeiltasten und Enter bedienen oder die Schaltflächen anklicken. Ein Mausklick auf das Display entspricht Enter; auch das Mausrad wird unterstützt.';
+            luxtronikHelp.textContent = 'Verbunden.';
         };
         const readLuxtronikResponse = (text) => {
             if (typeof text !== 'string' || text.length > 262144) throw new Error('Invalid response');
