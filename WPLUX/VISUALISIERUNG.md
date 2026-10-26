@@ -34,10 +34,13 @@ ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
 - Komponenten-Checkboxen für Puffer, Warmwasserspeicher und Solarthermie.
 - Optionale Warmwasser-Zirkulation mit Pumpe, Leitung und Hahn; ihr Zustand
   stammt intern von `Ausgang_Zirkulationspumpe` (ID 46).
-- Zwei Heizkreisplätze: HK1 als Standard, HK2 optional, jeweils mit eigener Bezeichnung.
+- Ein direkter Heizkreis mit frei wählbarer Bezeichnung; ein zweiter Heizkreis
+  ist optional. Mischersymbole entfallen. Bei einem Kreis kommt VL aus dem normalen
+  WP-Vorlauf (ID 10), bei zwei Kreisen aus Mischkreis 1/2 (IDs 21/24).
+  Die Anzeigesperre bei Boilerladung gilt mit und ohne Reihenpuffer.
 - Eine gemeinsame HUP mit Prozentwert im Gerätebereich und Boiler-Umschaltventil.
-  Mischersymbole und Mischereinstellungen entfallen; die bisherigen
-  Mischkreis-Vorlauftemperaturen bleiben an den Heizkreisabgängen erhalten.
+- Optionaler kompakter Reihenpuffer nur im Heizungsrücklauf; der Vorlauf führt
+  direkt am Speicher vorbei. Ohne Puffer auch direkter Rücklauf.
 - Bis zu drei optionale Raumtemperaturen mit frei wählbarer Bezeichnung
   (leer = Variablenname). Ein Einzelwert wird größer dargestellt. Für Icons
   wird das Variablensymbol verwendet, ersatzweise ein Haus. Je Raum sind Name, Icon
@@ -45,9 +48,8 @@ ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
 - Unter **Heizstäbe** bis zu drei Ist-Leistungsvariablen (W oder kW laut Profil;
   ohne Einheit W) und jeweils eine optionale Schaltvariable mit Aktion und
   Assoziationen. Legacy-Profile und moderne Aufzählungen werden unterstützt.
-- Solarwärme wahlweise an Warmwasserspeicher oder Puffer (Heizunterstützung),
-  direkt neben dem Solarthermie-Schalter. Ohne aktivierten Puffer wird Solarthermie
-  automatisch am Warmwasserspeicher dargestellt, der dafür bei Bedarf eingeblendet wird.
+- Solarthermie ausschließlich am bivalenten Warmwasserspeicher, mit zwei
+  getrennten gelben Leitungen. Keine Auswahl zur Ladung des Heizpuffers.
 - Ansteuerung der Heizwasserpumpe über ID 183 in Prozent. Eine separate
   U/min-Drehzahl ist nicht bestätigt und wird nicht angezeigt.
 - Eingangsleistung aus der bereits konfigurierten COP-Quelle `kwin` (kW), ohne
@@ -60,46 +62,51 @@ Es gibt keine separaten Auswahlfelder für einzelne Speicherfühler, Pumpen oder
 interne Heizkreiswerte. Ein umfassendes Zuordnungsformular, Zuordnungsdiagnosen,
 Tabellen, ein Importbutton und ein manueller Modus entfallen.
 
-Die Warmwasserbereitung bleibt ein eigener Speicher-/Ladekreis und belegt keinen
-der zwei Heizkreisplätze. Vom Luxtronik-Regler gelieferte Mischkreiswerte
-sind interne Werte, auch wenn Mischer und Pumpen außerhalb des Wärmepumpengehäuses
-montiert sind. Fremdvariablen stammen beispielsweise von separaten Symcon-Zählern.
+Die Warmwasserbereitung bleibt ein eigener Speicher-/Ladekreis.
+Ein einzelner Heizkreis zeigt zwei Zeilen: seine **Bezeichnung** und **VL: … °C**.
+Diese Temperatur verwendet dieselbe Quelle wie der normale WP-Vorlauf
+`Vorlauftemperatur_Heizkreis` (ID 10), einschließlich der gewählten Lesequelle und
+verfügbarer Ersatzquellen. Bei zwei aktivierten Heizkreisen verwenden die Abgänge
+fest `Mischkreis_1_Vorlauftemperatur` (ID 21) und `Mischkreis_2_Vorlauftemperatur`
+(ID 24). Sie zeigen drei Zeilen: Name, **ab Mischer 1/2**, **VL: … °C**.
+Es werden keine Mischer gezeichnet und keine anderen Fühler ersatzweise für eine
+fehlende Mischkreistemperatur eingesetzt: Fehlt der Messwert, erscheint **VL: —**.
+Beim Wechsel zwischen einem und zwei Kreisen werden zuvor gehaltene Werte aus der
+anderen Quelle verworfen. Native Mischkreiswerte und ihre Idents bleiben in der
+ID-Liste verfügbar; zusätzliche Reglerobjekte werden nicht erstellt.
+Gespeicherte Mischerzuordnungen und das alte Solarziel bleiben unverändert erhalten,
+beeinflussen diese Darstellung aber nicht und sind nicht mehr im Formular.
 
-Je Heizkreis lässt sich eine **Bezeichnung** vergeben. HK1 liest fest
-`Mischkreis_1_Vorlauftemperatur` (ID 21), HK2 fest `Mischkreis_2_Vorlauftemperatur`
-(ID 24). Alte Mischer- oder Fremdsensorzuordnungen überschreiben diese Quellen
-nicht. Die Karten zeigen drei Zeilen: Name, **ab Mischer 1/2**, **VL: … °C**.
-Fehlt der jeweilige Messwert, erscheint **VL: —**. Gehaltene Werte aus einer
-früheren abweichenden Zuordnung werden beim Umstieg verworfen.
-Der dritte Regler-Mischkreis bleibt als Datenquelle und in der ID-Liste erhalten.
+Die gemeinsame HUP sitzt im roten Steigstrang, darüber folgt das
+Boiler-Umschaltventil. Der rote Heizungs-Vorlauf geht gerade nach oben zu den Heizkreisabgängen.
+Bei zwei Kreisen rücken beide Abgänge nach oben, oberhalb des Rücklaufpuffers.
+Ein aktivierter Puffer ist ausschließlich als kompakter **Reihen-Rücklaufpuffer**
+mit zwei Anschlüssen gezeichnet, links unterhalb der Heizkreisabgänge. Der Heizungsrücklauf
+tritt seitlich ein und verlässt den Speicher unten direkt in Richtung WP.
+Der Warmwasser-Rücklauf mündet erst hinter diesem Puffer in die gemeinsame
+WP-Rücklaufleitung. Ohne Puffer führt der Heizungsrücklauf direkt zur WP.
+Ein gestrichelt gezeichneter Bypass mit Überströmventil verbindet den Heizungs-Vorlauf
+mit dem Heizungsrücklauf vor dem Puffer. Er hat keine angebundene Stellungsrückmeldung
+und wird daher nicht als geöffnet oder durchströmt animiert.
 
-Das Schema enthält eine gemeinsame HUP im roten Steigstrang. In Flussrichtung
-folgt darüber unmittelbar das Boiler-Umschaltventil. Die kurzen Anschlussstücke am
-Kondensator sind nur leicht verlängert; der blaue Rücklauf behält den unteren
-Knick. Pumpe und Ventil stehen nahe am Kondensator. Blau liegt parallel
-zum roten Steigstrang. Der Warmwasserspeicher steht höher und ist nach oben verlängert. Beim Kompaktieren ziehen Boiler und
-Leitungsanschlüsse mit nach oben; Solarleitungen und Zirkulationsabgang bleiben
-frei von den Beschriftungen. Die
-blaue Steigleitung steht weiter rechts, ohne den Puffer zu verschieben. VL steht
-am roten Strang vor dem Ventil, der Prozentwert neben der Pumpe und RL direkt
-neben dem blauen Kondensatoraustritt. Dahinter
-zweigt die Boilerladung ab; der Heizungszweig führt direkt zum optionalen Puffer
-und von dort zu den Heizkreisen. Der Puffer ist als parallel eingebundener
-Vieranschluss-Trennspeicher gezeichnet: WP-Vorlauf/Rücklauf links,
-Heizkreis-Vorlauf/Rücklauf rechts. Zwischen den beiden Rückläufen gibt es keine
-zusätzliche äußere Verbindung. Kurze gemeinsame Leitungen verteilen das Wasser
-auf die Heizkreisabgänge; kleine Unterbrechungen kennzeichnen Kreuzungen ohne
-Verbindung. Ein Reihenpuffer entspricht diesem Schema nicht. Der Speicher und die Heizkreisabgänge sind nach links zusammengerückt; ohne
-Solarthermie wird die Zeichenfläche entsprechend schmaler. Der rote Steigstrang läuft gerade ab dem Umschaltventil nach oben, der
-blaue Rücklauf parallel daneben außerhalb der WP-Temperaturbeschriftungen. Beide
-Solarleitungen führen auf kurzem Weg unterhalb der Heizkreise an die Unterseite
-des Puffers; die Schleife über dem Speicher und Kreuzungen mit den Heizkreisen entfallen.
-Die beiden gelben Steigleitungen haben auch am Pumpensymbol Abstand voneinander;
-der obere Anschluss an der Solar-Kachel liegt höher und der Wasserhahn tiefer.
-Die obere Leitung verwendet den rechten Steigstrang, die untere den linken;
-auch die kurzen waagerechten Anschlüsse berühren den jeweils anderen Strang nicht. Bei Solarwärme an den
-Warmwasserspeicher verlaufen Vor- und Rücklauf getrennt waagerecht auf Höhe der
-Solaranschlüsse; der Wasserhahn liegt dazwischen. Ein gemeinsames Leitungsstück entfällt.
+Der Speicher erhöht das verfügbare Wasservolumen, etwa für das Abtauen. Er allein
+sichert keinen Mindestvolumenstrom bei geschlossenen Heizkreisen: Dafür sind der
+passend eingestellte Überströmweg oder ausreichend offene Heizflächen nötig.
+Ein Volumen von 100–200 Litern kann passen; maßgeblich bleiben die Anforderungen
+der konkreten Wärmepumpe und das tatsächlich verfügbare Anlagenvolumen.
+Der vorhandene externe Rücklauffühler (ID 13,
+`Ruecklauftemperatur_im_Trennspeicher`) bleibt die angezeigte Speicherquelle.
+Seine tatsächliche Einbauposition und Eignung für den Reihenpuffer müssen zur
+realen Anlage passen; der Variablenname beweist den Einbauort nicht.
+
+Die Anordnung von Kondensator, Pumpe, Ventil und Temperaturwerten im Gerätebereich
+bleibt erhalten. VL steht vor dem Ventil, der Prozentwert neben der Pumpe,
+Durchfluss mittig zwischen den blauen Querleitungen; RL und RL Soll mit gleichem
+Abstand oberhalb/unterhalb der unteren Querleitung. Die Solarthermie führt
+kreuzungsfrei an den unteren Wärmetauscher des bivalenten Warmwasserspeichers;
+die WP lädt den oberen Bereich über ihren eigenen Kreis. Der Wasserhahn bleibt
+zwischen den beiden gelben Leitungen. Solar-Kachel und WP-Gehäuse schließen unten
+bündig ab. Ohne Solarthermie fällt die Zeichenfläche schmaler aus.
 
 Die Solarpumpe zeigt keinen zusätzlichen Ein/Aus-Text. Ohne numerischen
 Drehzahl-/Ansteuerungswert folgt die Animation dem SLP-Ausgang (ID 52).
@@ -112,8 +119,7 @@ Die Anzeige „Solarspeicher“ bezeichnet ausdrücklich den separaten Eingang
 ID 27. Ein Reglerwert von 150 °C wird unverändert wiedergegeben; daraus wird
 keine bestätigte Temperatur des Warmwasser- oder Heizpuffers abgeleitet.
 
-Die Grafik ist kein vollständiger Installationsplan: Bei hydraulischer Trennung
-können weitere reale Pumpen nötig sein, die hier nicht zusätzlich gezeichnet werden.
+Die Grafik ist ein vereinfachtes Schema des gewählten Systems und kein vollständiger Installationsplan.
 Ohne Puffer führt der Heizungszweig vom Umschaltventil direkt nach oben.
 Ohne Puffer und Solarthermie rücken die Abgänge nach links; die Zeichenfläche passt
 sich bis zur Bedienleiste an.
@@ -301,21 +307,22 @@ zur Heizung. Bei unbekanntem Ausgang wird keine Stellung gezeichnet. Der Tooltip
 weist darauf hin, dass keine mechanische Positionsrückmeldung vorliegt.
 
 Der Heizungszweig erhält seinen Vorlauf nach der Boilerumschaltung. Während
-Warmwasserladung ohne Puffer wird er blasser und nicht als durchströmt animiert.
+Warmwasserladung wird er mit und ohne Reihenpuffer blasser und nicht als durchströmt animiert.
 Die angezeigten Heizkreistemperaturen werden auf dem letzten Heizwert gehalten,
 mit ⏸ markiert und auch beim erneuten Öffnen beibehalten. Nach Ladeende bleiben sie
 gehalten, bis der WP-Vorlauf wieder auf seinen letzten Heizwert oder darunter
 gefallen ist. Erst dann erscheinen wieder aktuelle Heizkreistemperaturen.
 Der WP-Vorlauf selbst und alle Messvariablen bleiben live und unverändert. Ohne
-vorherigen Heizwert wird keine Temperatur erfunden. Ein hydraulisch getrennter
-Puffer kann die Heizkreise unabhängig versorgen; dort bleiben deren Messwerte live.
+vorherigen Heizwert wird keine Temperatur erfunden. Ein Reihen-Rücklaufpuffer
+ermöglicht keine unabhängige Heizkreisversorgung während der Boilerladung.
 
 Der Boilerzweig animiert nur bei angewähltem Warmwasserweg und vorhandenem
 Primärdurchfluss. Ein gemessener Durchfluss von 0 stoppt die Primäranimation auch
 bei aktivem BUP. Ohne verfügbaren BUP-Wert dient der Warmwasser-Betriebszustand als
 Darstellungsersatz; die Ventilstellung bleibt dabei ausdrücklich unbekannt.
-Mit Puffer bleibt die unabhängig gepumpte Heizungsseite darstellbar. Die Leitungen
-von der WP zum Puffer werden während Boilerladung nicht als durchströmt gezeichnet.
+Auch mit Reihenpuffer werden Heizkreis und Puffer während der Boilerladung
+nicht als durchströmt animiert. Die gemeinsame HUP und der gewählte Boilerzweig
+bleiben bei vorhandenem Durchfluss animiert.
 Die Grafik stellt die konfigurierte Umschalthydraulik schematisch dar; sie bestimmt
 nicht den tatsächlichen Einbauort von Pumpe oder Ventil im konkreten Gerät.
 

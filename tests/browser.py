@@ -553,6 +553,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 # Pump command and measured l/h have independent schematic speed scales.
                 def pump_reading(percent, flow=600, running=True, target=1):
                     sample=json.loads(json.dumps(payload))
+                    sample['data'][sample['config']['wwHeatingValve']]['value']=False
                     pump_key=sample['config']['heatingCircuitPumpValue']
                     sample['data'][pump_key]={'value':percent,'formatted':f'{percent} %'}
                     sample['data'][sample['config']['heatingCircuitPumpRunning']]['value']=running
@@ -580,9 +581,9 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 pump_reading(25,flow=1200)
                 assert page.locator('#main > .wp-live-flow').first.evaluate('e=>parseFloat(getComputedStyle(e).animationDuration)')==1.4
                 assert pump_reading(0)['name']=='none'
-                assert page.locator('#gHK1 > .wp-live-flow').count()==2  # Its independent FUP still runs from the buffer.
+                assert page.locator('#gHK1 > .wp-live-flow').count()==2  # Actual measured flow still feeds the direct circuit.
                 assert pump_reading(75,running=False)['name']=='none'
-                assert page.locator('#gHK1 > .wp-live-flow').count()==0
+                assert page.locator('#gHK1 > .wp-live-flow').count()==2
                 for missing in [None,'','unavailable',False,-1]:
                     rotor=pump_reading(missing)
                     assert rotor['name']=='symcon-modern-rotate' and 1.7<rotor['duration']<1.8,(missing,rotor)
@@ -640,9 +641,9 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                         assert page.locator('#textSupplyTemperatureHeating').get_attribute('data-held')=='false'
                         assert page.locator('#gHK1 > .wp-live-flow').count()==2
                     if stage=='buffered':
-                        assert page.locator('#textSupplyTemperatureHeating').text_content()=='VL: 29.4 °C'
+                        assert page.locator('#textSupplyTemperatureHeating').text_content()=='VL: 31.3 °C ⏸'
                         assert page.locator('#pathBufferChargeSupply + .wp-live-flow,#pathBufferChargeReturn + .wp-live-flow').count()==0
-                        assert page.locator('#pathBufferManifoldSupply + .wp-live-flow,#pathBufferManifoldReturn + .wp-live-flow').count()==2
+                        assert page.locator('#pathBufferManifoldSupply + .wp-live-flow,#pathBufferManifoldReturn + .wp-live-flow,#gHK1 > .wp-live-flow').count()==0
                         assert page.locator('#gDHW > .wp-live-flow').count()==2
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
 
@@ -696,51 +697,38 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert not errors,errors
                 print(json.dumps({'viewport':width,**result,'updates':'PASS'}))
                 page.close()
-            # Two heating outlets retain their temperatures without mixer hardware.
+            # Optional second mixed circuit; buffer stays in the return only.
             for width in [1200,390]:
                 mixed=browser.new_page(viewport={'width':width,'height':850})
-                errors=[]
-                mixed.on('pageerror',lambda e: errors.append(str(e)))
                 mixed.goto(f'http://127.0.0.1:{server.server_port}/mixed-circuits.html')
-                original=mixed.evaluate("""()=>{
-                    const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
-                    return JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
-                }""")
-                for has_buffer in [False,True]:
-                    sample=json.loads(json.dumps(original));sample['config']['tankHP']=has_buffer
-                    sample['config']['heatingFlow']='mixFlow';sample['data']['mixFlow']={'value':612,'formatted':'612 l/h'}
-                    mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
-                    assert mixed.locator('#gHK1').is_visible() and mixed.locator('#gHK2').is_visible()
-                    assert not mixed.locator('#gHK3').is_visible()
-                    assert not mixed.locator('#gHKPumpIcon1').is_visible() and not mixed.locator('#gHKPumpIcon2').is_visible()
-                    for n in [1,2]:
-                        assert mixed.locator('#textHeatingCircuitName'+str(n)).text_content()=='HK'+str(n)
-                        assert mixed.locator('#textHeatingCircuitSource'+str(n)).text_content()=='ab Mischer '+str(n)
-                        assert str(25+n*5) in mixed.locator('#textSupplyTemperatureHeating'+('' if n==1 else str(n))).text_content()
-                        assert mixed.locator('[id^="gMixerValveSymbol"],#gMixerValveReadings,[id^="pathHKMixingReturn"]').count()==0
-                    if has_buffer:
-                        assert mixed.locator('#pathBufferChargeReturn').get_attribute('d')=='M840 380H810V785'
-                        assert mixed.locator('#pathBufferManifoldReturn').get_attribute('d')=='M1100 415H1040V380H1010'
-                        shift=mixed.locator('#gHeating').evaluate('e=>e.transform.baseVal.getItem(0).matrix.e')
-                        assert mixed.locator('#gHK1 > path.hot').get_attribute('d')==f'M{1060-int(shift)} 245H1260'
-                        assert mixed.locator('#gHK2 > path.hot').get_attribute('d')==f'M{1060-int(shift)} 365H1260'
-                    assert mixed.locator('#textComputedCOP').text_content()=='4.25'
-                    assert mixed.locator('#textComputedJAZ').text_content()=='3.75'
-                    screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
-                    if screenshot_dir: mixed.screenshot(path=str(Path(screenshot_dir)/f'two-heating-outlets-{has_buffer}-{width}.png'))
-                sample['config']['tankHP']=False
-                sample['config']['heatingCircuitType2']='off'
-                sample['config']['mixers']=[m for m in sample['config']['mixers'] if m['circuit']==1]
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
-                assert not mixed.locator('#gHK2').is_visible()
-                assert mixed.locator('#gMixerValveSymbol2').count()==0
-                assert mixed.locator('#gMixerValveSymbol1').count()==0
-                sample['config']['mixers']=[]
-                mixed.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',sample)
-                assert mixed.locator('[id^="gMixerValveSymbol"]').count()==0
-                assert not errors,errors
+                original=mixed.evaluate("""()=>JSON.parse([...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init(')).textContent.trim().slice('SymconHeatPump.init('.length,-2))""")
+                for dual in [False,True]:
+                    for has_buffer in [False,True]:
+                        sample=json.loads(json.dumps(original));sample['config']['tankHP']=has_buffer
+                        sample['config']['heatingCircuitType2']='radiator' if dual else 'off'
+                        sample['data'][sample['config']['supplyTemperatureHeating']]=sample['data']['mixerActual1' if dual else 'supplyTemperature']
+                        mixed.evaluate('(p)=>window.handleMessage(p)',sample)
+                        assert mixed.locator('#gHK1').is_visible()
+                        assert mixed.locator('#gHK2').is_visible()==dual and not mixed.locator('#gHK3').is_visible()
+                        assert not mixed.locator('#gHKPumpIcon1').is_visible()
+                        assert mixed.locator('[id^="gMixerValveSymbol"]').count()==0
+                        assert mixed.locator('[id^="textHeatingCircuitSource"]').count()==(2 if dual else 0)
+                        if dual:
+                            assert mixed.locator('#textHeatingCircuitSource1').text_content()=='ab Mischer 1'
+                            assert mixed.locator('#textHeatingCircuitSource2').text_content()=='ab Mischer 2'
+                            assert '30.0' in mixed.locator('#textSupplyTemperatureHeating').text_content()
+                            assert '35.0' in mixed.locator('#textSupplyTemperatureHeating2').text_content()
+                        if has_buffer:
+                            assert mixed.locator('#pathBufferChargeReturn').get_attribute('d')=='M810 466V785'
+                            assert mixed.locator('#pathBufferManifoldReturn').get_attribute('d')==('M990 360V395H895' if dual else 'M990 295V395H895')
+                            assert mixed.locator('#pathBufferManifoldSupply').get_attribute('d')==''
+                            assert mixed.locator('#gReturnBufferBypass').is_visible()
+                        assert mixed.locator('#gBuffer').is_visible()==has_buffer
+                        assert mixed.locator('#gNoBuffer').is_visible()!=has_buffer
+                        assert mixed.locator('#textComputedCOP').text_content()=='4.25'
+                        assert mixed.locator('#textComputedJAZ').text_content()=='3.75'
                 mixed.close()
-            print(json.dumps({'two_heating_outlets':'PASS','omitted_mixers':'PASS','single_primary_pump':'PASS','DHW_temperature_hold':'PASS'}))
+            print(json.dumps({'optional_second_outlet':'PASS','series_return_buffer':'PASS','DHW_temperature_hold':'PASS'}))
 
             # Selected room count controls the layout and scales a sole reading up.
             for width in [1200,390]:
@@ -924,7 +912,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 shi.goto(f'http://127.0.0.1:{server.server_port}/shi.html')
                 assert shi.locator('#wp-error').text_content()==''
                 assert shi.locator('#textHPStatus').text_content()=='Heizen'
-                assert '31.5' in shi.locator('#textSupplyTemperatureHeating').text_content()
+                assert '34.5' in shi.locator('#textSupplyTemperatureHeating').text_content()
                 assert shi.locator('#textInputPower').text_content()=='1.20 kW'
                 assert shi.locator('#gSymconWarmWaterSetpoint').is_visible()
                 assert shi.locator('#gSymconHeatingCorrection').is_visible()
@@ -968,7 +956,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
             for width in [1200,390]:
                 internal=browser.new_page(viewport={'width':width,'height':850})
                 internal.goto(f'http://127.0.0.1:{server.server_port}/internal-only.html')
-                assert '24.9' in internal.locator('#textSupplyTemperatureHeating').text_content()
+                assert '25.0' in internal.locator('#textSupplyTemperatureHeating').text_content()
                 assert internal.locator('#textHPStatus').text_content()=='Keine Anforderung'
                 assert internal.locator('#textInputPower').text_content()=='1.50 kW'
                 assert internal.locator('#textHeatingFlow').text_content()=='607 l/h'
@@ -997,7 +985,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gCirculatingPumpVisual').evaluate('e=>getComputedStyle(e).display')=='none'
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M960 385V425H1250V615H1260M1260 820H1218V445H920V385'
+                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M1088 616H1260M1260 756H1088'
                 assert_solar_pipe_clearance(comp.locator('#gSolar > path.sol').get_attribute('d'))
                 screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                 if screenshot_dir: comp.screenshot(path=str(Path(screenshot_dir)/f'solar-buffer-{width}.png'))

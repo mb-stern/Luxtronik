@@ -666,18 +666,6 @@ HTML;
             $config['heatingCircuitMixed' . $i] = false;
         }
         $config['mixers'] = [];
-        // Fixed circuit identity: HK1 uses MK1 and HK2 uses MK2. Obsolete saved
-        // mixer assignments must not silently override the displayed source.
-        for ($circuit = 1; $circuit <= 2; ++$circuit) {
-            if (!$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $circuit)) continue;
-            $i = $circuit;
-            $config['mixers'][] = ['number' => $i, 'circuit' => $circuit,
-                'actual' => $this->DataKey('MixerActual' . $i, 'mixerActual' . $i),
-                'target' => $this->DataKey('MixerTarget' . $i, 'mixerTarget' . $i),
-                'open' => $this->DataKey('MixerOpen' . $i, 'mixerOpen' . $i),
-                'close' => $this->DataKey('MixerClose' . $i, 'mixerClose' . $i),
-                'pump' => $this->DataKey('MixerPump' . $i, 'mixerPump' . $i)];
-        }
         $config['roomTemperatures'] = $this->GetVisualizationRoomSources();
         $config['inputPower'] = $this->DataKey('InputPower', 'inputPower');
         $config['circulation'] = $this->ReadPropertyBoolean('VisualizationCirculation');
@@ -686,8 +674,7 @@ HTML;
         $config['suctionTemperature'] = $this->DataKey('SuctionTemperature', 'suctionTemperature');
         $config['timeUntilDefrost'] = $this->DataKey('TimeUntilDefrost', 'timeUntilDefrost');
         $config['solarStorageTemperature'] = $this->DataKey('SolarStorageTemperature', 'solarStorageTemperature');
-        $config['solarTarget'] = $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer'
-            && $this->ReadPropertyBoolean('TankHP') ? 'buffer' : 'hotwater';
+        $config['solarTarget'] = 'hotwater'; // Series return buffer is never a solar charging target.
         $config['computedCOP'] = $this->DataKey('ComputedCOP', 'computedCOP');
         $config['computedJAZ'] = $this->DataKey('ComputedJAZ', 'computedJAZ');
         $config['circuitWarning'] = '';
@@ -841,25 +828,18 @@ HTML;
     private function ApplyHeatingTemperatureHold(array $data): array
     {
         $signature=hash('sha256',json_encode([$this->VisualizationSourceKey(),$this->ReadPropertyBoolean('TankHP'),
-            'fixed-circuit-sources-v1',
+            'direct-or-dual-mixed-v1',$this->ReadPropertyBoolean('VisualizationHeatingCircuit2'),
             $this->ReadPropertyInteger('SupplyTemperature'),$this->ReadPropertyInteger('SupplyTemperatureHeating1'),
             $this->ReadPropertyInteger('SupplyTemperatureHeating2')],JSON_THROW_ON_ERROR));
         $state=json_decode($this->GetBuffer('HeatingTemperatureHold'),true)??[];
         if(($state['signature']??'')!==$signature) $state=['signature'=>$signature,'last'=>[],'held'=>[],'pending'=>false];
-        if($this->ReadPropertyBoolean('TankHP')) {
-            $this->SetBuffer('HeatingTemperatureHold','');return $data;
-        }
         $valve=$data['wwHeatingValve']['value']??null;
         $hotwater=$valve!==null && $valve!=='' ? $this->NormalizeBinaryValue($valve)
             : (isset($data['heatingPumpHotWaterMode']['value'])?$this->NormalizeBinaryValue($data['heatingPumpHotWaterMode']['value']):null);
         $wp=$data['supplyTemperature']['value']??null;
         $valid=static fn($value):bool=>!is_bool($value) && is_numeric($value) && is_finite((float)$value);
-        $keys=['supplyTemperatureHeating','supplyTemperatureHeating2'];
-        for($i=1;$i<=2;++$i) {
-            if(!$this->ReadPropertyBoolean('VisualizationHeatingCircuit'.$i)) continue;
-            $keys[]='mixerActual'.$i;
-        }
-        $keys=array_values(array_unique($keys));
+        $keys=['supplyTemperatureHeating'];
+        if($this->ReadPropertyBoolean('VisualizationHeatingCircuit2')) $keys[]='supplyTemperatureHeating2';
         if($hotwater===true && empty($state['pending'])) {
             $state['held']=$state['last'];$state['threshold']=$state['lastWP']??null;
             $state['pending']=true;$state['since']=time();
@@ -2940,7 +2920,7 @@ window.SymconHeatPump = {
             const wwValveToHotWater = valveKnown && binary(cfg.wwHeatingValve);
             const hotWaterRoute = valveKnown ? wwValveToHotWater
                 : controls.hotwaterActive === true || binary(cfg.heatingPumpHotWaterMode);
-            const directHeatingInterrupted = !previewAll && !!cfg.tankWW && !cfg.tankHP && hotWaterRoute;
+            const directHeatingInterrupted = !previewAll && !!cfg.tankWW && hotWaterRoute;
 
             const optionName = (control) => {
                 if (!control || !control.configured) return '';
@@ -3170,12 +3150,21 @@ window.SymconHeatPump = {
             const circulationVisible = previewAll || (!!cfg.tankWW && !!cfg.circulation && !!cfg.circulatingPumpRunning);
             const contentRight = Math.max(previewAll || cfg.thermalSolarAvailable ? 1570
                 : buffered ? 1375 : cfg.circulation ? 1235 : 1140,nextButtonX - buttonGap);
-            const heatingShift = Math.min(0,contentRight - 1525,buffered ? -100 : 0);
-            svg.querySelector('#gHeating')?.setAttribute('transform','translate(' + heatingShift + ' 0)');
-            const coldHeaderX = buffered ? 1100 : 810;
+            const heatingShift = Math.min(0,contentRight - 1525,buffered ? -200 : 0);
+            const heatingY = hk2 ? -55 : 0;
+            svg.querySelector('#gHeating')?.setAttribute('transform','translate(' + heatingShift + ' '+heatingY+')');
+            const coldHeaderX = buffered ? 990 : 810;
             const coldHeaderLocalX = coldHeaderX - heatingShift;
-            const heatingSupplyX = buffered ? 1060 : boilerValveX;
-            svg.querySelector('#gBufferTankBody')?.setAttribute('transform','translate(840 180)');
+            const heatingSupplyX = boilerValveX;
+            const returnTank = svg.querySelector('#gBufferTankBody');
+            returnTank?.setAttribute('transform','translate(725 330)');
+            returnTank?.querySelector(':scope > rect')?.setAttribute('height','100');
+            returnTank?.querySelector(':scope > ellipse:last-of-type')?.setAttribute('cy','118');
+            returnTank?.querySelector(':scope > rect[rx]')?.setAttribute('height','68');
+            returnTank?.querySelector(':scope > path')?.setAttribute('d','M28 88H150');
+            const returnTankTitle = returnTank?.querySelector(':scope > text.hd');
+            returnTankTitle?.setAttribute('y','48');
+            if (returnTankTitle) returnTankTitle.style.fontSize='18px';
             svg.querySelector('#heatPump')?.setAttribute('transform','translate(0 -'+lowerLift+')');
             svg.querySelector('#main')?.setAttribute('transform','translate(0 -'+lowerLift+')');
             svg.querySelector('#heatPumpPanel')?.setAttribute('width','862');
@@ -3196,17 +3185,18 @@ window.SymconHeatPump = {
                 svg.querySelector('#gHKPumpIcon' + n)?.setAttribute('transform','translate(-25 0)');
             });
             const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
-            // Four-port separator: primary left, secondary right, no return bypass.
-            const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25 - lowerLift) + 'V245H840',
-                'M840 380H810V' + (waterReturnY - lowerLift),
-                'M1010 245H1060V'+(lastReturn-50),
-                lastReturn <= 380 ? 'M1100 '+lastReturn+'V380H1010' : 'M1100 '+lastReturn+'H1040V380H1010'];
+            // Both heating supplies bypass the compact two-port return tank.
+            // Only the heating return enters its side and leaves through the bottom.
+            const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25 - lowerLift) + 'V'+(hk2 && !hk1 ? 215 : firstReturn-50+heatingY),
+                'M810 466V' + (waterReturnY - lowerLift),
+                '',
+                'M990 '+(lastReturn+heatingY)+'V395H895'];
             bufferPaths.forEach((path,index) => {
                 path.setAttribute('d',bufferGeometry[index]);
                 path.setAttribute('id',['pathBufferChargeSupply','pathBufferChargeReturn','pathBufferManifoldSupply','pathBufferManifoldReturn'][index]);
             });
-            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M'+boilerValveX+' ' + (waterSupplyY - 25 - lowerLift) + 'V'+(firstReturn-50));
-            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M810 '+lastReturn+'V' + (waterReturnY - lowerLift));
+            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M'+boilerValveX+' ' + (waterSupplyY - 25 - lowerLift) + 'V'+(firstReturn-50+heatingY));
+            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M810 '+(lastReturn+heatingY)+'V' + (waterReturnY - lowerLift));
             // Gaps mark crossings without creating apparent hydraulic junctions.
             let crossings = svg.querySelector('#maskHydraulicCrossings');
             if (!crossings) crossings = node(svg.querySelector('defs'),'mask',{
@@ -3214,17 +3204,23 @@ window.SymconHeatPump = {
             crossings.replaceChildren();
             node(crossings,'rect',{x:0,y:0,width:1600,height:1000,fill:'#fff'});
             if (buffered) {
-                if (hk1 && hk2) node(crossings,'rect',{x:1090-heatingShift,y:356,width:20,height:18,fill:'#000'});
+                if (hk1 && hk2) node(crossings,'rect',{x:coldHeaderLocalX-10,y:356,width:20,height:18,fill:'#000'});
             } else if (hk1 && hk2) {
                 node(crossings,'rect',{x:800-heatingShift,y:356,width:20,height:18,fill:'#000'});
             }
             ['#main > path.hot','#pathBufferChargeSupply','#gNoBuffer > path.hot','#gHK1 > path.hot','#gHK2 > path.hot']
                 .forEach(selector=>svg.querySelector(selector)?.setAttribute('mask','url(#maskHydraulicCrossings)'));
 
+            const bypassY = hk2 ? 215 : 270;
+            const bypass = group('gReturnBufferBypass',svg.querySelector('#gBuffer'));
+            node(bypass,'title',{},'Überströmventil im Bypass zwischen Vorlauf und Heizungsrücklauf, vor dem Reihenpuffer; schematisch, ohne Stellungsrückmeldung');
+            node(bypass,'path',{d:hk2 && !hk1 ? 'M700 215H990V300M990 320V360' : 'M700 '+bypassY+'H990V'+(bypassY+25),fill:'none',stroke:'var(--wp-icon)','stroke-width':3,'stroke-dasharray':'5 5'});
+            node(bypass,'circle',{cx:980,cy:bypassY,r:10,fill:'var(--wp-button)',stroke:'var(--wp-icon)','stroke-width':2});
+            node(bypass,'path',{d:'M976 '+(bypassY-6)+'L984 '+bypassY+'L976 '+(bypassY+6),fill:'none',stroke:'var(--wp-icon)','stroke-width':2});
+
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
             show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
-            const solarBuffer = cfg.solarTarget === 'buffer' && !!cfg.tankHP;
-            const solarHotWater = !!cfg.thermalSolarAvailable && !solarBuffer;
+            const solarHotWater = !!cfg.thermalSolarAvailable;
             show('#gDHW', previewAll || !!cfg.tankWW || solarHotWater);
             svg.querySelector('#gDHW')?.setAttribute('transform','translate(' + dhwShift + ' ' + (dhwLift - lowerLift + boilerAlignment) + ')');
             // Extend the boiler upward while retaining its base and lower fittings.
@@ -3245,8 +3241,8 @@ window.SymconHeatPump = {
             node(boilerCrossing,'rect',{x:800-dhwShift,y:waterSupplyY-dhwLift-boilerAlignment-9,width:20,height:18,fill:'#000'});
             svg.querySelector('#gDHW > path.hot')?.setAttribute('mask','url(#maskBoilerCrossing)');
             svg.querySelector('#gCirculatingPumpVisual')?.setAttribute('transform','translate(-31 '+(85 + lowerLift - boilerAlignment + lowerDrop)+')');
-            show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? heating : true)));
-            // Solar enters the buffer from below, clear of the heating outlets.
+            show('#gSolar', previewAll || !!cfg.thermalSolarAvailable);
+            // Solar exclusively charges the lower heat exchanger of the DHW tank.
             const solar = svg.querySelector('#gSolar');
             if (solar) svg.insertBefore(solar,svg.querySelector('#heatPump'));
             solar?.setAttribute('transform','translate(0 '+lowerDrop+')');
@@ -3260,11 +3256,9 @@ window.SymconHeatPump = {
             const solarPipe = svg.querySelector('#gSolar > path.sol');
             const solarBoilerTopY = 575 + dhwLift + 66;
             const solarBoilerBottomY = 575 + dhwLift + 206;
-            if (solarPipe) solarPipe.setAttribute('d', solarBuffer
-                ? 'M960 '+(410-lowerDrop)+'V425H1250V615H1260M1260 820H1218V445H920V'+(410-lowerDrop)
-                : 'M' + (1064 + dhwShift) + ' '+solarBoilerTopY+'H1260M1260 '+solarBoilerBottomY+'H' + (1064 + dhwShift));
+            if (solarPipe) solarPipe.setAttribute('d', 'M' + (1064 + dhwShift) + ' '+solarBoilerTopY+'H1260M1260 '+solarBoilerBottomY+'H' + (1064 + dhwShift));
             const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
-            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(33 -155)' : 'translate(35 '+(solarBoilerTopY-755)+')');
+            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', 'translate(35 '+(solarBoilerTopY-755)+')');
 
             // Optional DHW circulation uses its confirmed native output.
             show(
@@ -3286,7 +3280,7 @@ window.SymconHeatPump = {
                     '#gHK2'
                 ].forEach((selector) => show(selector, true));
 
-                // In der Maximalansicht drei unterschiedliche Heizflächen zeigen.
+                // In der Vollansicht beide Heizkreisabgänge zeigen.
                 show('#gHKFloor1', true);
                 show('#gHKRadiator1', false);
                 show('#gHKFloor2', false);
@@ -3468,13 +3462,13 @@ window.SymconHeatPump = {
             }
 
             placeTankValues([
-                ['#textTankTempHPUp', cfg.tankTempHPUp, 82],
-                ['#textTankTempHPMiddle', cfg.tankTempHPMiddle, 128],
-                ['#textTankTempHPDown', cfg.tankTempHPDown, 190]
+                ['#textTankTempHPUp', '', 82],
+                ['#textTankTempHPMiddle', cfg.tankTempHPMiddle, 92],
+                ['#textTankTempHPDown', '', 150]
             ]);
             const bufferReading = svg.querySelector('#textTankTempHPMiddle');
             if (bufferReading && data[cfg.tankTempHPMiddle]?.ident === 'Ruecklauftemperatur_im_Trennspeicher') {
-                node(bufferReading,'title',{},'Externer Rücklauffühler im Trennspeicher (Luxtronik ID 13)');
+                node(bufferReading,'title',{},'Externer Rücklauffühler (Luxtronik ID 13); Position im Rücklauf/Reihenpuffer hängt von der realen Anlage ab');
             }
             const solarReading = group('gSolarStorageReading', svg.querySelector('#gSolar'));
             fittedText(solarReading, {id:'textSolarStorageTemperature', class:'sm', x:1280, y:815,
@@ -3500,12 +3494,12 @@ window.SymconHeatPump = {
                 show('#gHKPumpIcon' + n, false);
                 const offset = (n - 1) * 120;
                 const source = group('gHeatingCircuitSource' + n, branch);
-                if (n <= 2 && [hk1,hk2][n - 1]) fittedText(source,{
+                if (hk2 && n <= 2) fittedText(source,{
                     id:'textHeatingCircuitSource' + n,class:'sm',x:1370,y:242 + offset,
                     'dominant-baseline':'text-before-edge',style:'font-size:18px'},'ab Mischer ' + n,140);
                 if (name) {
                     const fullName = cfg['heatingCircuitName' + n] || 'HK' + n;
-                    name.setAttribute('y',String(210 + offset));
+                    name.setAttribute('y',String((hk2 ? 210 : 226) + offset));
                     name.setAttribute('x','1370');
                     name.setAttribute('text-anchor','start');
                     name.setAttribute('dominant-baseline','text-before-edge');
@@ -3532,7 +3526,7 @@ window.SymconHeatPump = {
                         : reading ? 'Heizkreis-Vorlauf ' + reading : 'Keine Heizkreistemperatur verfügbar');
                     value.style.fontSize = '18px';
                     value.setAttribute('x','1370');
-                    value.setAttribute('y',String(274 + offset));
+                    value.setAttribute('y',String((hk2 ? 274 : 266) + offset));
                     value.setAttribute('text-anchor','start');
                     value.setAttribute('dominant-baseline','text-before-edge');
                     value.removeAttribute('textLength');
@@ -3795,7 +3789,7 @@ window.SymconHeatPump = {
 
             // Command percentage controls schematic speed; an explicit off relay stops it.
             const pumpStates = [1,2,3].map(n => pumpState(circuitPump(n), circuitPumpValue(n)));
-            ['#gHeating','#gNoBuffer'].forEach(selector => {
+            ['#gHeating','#gNoBuffer','#gBuffer'].forEach(selector => {
                 const element = svg.querySelector(selector);
                 if(element) element.style.opacity = directHeatingInterrupted ? '.45' : '';
             });
@@ -3870,7 +3864,6 @@ window.SymconHeatPump = {
             svg.setAttribute('viewBox','15 0 ' + contentRight + ' ' + (925 - lowerLift));
 
             // Live flow overlays use actual running variables; no idle animation.
-            const heatingActive = pumpStates.some((state,index) => [hk1,hk2,hk3][index] && state.active);
             const measuredFlow = measuredNumber(cfg.heatingFlow);
             const hasMeasuredFlow = measuredFlow !== null && measuredFlow >= 0;
             const primaryPump = pumpState(cfg.heatingCircuitPumpRunning, cfg.heatingCircuitPumpValue);
@@ -3902,14 +3895,12 @@ window.SymconHeatPump = {
             primaryRotor.style.setProperty('animation',primaryDuration ? 'symcon-modern-rotate '+primaryDuration.toFixed(2)+'s linear infinite' : 'none');
             setText('#textPrimaryPumpValue',primaryPump.percent!==null?primaryPump.percent.toFixed(1)+' %':'');
             const directHeatingFlow = heating && !hotWaterRoute && primaryWaterActive;
-            const secondaryHeatingFlow = cfg.tankHP || previewAll ? heatingActive : directHeatingFlow;
+            const secondaryHeatingFlow = directHeatingFlow;
             // Visual scale only: 600 l/h or 50% uses 2.8 s; never derive a displayed l/h value.
             const flowDuration = (value, reference) => value > 0 ? Math.max(0.6, Math.min(8, 2.8 * reference / value)) : 2.8;
             const primaryFlowDuration = hasMeasuredFlow ? flowDuration(measuredFlow, 600)
                 : primaryPump.percent !== null ? flowDuration(primaryPump.percent, 50) : 2.8;
-            const circuitFlowDurations = pumpStates.map(state => state.percent !== null ? flowDuration(state.percent, 50) : 2.8);
-            const activeCircuitDurations = circuitFlowDurations.filter((_,index) => [hk1,hk2,hk3][index] && pumpStates[index].active);
-            const headerFlowDuration = activeCircuitDurations.length ? Math.min(...activeCircuitDurations) : 2.8;
+            const headerFlowDuration = primaryFlowDuration;
             const solarActive = hasSolarSpeed ? solarPumpNumber > 0 : binary(cfg.thermalSolarPump);
             const solarReference = /%/.test(solarUnit) || /hz/.test(solarUnit) ? 50
                 : /rpm|u\s*\/\s*min|1\s*\/\s*min/.test(solarUnit) ? 1500 : null;
@@ -3921,11 +3912,11 @@ window.SymconHeatPump = {
                 ['#gRefrigerantCircuit path.hot, #gRefrigerantCircuit path.cold', compressorActive],
                 ['#main path.hot, #main path.cold', primaryWaterActive, primaryFlowDuration],
                 ['#pathBufferChargeSupply, #pathBufferChargeReturn', primaryWaterActive && !hotWaterRoute, primaryFlowDuration],
-                ['#pathBufferManifoldSupply, #pathBufferManifoldReturn', heatingActive, headerFlowDuration],
+                ['#pathBufferManifoldReturn', directHeatingFlow, primaryFlowDuration],
                 ['#gNoBuffer path.hot, #gNoBuffer path.cold', directHeatingFlow, headerFlowDuration],
                 ['#gHeatingHeaders path.hot, #gHeatingHeaders path.cold', secondaryHeatingFlow, headerFlowDuration],
-                ['#gHK1 > path.hot, #gHK1 > path.cold', hk1 && secondaryHeatingFlow, cfg.tankHP ? circuitFlowDurations[0] : primaryFlowDuration],
-                ['#gHK2 > path.hot, #gHK2 > path.cold', hk2 && secondaryHeatingFlow, cfg.tankHP ? circuitFlowDurations[1] : primaryFlowDuration],
+                ['#gHK1 > path.hot, #gHK1 > path.cold', hk1 && secondaryHeatingFlow, primaryFlowDuration],
+                ['#gHK2 > path.hot, #gHK2 > path.cold', hk2 && secondaryHeatingFlow, primaryFlowDuration],
                 ['#gHK3 > path.hot, #gHK3 > path.cold', false],
                 ['#gDHW > path.hot, #gDHW > path.cold', !!cfg.tankWW && hotWaterRoute && primaryWaterActive, primaryFlowDuration],
                 ['#gSolar path.sol', solarActive,solarDuration ? solarDuration * 2 : 2.8]
@@ -4157,10 +4148,8 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         if (preg_match('/^(SupplyTemperatureHeating|RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)([1-3])$/D', $property, $match)
             && !in_array($property, ['HeatingCircuitPumpRunning1','HeatingCircuitPumpValue1'], true)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return [];
-        if (preg_match('/^SupplyTemperatureHeating([1-3])$/D', $property, $match)) {
-            $circuit = (int)$match[1];
-            return self::VISUALIZATION_EXTRA_IDENT_MAP['MixerActual' . $circuit];
-        }
+        if ($property === 'SupplyTemperatureHeating1') return $this->ReadPropertyBoolean('VisualizationHeatingCircuit2')
+            ? self::VISUALIZATION_EXTRA_IDENT_MAP['MixerActual1'] : $this->GetVisualizationIdents('SupplyTemperature');
 
         return self::VISUALIZATION_EXTRA_IDENT_MAP[$property] ?? self::LUXTRONIK_IDENT_MAP[$property] ?? [];
     }
@@ -4522,21 +4511,19 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             ['type' => 'Label', 'caption' => 'Komponenten auswählen; die Grafik erhält ihre internen Messwerte automatisch, unabhängig von der ID-Liste.'],
             $this->VariableSelect('Wettercode (OpenWeather, z. B. 10d; optional)', 'VisualizationWeatherCode'),
             ['type' => 'RowLayout', 'items' => [
-                ['type' => 'CheckBox', 'name' => 'TankHP', 'caption' => 'Pufferspeicher'],
+                ['type' => 'CheckBox', 'name' => 'TankHP', 'caption' => 'Reihenpuffer im Heizungsrücklauf'],
                 ['type' => 'CheckBox', 'name' => 'TankWW', 'caption' => 'Warmwasserspeicher'],
                 ['type' => 'CheckBox', 'name' => 'VisualizationCirculation', 'caption' => 'Warmwasser-Zirkulation']
             ]],
-            ['type' => 'RowLayout', 'items' => [
-                ['type' => 'CheckBox', 'name' => 'ThermalSolarAvailable', 'caption' => 'Solarthermie'],
-                ['type' => 'Select', 'name' => 'VisualizationSolarTarget', 'caption' => 'Solarwärme an',
-                    'options' => [['caption'=>'Warmwasserspeicher','value'=>'hotwater'],['caption'=>'Pufferspeicher (Heizunterstützung)','value'=>'buffer']]]
+            ['type' => 'CheckBox', 'name' => 'ThermalSolarAvailable', 'caption' => 'Solarthermie am Warmwasserspeicher'],
+            ['type'=>'RowLayout','items'=>[
+                ['type'=>'CheckBox','name'=>'VisualizationHeatingCircuit1','caption'=>'Heizkreis 1 (Standard)'],
+                ['type'=>'ValidationTextBox','name'=>'HeatingCircuitName1','caption'=>'Bezeichnung']
             ]],
-            ['type' => 'Label', 'caption' => 'Ohne Pufferspeicher wird die Solarwärme am Warmwasserspeicher dargestellt.',
-                'visible' => $this->ReadPropertyBoolean('ThermalSolarAvailable') && $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer' && !$this->ReadPropertyBoolean('TankHP')],
-            ...array_map(static fn(int $i): array => ['type'=>'RowLayout','items'=>[
-                ['type'=>'CheckBox','name'=>'VisualizationHeatingCircuit' . $i,'caption'=>$i===1?'Heizkreis 1 (Standard)':'Heizkreis 2 (optional)'],
-                ['type'=>'ValidationTextBox','name'=>'HeatingCircuitName' . $i,'caption'=>'Bezeichnung']
-            ]],range(1,2)),
+            ['type'=>'RowLayout','items'=>[
+                ['type'=>'CheckBox','name'=>'VisualizationHeatingCircuit2','caption'=>'Heizkreis 2 (optional)'],
+                ['type'=>'ValidationTextBox','name'=>'HeatingCircuitName2','caption'=>'Bezeichnung']
+            ]],
             ['type' => 'ExpansionPanel', 'caption' => 'Heizstäbe', 'items' => [
                 ['type' => 'Label', 'caption' => 'Ist-Leistungsvariablen werden mit ihrer Einheit W/kW summiert. Schaltvariablen und deren Assoziationen dienen ausschließlich der Bedienung.'],
                 ...array_map(fn(int $i): array => $this->HeaterConfigurationFields($i), range(1, 3))
@@ -4630,6 +4617,9 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function GetVisualizationPointData(string $property): ?array
     {
+        if ($property === 'SupplyTemperatureHeating1' && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit2')) {
+            return $this->ReadPropertyBoolean('VisualizationHeatingCircuit1') ? $this->GetVisualizationPointData('SupplyTemperature') : null;
+        }
         if (in_array($property,['EEVHeatingOpening','EEVCoolingOpening'],true)
             && !in_array($this->ReadPropertyString('IPAddress'),['','0.0.0.0','::'],true)) {
             return $this->GetWebEEVPoint($property==='EEVHeatingOpening'?'EEV_Heizen':'EEV_Kuehlen');
@@ -4688,15 +4678,9 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     private function GetVisualizationRequiredPointIDs(): array
     {
         $idents = [];
-        $mixers = [];
-        for ($i = 1; $i <= 3; ++$i) {
-            if ($this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $i)) {
-                $mixers[$i] = true;
-            }
-        }
         foreach (self::LUXTRONIK_IDENT_MAP + self::VISUALIZATION_EXTRA_IDENT_MAP as $property => $candidates) {
-            if (preg_match('/^Mixer(?:Actual|Target|Open|Close|Pump)([1-3])$/D', $property, $match)
-                && !isset($mixers[(int)$match[1]])) continue;
+            if (preg_match('/^Mixer(?:Actual|Target|Open|Close|Pump)([1-3])$/D', $property)) continue;
+            if (preg_match('/^(?:RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)[23]$/D', $property) || $property==='SupplyTemperatureHeating3') continue;
             if ($property === 'ThermalSolarPanelTemp' && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
             if (in_array($property, ['SolarStorageTemperature', 'ThermalSolarPump'], true) && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
             if ($property === 'CirculatingPumpRunning' && !$this->ReadPropertyBoolean('VisualizationCirculation')) continue;
@@ -4713,7 +4697,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function GetVisualizationExtraPointIDs(): array
     {
-        return $this->ReadPropertyBoolean('VisualizationHeatingCircuit1') ? [110351=>true] : [];
+        return []; // No mixer-pump status is needed for the direct circuit.
     }
 
     private function VisualizationHeaterPower(int $number): ?array

@@ -332,6 +332,7 @@ $tests['hybrid reads one Java frame for missing measurements while zero Modbus v
 $tests['unsupported or unavailable Modbus measurements use their exact Java ID without reinterpreting SHI-only fields'] = static function ():void {
     $v=hybridFrameValues();$v[15]=4294967271;
     withServer([[pack('N*',3004,0),frame(3004,$v)]],static function(Luxtronik $m):void {
+        $m->properties['VisualizationHeatingCircuit2']=true;
         $m->properties['IDListe']='[{"id":15,"enabled":true},{"id":80,"enabled":true}]';
         withSHI(static function(Luxtronik $m):void {
             shiRawUpdate($m);$p=shiPayload($m);
