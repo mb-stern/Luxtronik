@@ -91,9 +91,21 @@ auf die Heizkreisabgänge; kleine Unterbrechungen kennzeichnen Kreuzungen ohne
 Verbindung. Ein Reihenpuffer entspricht diesem Schema nicht. Der Speicher und die Heizkreisabgänge sind nach links zusammengerückt; ohne
 Solarthermie wird die Zeichenfläche entsprechend schmaler. Der rote Steigstrang läuft gerade ab dem Umschaltventil nach oben, der
 blaue Rücklauf parallel daneben außerhalb der WP-Temperaturbeschriftungen. Beide
-Solaranschlüsse liegen oberhalb des roten Heizkreisabgangs. Bei Solarwärme an den
+Solarleitungen führen auf kurzem Weg unterhalb der Heizkreise an die Unterseite
+des Puffers; die Schleife über dem Speicher und Kreuzungen mit den Heizkreisen entfallen. Bei Solarwärme an den
 Warmwasserspeicher verlaufen Vor- und Rücklauf getrennt waagerecht auf Höhe der
 Solaranschlüsse; der Wasserhahn liegt dazwischen. Ein gemeinsames Leitungsstück entfällt.
+
+Die Solarpumpe zeigt keinen zusätzlichen Ein/Aus-Text. Ohne numerischen
+Drehzahl-/Ansteuerungswert folgt die Animation dem SLP-Ausgang (ID 52).
+Ist eine numerische Pumpenmessung mit rpm, %, Hz oder U/min angebunden, werden
+der Wert und die passende Animationsgeschwindigkeit verwendet; ein Messwert 0
+stoppt die Animation. Java/WebSocket liefern in den vorliegenden Daten für Solar
+nur Kollektor (ID 26), Solarspeicherfühler (ID 27) und SLP, keine Pumpendrehzahl
+und keine eigenen Solar-Vorlauf-/Rücklauftemperaturen.
+Die Anzeige „Solarspeicher“ bezeichnet ausdrücklich den separaten Eingang
+ID 27. Ein Reglerwert von 150 °C wird unverändert wiedergegeben; daraus wird
+keine bestätigte Temperatur des Warmwasser- oder Heizpuffers abgeleitet.
 
 Die Grafik ist kein vollständiger Installationsplan: Bei hydraulischer Trennung
 können weitere reale Pumpen nötig sein, die hier nicht zusätzlich gezeichnet werden.

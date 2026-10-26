@@ -3240,14 +3240,14 @@ window.SymconHeatPump = {
             svg.querySelector('#gDHW > path.hot')?.setAttribute('mask','url(#maskBoilerCrossing)');
             svg.querySelector('#gCirculatingPumpVisual')?.setAttribute('transform','translate(-16 70)');
             show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? heating : true)));
-            // Paint solar behind the hydraulic pipes; its overhead routes stay above the buffer.
+            // Solar enters the buffer from below, clear of the heating outlets.
             const solar = svg.querySelector('#gSolar');
             if (solar) svg.insertBefore(solar,svg.querySelector('#heatPump'));
             const solarPipe = svg.querySelector('#gSolar > path.sol');
             const solarBoilerTopY = 575 + dhwLift + 66;
             const solarBoilerBottomY = 575 + dhwLift + 206;
             if (solarPipe) solarPipe.setAttribute('d', solarBuffer
-                ? 'M1004 235H1045V155H1230V680H1260M1260 820H1245V140H1030V215H1004'
+                ? 'M920 410V475H1230V680H1260M1260 820H1245V450H960V410'
                 : 'M' + (1064 + dhwShift) + ' '+solarBoilerTopY+'H1260M1260 '+solarBoilerBottomY+'H' + (1064 + dhwShift));
             const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
             if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : 'translate(35 '+(solarBoilerTopY-755)+')');
@@ -3465,7 +3465,8 @@ window.SymconHeatPump = {
             const solarReading = group('gSolarStorageReading', svg.querySelector('#gSolar'));
             if (formatted(cfg.solarStorageTemperature)) {
                 fittedText(solarReading, {id:'textSolarStorageTemperature', class:'sm', x:1295, y:900,
-                    style:'font-size:14px'}, 'Speicher ' + formatted(cfg.solarStorageTemperature), 215);
+                    style:'font-size:14px'}, 'Solarspeicher ' + temperature(cfg.solarStorageTemperature), 215);
+                node(solarReading,'title',{},'Separater Solarspeicherfühler (Luxtronik ID 27); eigener Fühlereingang, nicht die Warmwasser- oder Puffertemperatur');
             }
 
             setText('#textHeatingCircuitName1', cfg.heatingCircuitName1 || 'HK1');
@@ -3616,7 +3617,18 @@ window.SymconHeatPump = {
             setText('#textCompressorSpeedValue', formatted(cfg.compressorValue) || '—');
             group('gCompressorFrequencyReadings', svg.querySelector('#gRefrigerantCircuit'));
             setText('#textThermalSolarPanelTemp', formatted(cfg.thermalSolarPanelTemp));
-            setText('#textThermalSolarPumpSpeed', formatted(cfg.thermalSolarPumpSpeed) || (cfg.thermalSolarPump ? relay(cfg.thermalSolarPump) : '—'));
+            const solarPumpNumber = measuredNumber(cfg.thermalSolarPumpSpeed);
+            const solarUnit = (data[cfg.thermalSolarPumpSpeed]?.unit || formatted(cfg.thermalSolarPumpSpeed)).toLowerCase();
+            const hasSolarSpeed = solarPumpNumber !== null && solarPumpNumber >= 0
+                && /%|hz|rpm|u\s*\/\s*min|1\s*\/\s*min/.test(solarUnit);
+            setText('#textThermalSolarPumpSpeed', hasSolarSpeed ? formatted(cfg.thermalSolarPumpSpeed) : '');
+            const solarPumpLabel = [...svg.querySelectorAll('#gSolar > text')]
+                .find(el=>el.id==='textSolarPumpLabel' || el.textContent.trim()==='Pumpe');
+            if (solarPumpLabel) {
+                solarPumpLabel.id='textSolarPumpLabel';
+                show('#textSolarPumpLabel',hasSolarSpeed);
+            }
+            show('#textThermalSolarPumpSpeed',hasSolarSpeed);
 
             // Wärmepumpen-Status: ausschließlich der formatierte Profilwert
             // der konfigurierten Betriebsstatusvariable. Keine erfundenen Texte.
@@ -3872,9 +3884,13 @@ window.SymconHeatPump = {
             const circuitFlowDurations = pumpStates.map(state => state.percent !== null ? flowDuration(state.percent, 50) : 2.8);
             const activeCircuitDurations = circuitFlowDurations.filter((_,index) => [hk1,hk2,hk3][index] && pumpStates[index].active);
             const headerFlowDuration = activeCircuitDurations.length ? Math.min(...activeCircuitDurations) : 2.8;
-            const solarActive = Number(raw(cfg.thermalSolarPumpSpeed)) > 0 || binary(cfg.thermalSolarPump);
+            const solarActive = hasSolarSpeed ? solarPumpNumber > 0 : binary(cfg.thermalSolarPump);
+            const solarReference = /%/.test(solarUnit) || /hz/.test(solarUnit) ? 50
+                : /rpm|u\s*\/\s*min|1\s*\/\s*min/.test(solarUnit) ? 1500 : null;
+            const solarDuration = !solarActive ? 0 : hasSolarSpeed && solarReference
+                ? Math.max(.6,Math.min(4,1.4 * solarReference / solarPumpNumber)) : 1.4;
             const solarRotor = svg.querySelector('#solarPumpRotor');
-            if (solarRotor) solarRotor.style.setProperty('animation', solarActive ? 'symcon-modern-rotate 1.4s linear infinite' : 'none', 'important');
+            if (solarRotor) solarRotor.style.setProperty('animation', solarActive ? 'symcon-modern-rotate '+solarDuration+'s linear infinite' : 'none', 'important');
             const flows = [
                 ['#gRefrigerantCircuit path.hot, #gRefrigerantCircuit path.cold', compressorActive],
                 ['#main path.hot, #main path.cold', primaryWaterActive, primaryFlowDuration],
@@ -3886,7 +3902,7 @@ window.SymconHeatPump = {
                 ['#gHK2 > path.hot, #gHK2 > path.cold', hk2 && secondaryHeatingFlow, cfg.tankHP ? circuitFlowDurations[1] : primaryFlowDuration],
                 ['#gHK3 > path.hot, #gHK3 > path.cold', false],
                 ['#gDHW > path.hot, #gDHW > path.cold', !!cfg.tankWW && hotWaterRoute && primaryWaterActive, primaryFlowDuration],
-                ['#gSolar path.sol', solarActive]
+                ['#gSolar path.sol', solarActive,solarDuration ? solarDuration * 2 : 2.8]
             ];
             flows.forEach(([selector, active, duration = 2.8]) => {
                 svg.querySelectorAll(selector).forEach((path) => {

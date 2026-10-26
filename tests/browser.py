@@ -964,7 +964,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 comp.goto(f'http://127.0.0.1:{server.server_port}/components.html')
                 assert comp.locator('#textBufferReturnTemperature').count()==0
                 assert '42.0' in comp.locator('#textSolarStorageTemperature').text_content()
-                assert comp.locator('#textThermalSolarPumpSpeed').text_content()=='Ein'
+                assert comp.locator('#textThermalSolarPumpSpeed').text_content()==''
+                assert not comp.locator('#textSolarPumpLabel').is_visible()
                 assert '31.7' in comp.locator('#textPrimaryPumpValue').text_content()
                 assert comp.locator('#textHeatingPumpSpeed').count()==0
                 assert comp.locator('#gCirculatingPumpVisual').evaluate('e=>getComputedStyle(e).display')!='none'
@@ -975,7 +976,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gCirculatingPumpVisual').evaluate('e=>getComputedStyle(e).display')=='none'
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert comp.locator('#gSolar > path.sol').get_attribute('d').startswith('M1004 235')
+                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M920 410V475H1230V680H1260M1260 820H1245V450H960V410'
                 screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                 if screenshot_dir: comp.screenshot(path=str(Path(screenshot_dir)/f'solar-buffer-{width}.png'))
                 changed['config'].update(tankHP=False,tankWW=False,solarTarget='buffer')
