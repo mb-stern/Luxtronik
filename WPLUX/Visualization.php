@@ -3362,12 +3362,12 @@ window.SymconHeatPump = {
 
             // The information panel keeps its size; operating data replaces VL/RL.
             const info = svg.querySelector('#info');
-            const infoLeft = 345;
-            const infoWidth = 305;
+            const infoLeft = 363;
+            const infoWidth = 287;
             const infoFontFamily = getComputedStyle(svg.querySelector('#textHeatingPowerLabel')).fontFamily;
             const infoTypography = el => {
                 el.style.setProperty('font-family',infoFontFamily,'important');
-                el.style.setProperty('font-size','24px','important');
+                el.style.setProperty('font-size','23px','important');
                 el.style.setProperty('font-weight','400','important');
                 el.style.setProperty('font-style','normal','important');
                 el.removeAttribute('textLength');
@@ -3393,12 +3393,10 @@ window.SymconHeatPump = {
             [[cfg.computedCOP, 'COP'], [cfg.computedJAZ, 'JAZ']].forEach(([key,label])=>{
                 const pair=node(efficiency,'g',{});
                 const heading=node(pair,'text',{id:'textLabel'+label,class:'lb',x:0,y:248},label+':');
-                const value=node(pair,'text',{id:'textComputed'+label,class:'md',x:0,y:248},formatted(key)||'—');
+                const value=node(heading,'tspan',{id:'textComputed'+label,class:'md',y:248},formatted(key)||'—');
                 [[heading,labelStyle],[value,valueStyle]].forEach(([el,reference])=>{
                     ['font-size','font-family','font-weight'].forEach(name=>el.style.setProperty(name,reference.getPropertyValue(name),'important'));
                 });
-                const headingBounds=heading.getBBox(),valueBounds=value.getBBox();
-                value.setAttribute('x',String(headingBounds.x+headingBounds.width+2-valueBounds.x));
                 row.push(pair);
             });
             const faults=group('gFaultHistory',efficiency);efficiency.appendChild(faults);
@@ -3412,9 +3410,10 @@ window.SymconHeatPump = {
             }
             const bounds=row.map(el=>el.getBBox());
             const widths=bounds.map(box=>box.width);
-            const gap=Math.min(12,Math.max(2,(infoWidth-widths.reduce((sum,width)=>sum+width,0))/Math.max(1,row.length-1)));
+            const gap=Math.min(12,Math.max(1,(infoWidth-widths.reduce((sum,width)=>sum+width,0))/Math.max(1,row.length-1)));
             let rowX=infoLeft;
             row.forEach((el,index)=>{
+                if (el === faults && history?.available) rowX=infoLeft+infoWidth-widths[index];
                 el.setAttribute('transform','translate('+(rowX-bounds[index].x)+' 0)');
                 rowX+=widths[index]+gap;
             });
