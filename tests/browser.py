@@ -29,6 +29,27 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+def assert_solar_pipe_clearance(path, minimum=8):
+    """Check all segments, including collector-side horizontal connections."""
+    tokens=re.findall(r'[MHV]|-?\d+(?:\.\d+)?',path)
+    paths=[];i=0;x=y=0
+    while i<len(tokens):
+        command=tokens[i];i+=1
+        if command=='M':
+            x,y=map(float,tokens[i:i+2]);i+=2;paths.append([])
+        else:
+            assert command in ('H','V'),command
+            value=float(tokens[i]);i+=1
+            end=(value,y) if command=='H' else (x,value)
+            paths[-1].append(((x,y),end));x,y=end
+    assert len(paths)==2,paths
+    for a in paths[0]:
+        for b in paths[1]:
+            dx=max(min(p[0] for p in a)-max(p[0] for p in b),min(p[0] for p in b)-max(p[0] for p in a),0)
+            dy=max(min(p[1] for p in a)-max(p[1] for p in b),min(p[1] for p in b)-max(p[1] for p in a),0)
+            assert dx*dx+dy*dy>=minimum*minimum,(a,b,'Solar pipes touch or cross')
+
+
 class LuxtronikFixture:
     """Independent local peer for the protocol seen in the user's Lux.js."""
 
@@ -976,7 +997,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gCirculatingPumpVisual').evaluate('e=>getComputedStyle(e).display')=='none'
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M920 385V445H1218V640H1260M1260 820H1250V435H960V385'
+                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M960 385V425H1250V615H1260M1260 820H1218V445H920V385'
+                assert_solar_pipe_clearance(comp.locator('#gSolar > path.sol').get_attribute('d'))
                 screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                 if screenshot_dir: comp.screenshot(path=str(Path(screenshot_dir)/f'solar-buffer-{width}.png'))
                 changed['config'].update(tankHP=False,tankWW=False,solarTarget='buffer')

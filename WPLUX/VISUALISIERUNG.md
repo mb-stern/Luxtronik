@@ -95,7 +95,9 @@ blaue Rücklauf parallel daneben außerhalb der WP-Temperaturbeschriftungen. Bei
 Solarleitungen führen auf kurzem Weg unterhalb der Heizkreise an die Unterseite
 des Puffers; die Schleife über dem Speicher und Kreuzungen mit den Heizkreisen entfallen.
 Die beiden gelben Steigleitungen haben auch am Pumpensymbol Abstand voneinander;
-der obere Anschluss an der Solar-Kachel bleibt oberhalb des Wasserhahns. Bei Solarwärme an den
+der obere Anschluss an der Solar-Kachel liegt höher und der Wasserhahn tiefer.
+Die obere Leitung verwendet den rechten Steigstrang, die untere den linken;
+auch die kurzen waagerechten Anschlüsse berühren den jeweils anderen Strang nicht. Bei Solarwärme an den
 Warmwasserspeicher verlaufen Vor- und Rücklauf getrennt waagerecht auf Höhe der
 Solaranschlüsse; der Wasserhahn liegt dazwischen. Ein gemeinsames Leitungsstück entfällt.
 

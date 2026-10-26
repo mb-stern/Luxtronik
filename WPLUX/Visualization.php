@@ -3244,7 +3244,7 @@ window.SymconHeatPump = {
             node(boilerCrossing,'rect',{x:0,y:0,width:1600,height:1000,fill:'#fff'});
             node(boilerCrossing,'rect',{x:800-dhwShift,y:waterSupplyY-dhwLift-boilerAlignment-9,width:20,height:18,fill:'#000'});
             svg.querySelector('#gDHW > path.hot')?.setAttribute('mask','url(#maskBoilerCrossing)');
-            svg.querySelector('#gCirculatingPumpVisual')?.setAttribute('transform','translate(-16 '+(70 + lowerLift - boilerAlignment + lowerDrop)+')');
+            svg.querySelector('#gCirculatingPumpVisual')?.setAttribute('transform','translate(-31 '+(85 + lowerLift - boilerAlignment + lowerDrop)+')');
             show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? heating : true)));
             // Solar enters the buffer from below, clear of the heating outlets.
             const solar = svg.querySelector('#gSolar');
@@ -3261,7 +3261,7 @@ window.SymconHeatPump = {
             const solarBoilerTopY = 575 + dhwLift + 66;
             const solarBoilerBottomY = 575 + dhwLift + 206;
             if (solarPipe) solarPipe.setAttribute('d', solarBuffer
-                ? 'M920 '+(410-lowerDrop)+'V445H1218V640H1260M1260 820H1250V435H960V'+(410-lowerDrop)
+                ? 'M960 '+(410-lowerDrop)+'V425H1250V615H1260M1260 820H1218V445H920V'+(410-lowerDrop)
                 : 'M' + (1064 + dhwShift) + ' '+solarBoilerTopY+'H1260M1260 '+solarBoilerBottomY+'H' + (1064 + dhwShift));
             const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
             if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(33 -155)' : 'translate(35 '+(solarBoilerTopY-755)+')');
