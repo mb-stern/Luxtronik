@@ -90,7 +90,7 @@ text{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;fill:
 
 </g>
 
-<g id="heatPump"><rect id="heatPumpPanel" class="pn" x="28" y="445" width="842" height="465" rx="10" /><text id="textHPStatus" class="md" x="55" y="480" fill="#25e85d" />
+<g id="heatPump"><rect id="heatPumpPanel" class="pn" x="28" y="500" width="842" height="410" rx="10" /><text id="textHPStatus" class="md" x="55" y="480" fill="#25e85d" />
 
 <g id="gHeatPumpDeviceImage" transform="translate(0 -50)">
 <g id="gHPUnitCabinet">

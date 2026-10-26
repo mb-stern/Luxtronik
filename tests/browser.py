@@ -370,7 +370,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert geometry['panel']['x']<geometry['values']['x']<geometry['values']['right']<geometry['panel']['right'],geometry
                 assert geometry['panel']['y']<geometry['values']['y']<geometry['values']['bottom']<geometry['panel']['bottom'],geometry
                 assert geometry['tank']['y']<geometry['hotY']<geometry['coldY']<geometry['tankBase'],geometry
-                assert abs(geometry['panel']['bottom']-geometry['tankBase']-64*geometry['panel']['height']/465)<1,geometry
+                assert abs(geometry['panel']['bottom']-geometry['tankBase']-64*geometry['panel']['height']/410)<1,geometry
                 assert page.locator('#gHeatPumpTemperatures text').count()==3
                 align=page.evaluate("""()=>{
                     const n=document.getElementById('textHeatingCircuitName1'),v=document.getElementById('textSupplyTemperatureHeating');

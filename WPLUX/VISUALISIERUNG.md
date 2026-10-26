@@ -334,3 +334,7 @@ Passwortfeld entfällt. Oben stehen nur die drei Symbole für **Originalinterfac
 Verbindungsstatus entfallen bei vorhandenem Displaybild; Hinweise erscheinen,
 wenn noch kein Bild empfangen wurde oder die Verbindung scheitert. Das Display
 passt sich auch der verfügbaren Höhe an, damit die Bedienpfeile sichtbar bleiben.
+
+Der Wärmepumpenrahmen hat oben und unten am Kältekreis denselben Innenabstand
+von 15 SVG-Einheiten. Die obere Rahmenkante liegt näher an Gerätebild und
+Kältekreis; deren Positionen und die Leitungsführung bleiben erhalten.
