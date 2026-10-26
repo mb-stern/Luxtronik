@@ -74,8 +74,11 @@ Das Schema enthält eine gemeinsame HUP im roten Steigstrang. In Flussrichtung
 folgt darüber unmittelbar das Boiler-Umschaltventil. Die kurzen Anschlussstücke am
 Kondensator sind nur leicht verlängert; der blaue Rücklauf behält den unteren
 Knick. Pumpe und Ventil stehen nahe am Kondensator. Blau liegt parallel
-zum roten Steigstrang. Der Warmwasserspeicher mit seinen Anschlüssen,
-Solarleitungen und der Zirkulation steht höher. Dahinter
+zum roten Steigstrang. Der Warmwasserspeicher steht höher und ist nach oben verlängert. Sein roter
+Abzweig liegt höher, untere Anschlüsse und Anbauteile behalten ihre Höhe. Die
+blaue Steigleitung steht weiter rechts, ohne den Puffer zu verschieben. VL steht
+am roten Strang vor dem Ventil, der Prozentwert neben der Pumpe und RL direkt
+neben dem blauen Kondensatoraustritt. Dahinter
 zweigt die Boilerladung ab; der Heizungszweig führt direkt zum optionalen Puffer
 und von dort zu den Heizkreisen. Der Puffer ist als parallel eingebundener
 Vieranschluss-Trennspeicher gezeichnet: WP-Vorlauf/Rücklauf links,
