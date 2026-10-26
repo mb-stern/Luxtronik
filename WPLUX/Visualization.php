@@ -3157,12 +3157,13 @@ window.SymconHeatPump = {
             });
 
 
-            const waterSupplyY = 640;
-            const waterReturnY = 847;
+            const waterSupplyY = 590;
+            const waterReturnY = 795;
             const buffered = previewAll || !!cfg.tankHP;
-            const boilerValveX = buffered ? 785 : (hk1 !== hk2) ? 825 : 850;
-            // Tank base and WP enclosure share the same baseline (y=910).
-            const dhwLift = 39;
+            const boilerValveX = 785;
+            const primaryPumpY = 650;
+            // Raise the boiler with its connections; keep the condenser exits horizontal.
+            const dhwLift = -25;
             const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0,3) : [];
             const dhwShift = 24;
             const circulationVisible = previewAll || (!!cfg.tankWW && !!cfg.circulation && !!cfg.circulatingPumpRunning);
@@ -3170,13 +3171,13 @@ window.SymconHeatPump = {
                 : buffered ? 1375 : cfg.circulation ? 1235 : 1140,nextButtonX - buttonGap);
             const heatingShift = Math.min(0,contentRight - 1525,buffered ? -100 : 0);
             svg.querySelector('#gHeating')?.setAttribute('transform','translate(' + heatingShift + ' 0)');
-            const coldHeaderX = buffered ? 1100 : 790;
+            const coldHeaderX = buffered ? 1100 : 825;
             const coldHeaderLocalX = coldHeaderX - heatingShift;
             const heatingSupplyX = buffered ? 1060 : boilerValveX;
             svg.querySelector('#gBufferTankBody')?.setAttribute('transform','translate(840 180)');
             svg.querySelector('#heatPumpPanel')?.setAttribute('width','862');
-            svg.querySelector('#main > path.hot')?.setAttribute('d','M650 680H670V'+waterSupplyY+'H'+boilerValveX);
-            svg.querySelector('#main > path.cold')?.setAttribute('d','M'+(buffered ? 825 : 790)+' '+waterReturnY+'H670V705H650');
+            svg.querySelector('#main > path.hot')?.setAttribute('d','M650 680H'+boilerValveX+'V'+waterSupplyY);
+            svg.querySelector('#main > path.cold')?.setAttribute('d','M825 '+waterReturnY+'V705H650');
             svg.querySelector('#switchValve')?.setAttribute('transform','translate('+boilerValveX+' '+waterSupplyY+')');
 
             // Short shared supply/return trunks feed the two heating outlets.
@@ -3202,7 +3203,7 @@ window.SymconHeatPump = {
                 path.setAttribute('id',['pathBufferChargeSupply','pathBufferChargeReturn','pathBufferManifoldSupply','pathBufferManifoldReturn'][index]);
             });
             svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M'+boilerValveX+' ' + (waterSupplyY - 25) + 'V'+(firstReturn-50));
-            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M790 '+lastReturn+'V' + waterReturnY);
+            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M825 '+lastReturn+'V' + waterReturnY);
             // Gaps mark crossings without creating apparent hydraulic junctions.
             let crossings = svg.querySelector('#maskHydraulicCrossings');
             if (!crossings) crossings = node(svg.querySelector('defs'),'mask',{
@@ -3211,9 +3212,8 @@ window.SymconHeatPump = {
             node(crossings,'rect',{x:0,y:0,width:1600,height:1000,fill:'#fff'});
             if (buffered) {
                 if (hk1 && hk2) node(crossings,'rect',{x:1090-heatingShift,y:356,width:20,height:18,fill:'#000'});
-            } else {
-                [1,2].filter(n=>[hk1,hk2][n-1]).forEach(n=>node(crossings,'rect',{
-                    x:boilerValveX-10,y:295+(n-1)*120-9,width:20,height:18,fill:'#000'}));
+            } else if (hk1 && hk2) {
+                node(crossings,'rect',{x:815-heatingShift,y:356,width:20,height:18,fill:'#000'});
             }
             ['#main > path.hot','#pathBufferChargeSupply','#gNoBuffer > path.hot','#gHK1 > path.hot','#gHK2 > path.hot']
                 .forEach(selector=>svg.querySelector(selector)?.setAttribute('mask','url(#maskHydraulicCrossings)'));
@@ -3225,13 +3225,13 @@ window.SymconHeatPump = {
             show('#gDHW', previewAll || !!cfg.tankWW || solarHotWater);
             svg.querySelector('#gDHW')?.setAttribute('transform','translate(' + dhwShift + ' ' + dhwLift + ')');
             svg.querySelector('#gDHW > path.hot')?.setAttribute('d','M' + (boilerValveX + 25 - dhwShift) + ' ' + (waterSupplyY - dhwLift) + 'H900');
-            svg.querySelector('#gDHW > path.cold')?.setAttribute('d','M900 ' + (waterReturnY - dhwLift) + 'H' + (790 - dhwShift));
+            svg.querySelector('#gDHW > path.cold')?.setAttribute('d','M900 ' + (waterReturnY - dhwLift) + 'H' + (825 - dhwShift));
             let boilerCrossing = svg.querySelector('#maskBoilerCrossing');
             if (!boilerCrossing) boilerCrossing = node(svg.querySelector('defs'),'mask',{
                 id:'maskBoilerCrossing',maskUnits:'userSpaceOnUse',x:0,y:0,width:1600,height:1000});
             boilerCrossing.replaceChildren();
             node(boilerCrossing,'rect',{x:0,y:0,width:1600,height:1000,fill:'#fff'});
-            if (buffered) node(boilerCrossing,'rect',{x:815-dhwShift,y:waterSupplyY-dhwLift-9,width:20,height:18,fill:'#000'});
+            node(boilerCrossing,'rect',{x:815-dhwShift,y:waterSupplyY-dhwLift-9,width:20,height:18,fill:'#000'});
             svg.querySelector('#gDHW > path.hot')?.setAttribute('mask','url(#maskBoilerCrossing)');
             svg.querySelector('#gCirculatingPumpVisual')?.setAttribute('transform','translate(-16 70)');
             show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? heating : true)));
@@ -3239,11 +3239,13 @@ window.SymconHeatPump = {
             const solar = svg.querySelector('#gSolar');
             if (solar) svg.insertBefore(solar,svg.querySelector('#heatPump'));
             const solarPipe = svg.querySelector('#gSolar > path.sol');
+            const solarBoilerTopY = 575 + dhwLift + 66;
+            const solarBoilerBottomY = 575 + dhwLift + 206;
             if (solarPipe) solarPipe.setAttribute('d', solarBuffer
                 ? 'M1004 235H1045V155H1230V680H1260M1260 820H1245V140H1030V215H1004'
-                : 'M' + (1064 + dhwShift) + ' 680H1260M1260 820H' + (1064 + dhwShift));
+                : 'M' + (1064 + dhwShift) + ' '+solarBoilerTopY+'H1260M1260 '+solarBoilerBottomY+'H' + (1064 + dhwShift));
             const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
-            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : 'translate(35 -75)');
+            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : 'translate(35 '+(solarBoilerTopY-755)+')');
 
             // Optional DHW circulation uses its confirmed native output.
             show(
@@ -3581,8 +3583,7 @@ window.SymconHeatPump = {
             // Umschaltventil: EIN = Warmwasser, AUS = Heizung.
             // Nur anzeigen, wenn eine Variable konfiguriert ist.
             // Angeforderte Richtung darstellen; keine gemessene Ventilposition.
-            // Heizung    = von links kommend nach oben
-            // Warmwasser = von links nach rechts durchgehend
+            // The rising supply enters from below: heating up, boiler right.
             const switchValveFlow = svg.querySelector('#switchValveFlow');
             if (!svg.querySelector('#valveMotionStyle')) {
                 node(svg,'style',{id:'valveMotionStyle'},'@keyframes valveRecentChange{0%,100%{opacity:1}50%{opacity:.45}}.wp-valve-recent{animation:valveRecentChange 1.5s ease-in-out infinite}@media(prefers-reduced-motion:reduce){.wp-valve-recent{animation:none}}');
@@ -3590,7 +3591,7 @@ window.SymconHeatPump = {
             if (switchValveFlow) {
                 switchValveFlow.setAttribute(
                     'd',
-                    !valveKnown ? '' : wwValveToHotWater ? 'M-16 0H16' : 'M-16 0H0V-16'
+                    !valveKnown ? '' : wwValveToHotWater ? 'M0 16V0H16' : 'M0 16V-16'
                 );
                 switchValveFlow.classList.toggle('wp-valve-recent', recentlyChanged(cfg.wwHeatingValve));
                 switchValveFlow.setAttribute('data-target', !valveKnown ? 'unknown' : wwValveToHotWater ? 'hotwater' : 'heating');
@@ -3628,13 +3629,13 @@ window.SymconHeatPump = {
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:680, y:waterReturnY - waterLineGap - 44,
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:670, y:waterReturnY - waterLineGap - 44,
                     'text-anchor':'start', 'dominant-baseline':'text-after-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 100);
             }
             // Common WP temperatures belong before the DHW/heating split, in every operating mode.
             const wpTemperatures = group('gHeatPumpTemperatures', svg.querySelector('#heatPump'));
-            wpTemperatures.setAttribute('transform','translate(680 0)');
+            wpTemperatures.setAttribute('transform','translate(670 0)');
             [
                 ['textWPSupplyTemperature','VL',cfg.supplyTemperature,waterSupplyY,true],
                 ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,waterReturnY,false],
@@ -3838,18 +3839,18 @@ window.SymconHeatPump = {
             if(!primaryPumpSymbol) {
                 primaryPumpSymbol = node(svg.querySelector('#main'),'g',{id:'gPrimaryWaterPump'});
                 node(primaryPumpSymbol,'title',{},'Gemeinsame Heizwasserumwälzpumpe (HUP) vor der Boiler-/Heizungsumschaltung; schematische Anordnung');
-                node(primaryPumpSymbol,'circle',{cx:750,cy:waterSupplyY,r:18,fill:'var(--wp-button)',stroke:'var(--wp-icon)','stroke-width':2});
-                const pumpCenter = node(primaryPumpSymbol,'g',{transform:'translate(750 '+waterSupplyY+')'});
+                node(primaryPumpSymbol,'circle',{cx:0,cy:0,r:18,fill:'var(--wp-button)',stroke:'var(--wp-icon)','stroke-width':2});
+                const pumpCenter = node(primaryPumpSymbol,'g',{});
                 node(pumpCenter,'circle',{r:12,fill:'none',stroke:'var(--wp-icon)','stroke-width':1.5});
                 const rotor = node(pumpCenter,'g',{id:'primaryPumpRotor',class:'hk-pump-rotor',fill:'var(--wp-icon)'});
                 [0,120,240].forEach(angle=>node(rotor,'path',{
                     d:'M-2-10C5-9 9-5 9-1C5-3 1-3-2-2C0-5 0-8-2-10Z',transform:'rotate('+angle+')'}));
                 node(rotor,'circle',{r:3.5});
-                node(primaryPumpSymbol,'text',{id:'textPrimaryPumpValue',class:'sm',x:750,y:waterSupplyY - 22,
-                    'text-anchor':'middle','dominant-baseline':'text-after-edge',style:'font-size:18px'});
+                node(primaryPumpSymbol,'text',{id:'textPrimaryPumpValue',class:'sm',x:-35,y:0,
+                    'text-anchor':'end','dominant-baseline':'middle',style:'font-size:18px'});
             }
             show('#gPrimaryWaterPump',hasPrimaryPump);
-            primaryPumpSymbol.setAttribute('transform',buffered ? 'translate(-20 0)' : 'translate(0 0)');
+            primaryPumpSymbol.setAttribute('transform','translate('+boilerValveX+' '+primaryPumpY+')');
             const primaryRotor = svg.querySelector('#primaryPumpRotor');
             const primarySpeed = primaryPump.active ? primaryPump.percent ?? 50 : 0;
             const primaryDuration = primarySpeed > 0 ? Math.max(.55,Math.min(2.8,3-primarySpeed*.0245)) : 0;

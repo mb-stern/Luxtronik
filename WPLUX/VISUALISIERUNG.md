@@ -70,7 +70,11 @@ Vorlauf für HK1 aus Mischkreis 1 und für HK2 aus Mischkreis 2. Frühere abweic
 Sensorzuordnungen bleiben intern erhalten; eine zusätzliche Mischerauswahl entfällt.
 Der dritte Regler-Mischkreis bleibt als Datenquelle und in der ID-Liste erhalten.
 
-Das Schema enthält eine gemeinsame HUP vor dem Boiler-Umschaltventil. Dahinter
+Das Schema enthält eine gemeinsame HUP im roten Steigstrang. In Flussrichtung
+folgt darüber unmittelbar das Boiler-Umschaltventil. Die Rohrstücke am
+Kondensator führen zunächst länger waagerecht nach außen; Blau liegt parallel
+zum roten Steigstrang. Der Warmwasserspeicher mit seinen Anschlüssen,
+Solarleitungen und der Zirkulation steht höher. Dahinter
 zweigt die Boilerladung ab; der Heizungszweig führt direkt zum optionalen Puffer
 und von dort zu den Heizkreisen. Der Puffer ist als parallel eingebundener
 Vieranschluss-Trennspeicher gezeichnet: WP-Vorlauf/Rücklauf links,
