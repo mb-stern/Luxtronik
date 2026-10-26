@@ -121,6 +121,7 @@ Version 5.0 (in Vorbereitung; Änderungen ab 4.8)
 - Ein-/Aus-Assoziationen für Heizstäbe wählbar; Puffer/Solar/Zirkulation optional, Solarziel mit Boiler-Fallback und HUP-Ansteuerung in Prozent.
 - Obere Bedienleiste gemäß aktivierten Steuervariablen, einschließlich Schwimmbad und Raumtemperatur-Soll; dynamische Anordnung und Breite. Raum-Sollwert mit eigenem Temperaturprofil.
 - LUX-Bedienfeld zweizeilig; Heizstab-Menü mit einer kompakten Zeile je Heizstab (Name, Ein/Aus-Aktion, gemessene Leistung). Pumpendrehung nach Prozent-Ansteuerung und Wasserflussanimation mit variabler Geschwindigkeit nach l/h bzw. vorhandener Pumpen-Ansteuerung.
+- Obere Bedienmenüs bleiben nach Schaltbefehlen und Sollwertänderungen geöffnet, aktualisieren bestätigte Zustände und schließen beim Klick daneben oder mit Escape. Menüs und Eingabefelder übernehmen das helle oder dunkle Symcon-Design.
 - Optionaler Wettercode aus einer externen Variable (OpenWeather, z. B. 10d/01n) ersetzt die feste Sonne durch ein lokales Wettersymbol mit Tag-/Nacht-Darstellung.
 - EEV-Lesediagnose mit `WPLUX_GetEEVDiagnosticData($id, 3003)` für Parameter bzw. unverändert mit 3004 für Berechnungswerte; bekannte Zugangsdatenfelder im Parameterexport ausgeblendet.
 - Vollständige WebSocket-Diagnose in der Instanzkonfiguration mit JSON-Download; in der Visu bleibt nur das LUX-Gerätedisplay. Bestandsabfrage beim ersten Kontakt und danach täglich, normale Abfragen nur für benötigte fehlende Werte.

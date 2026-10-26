@@ -18,6 +18,11 @@ welche Messwertvariablen im Objektbaum angelegt werden. Die gespeicherte Auswahl
 wird nicht verändert. Bedienvariablen
 werden weiterhin über die bisherigen Optionen aktiviert.
 
+Die Bedienmenüs der oberen Buttons bleiben nach einer Auswahl oder dem
+Übernehmen eines Sollwerts geöffnet. Bestätigte Schaltzustände werden darin
+aktualisiert; laufende Eingaben bleiben erhalten. Ein Klick daneben oder Escape
+schließt das Menü. Hintergrund, Schrift und Eingabefelder folgen dem Symcon-Design.
+
 Ab Symcon 9.1 kann die Kachel maximiert werden. Dafür in den visuellen
 Einstellungen **„Maximieren-Button anzeigen“** aktivieren. Bei bestehenden
 Instanzen die Modulkonfiguration einmal übernehmen, damit der Darstellungstyp

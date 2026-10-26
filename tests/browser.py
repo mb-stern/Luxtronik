@@ -437,6 +437,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                         field=page.locator('#wp-mode-menu input')
                         field.fill(str(value))
                         page.get_by_role('button',name='Übernehmen',exact=True).dispatch_event('click')
+                        assert page.locator('#wp-mode-menu').is_visible()
                         action=page.evaluate('window.testActions.at(-1)')
                         assert action=={'ident':'SetNumericControl','payload':{'function':function,'value':expected}},action
                         assert minimum<=action['payload']['value']<=maximum,action
@@ -457,12 +458,14 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 page.locator('#gHeaterControlButton').dispatch_event('click')
                 assert page.locator('#wp-mode-menu [data-heater="1"][data-value="true"]').text_content()=='Ein'
                 page.locator('#wp-mode-menu [data-heater="1"][data-value="true"]').click()
+                assert page.locator('#wp-mode-menu').is_visible()
                 assert page.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':True}}
                 heater_controls=json.loads(json.dumps(payload['controls']))
                 heater_controls['heaterSwitches'][0]['currentValue']=True
                 heater_controls['heaterSwitches'][0]['enabled']=True
                 heater_controls['heaterSwitches'][2]['configured']=False
                 page.evaluate('(controls)=>window.handleMessage({type:"update",controls})',heater_controls)
+                assert page.locator('#wp-mode-menu [data-heater="1"][data-value="false"]').text_content()=='Aus'
                 assert page.locator('#textHeaterButtonState').text_content()=='0.08 kW'
                 page.locator('#gHeaterControlButton').focus()
                 page.keyboard.press('Enter')
@@ -642,6 +645,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     palette=page.locator('#wp-luxtronik-dialog').evaluate('e=>({background:getComputedStyle(e).backgroundColor,color:getComputedStyle(e).color})')
                     assert palette==({'background':'rgb(24, 34, 47)','color':'rgb(230, 237, 244)'} if theme=='dark'
                                      else {'background':'rgb(248, 250, 252)','color':'rgb(31, 41, 55)'}),palette
+                    assert page.locator('#wp-mode-menu').evaluate('e=>({background:getComputedStyle(e).backgroundColor,color:getComputedStyle(e).color})')==palette
                     assert page.locator('#wp-luxtronik-password').count()==0
                     screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                     if screenshot_dir: page.screenshot(path=str(Path(screenshot_dir)/f'lux-theme-{theme}-{width}.png'))

@@ -387,9 +387,9 @@ trait LuxtronikVisualization
         transform: translateX(-50%);
         padding: 8px;
         border-radius: 12px;
-        border: 1px solid rgba(127,127,127,.35);
-        background: Canvas;
-        color: CanvasText;
+        border: 1px solid var(--wp-dialog-border, rgba(127,127,127,.35));
+        background: var(--wp-dialog-background, Canvas);
+        color: var(--wp-dialog-color, CanvasText);
         box-shadow: 0 8px 28px rgba(0,0,0,.28);
         font: 14px Arial, sans-serif;
         touch-action: manipulation;
@@ -443,7 +443,7 @@ trait LuxtronikVisualization
     #wp-mode-menu .wp-heater-row button,
     #wp-mode-menu .wp-heater-row select { box-sizing: border-box; width: auto; min-width: 60px; max-width: 105px; min-height: 36px; margin: 0; padding: 6px 10px; border: 1px solid rgba(127,127,127,.45); border-radius: 6px; font: inherit; color: inherit; background-color: transparent; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #wp-mode-menu .wp-heater-row button:disabled { cursor: default; opacity: .5; }
-    #wp-mode-menu .wp-heater-row select option { background: Canvas; color: CanvasText; }
+    #wp-mode-menu .wp-heater-row select option { background: var(--wp-dialog-background, Canvas); color: var(--wp-dialog-color, CanvasText); }
 
     #wp-mode-menu .wp-numeric-row {
         display: flex;
@@ -466,8 +466,8 @@ trait LuxtronikVisualization
         padding: 7px 6px;
         border: 1px solid rgba(127,127,127,.45);
         border-radius: 5px;
-        background: Canvas;
-        color: CanvasText;
+        background: var(--wp-dialog-background, Canvas);
+        color: var(--wp-dialog-color, CanvasText);
         text-align: right;
         font: inherit;
     }
@@ -1980,7 +1980,7 @@ window.SymconHeatPump = {
                     dialogBackground=channels[0]*.2126+channels[1]*.7152+channels[2]*.0722>128?'#202020':'#ffffff';
                 }
             }
-            ['wp-luxtronik-dialog','wp-fault-dialog'].forEach(id=>{
+            ['wp-luxtronik-dialog','wp-fault-dialog','wp-mode-menu'].forEach(id=>{
                 const dialog=document.getElementById(id);
                 if(dialog) {
                     dialog.style.setProperty('--wp-dialog-background',dialogBackground);
@@ -2154,8 +2154,6 @@ window.SymconHeatPump = {
                 return;
             }
 
-            closeModeMenu();
-
             const oldCard = document.getElementById('wp-card');
             const newCard = document.createElement('heat-pump-card');
             newCard.id = 'wp-card';
@@ -2176,7 +2174,9 @@ window.SymconHeatPump = {
             });
         };
 
+        let activeControlMenu = null;
         const closeModeMenu = () => {
+            activeControlMenu = null;
             const menu = document.getElementById('wp-mode-menu');
             if (menu) {
                 menu.style.display = 'none';
@@ -2185,13 +2185,14 @@ window.SymconHeatPump = {
         };
 
         const openModeMenu = (functionName, event) => {
-            event.preventDefault();
-            event.stopPropagation();
+            event?.preventDefault();
+            event?.stopPropagation();
 
             const control = currentControls && currentControls[functionName];
             if (!control || !control.configured || !Array.isArray(control.options) || control.options.length === 0) {
                 return;
             }
+            activeControlMenu = {kind:'mode', functionName, signature:JSON.stringify(control)};
 
             const menu = document.getElementById('wp-mode-menu');
             if (!menu) {
@@ -2240,6 +2241,7 @@ window.SymconHeatPump = {
                 button.addEventListener('click', (clickEvent) => {
                     clickEvent.preventDefault();
                     clickEvent.stopPropagation();
+                    if (!currentControls[functionName]?.configured) return;
 
                     requestAction(
                         'SetControlMode',
@@ -2249,7 +2251,6 @@ window.SymconHeatPump = {
                         })
                     );
 
-                    closeModeMenu();
                 });
 
                 menu.appendChild(button);
@@ -2258,9 +2259,11 @@ window.SymconHeatPump = {
             menu.style.display = 'block';
         };
 
+        const heaterMenuSignature = heaters => JSON.stringify((Array.isArray(heaters) ? heaters : []).map(({powerWatts, ...state}) => state));
+        const formatHeaterMenuPower = watts => typeof watts === 'number' ? (watts / 1000).toFixed(2) + ' kW' : '—';
         const openHeaterMenu = (event) => {
-            event.preventDefault();
-            event.stopPropagation();
+            event?.preventDefault();
+            event?.stopPropagation();
             const menu = document.getElementById('wp-mode-menu');
             if (!menu) return;
             menu.replaceChildren();
@@ -2269,6 +2272,7 @@ window.SymconHeatPump = {
             title.textContent = 'Heizstäbe';
             menu.appendChild(title);
             const heaters = Array.isArray(currentControls.heaterSwitches) ? currentControls.heaterSwitches : [];
+            activeControlMenu = {kind:'heaters', signature:heaterMenuSignature(heaters)};
             heaters.forEach((heater) => {
                 const row = document.createElement('div');
                 row.className = 'wp-heater-row';
@@ -2276,14 +2280,13 @@ window.SymconHeatPump = {
                 name.className = 'wp-heater-name';
                 name.textContent = heater.label;
                 name.title = heater.label;
-                const power = typeof heater.powerWatts === 'number' ? (heater.powerWatts / 1000).toFixed(2) + ' kW' : '—';
+                const power = formatHeaterMenuPower(heater.powerWatts);
                 const options = Array.isArray(heater.options) ? heater.options : [];
                 const on = options.find(option => option.role === 'on') || (heater.boolean ? options.find(option => option.value === true) : null);
                 const off = options.find(option => option.role === 'off') || (heater.boolean ? options.find(option => option.value === false) : null);
                 const send = (value) => {
                     if (!heater.configured) return;
                     requestAction('SetHeaterSwitch', JSON.stringify({number:heater.number, value}));
-                    closeModeMenu();
                 };
                 let control;
                 if (!on && !off && options.length > 1) {
@@ -2336,6 +2339,7 @@ window.SymconHeatPump = {
             if (!control || !control.configured) {
                 return;
             }
+            activeControlMenu = {kind:'numeric', functionName};
 
             const menu = document.getElementById('wp-mode-menu');
             if (!menu) {
@@ -2424,6 +2428,7 @@ window.SymconHeatPump = {
             apply.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                if (!currentControls[functionName]?.configured) return;
 
                 if (input.value.trim() === '') {
                     return;
@@ -2441,7 +2446,7 @@ window.SymconHeatPump = {
                     })
                 );
 
-                closeModeMenu();
+                input.value = String(value);
             });
             menu.appendChild(apply);
 
@@ -4034,6 +4039,34 @@ window.SymconHeatPump = {
 
             if (data.controls) {
                 currentControls = data.controls;
+                const menu = document.getElementById('wp-mode-menu');
+                const state = activeControlMenu;
+                if (state && menu?.style.display === 'block') {
+                    if (state.kind === 'numeric') {
+                        menu.querySelectorAll('button,input').forEach(el => el.disabled = !currentControls[state.functionName]?.configured);
+                    } else {
+                        const control = state.kind === 'heaters' ? currentControls.heaterSwitches : currentControls[state.functionName];
+                        const signature = state.kind === 'heaters' ? heaterMenuSignature(control) : JSON.stringify(control);
+                        if (signature !== state.signature) {
+                            const focused = menu.contains(document.activeElement) ? document.activeElement : null;
+                            const heater = focused?.dataset.heater;
+                            const value = focused?.dataset.value;
+                            if (state.kind === 'heaters') openHeaterMenu();
+                            else if (control?.configured) openModeMenu(state.functionName);
+                            else {
+                                menu.querySelectorAll('button').forEach(el => el.disabled = true);
+                                state.signature = signature;
+                            }
+                            if (focused) [...menu.querySelectorAll('button,select')].find(el => heater ? el.dataset.heater === heater : el.dataset.value === value)?.focus({preventScroll:true});
+                        } else if (state.kind === 'heaters') {
+                            menu.querySelectorAll('.wp-heater-row').forEach(row => {
+                                const number = Number(row.querySelector('[data-heater]').dataset.heater);
+                                const heater = control.find(item => item.number === number);
+                                row.querySelector('.wp-heater-power').textContent = formatHeaterMenuPower(heater?.powerWatts);
+                            });
+                        }
+                    }
+                }
             }
 
             if (data.type === 'rebuild') {
