@@ -473,6 +473,7 @@ trait LuxtronikVisualization
         width: 760px;
         max-width: calc(100vw - 24px);
         max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
         box-sizing: border-box;
         padding: 12px;
         border: 1px solid var(--divider-color, #888);
@@ -489,18 +490,20 @@ trait LuxtronikVisualization
     #wp-fault-list li { padding:12px 0; border-top:1px solid GrayText; }
     #wp-fault-list p { margin:6px 0 0; }
     #wp-luxtronik-dialog::backdrop { background: rgba(0, 0, 0, .4); }
-    #wp-luxtronik-dialog .wp-luxtronik-header { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-    #wp-luxtronik-dialog .wp-luxtronik-header strong { flex: 1; }
+    #wp-luxtronik-dialog .wp-luxtronik-header { display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; flex: 0 0 auto; gap: 6px; }
     #wp-luxtronik-dialog a { color: inherit; }
     #wp-luxtronik-help { margin: 0; font-size: 14px; }
-    #wp-luxtronik-login { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-    #wp-luxtronik-device { padding: 24px; border-radius: 14px; background: color-mix(in srgb, var(--wp-dialog-color, CanvasText) 6%, var(--wp-dialog-background, Canvas)); }
-    #wp-luxtronik-display { display: block; width: 100%; height: auto; background: #0000ff; image-rendering: pixelated; border: 8px solid #252a30; border-radius: 5px; box-sizing: border-box; cursor: pointer; touch-action: manipulation; }
-    #wp-luxtronik-controls { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px; border: 0; margin: 22px 0 0; padding: 0; }
+    #wp-luxtronik-help:empty { display: none; }
+    #wp-luxtronik-login { display: flex; margin: 0; flex: 0 0 auto; }
+    #wp-luxtronik-device { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; padding: 16px; border-radius: 14px; background: color-mix(in srgb, var(--wp-dialog-color, CanvasText) 6%, var(--wp-dialog-background, Canvas)); }
+    #wp-luxtronik-display { display: block; width: min(100%, max(0px, calc((100vh - 216px) * 2.5 + 16px))); width: min(100%, max(0px, calc((100dvh - 216px) * 2.5 + 16px))); height: auto; flex: 0 0 auto; background: #0000ff; image-rendering: pixelated; border: 8px solid #252a30; border-radius: 5px; box-sizing: border-box; cursor: pointer; touch-action: manipulation; }
+    #wp-luxtronik-controls { display: flex; justify-content: center; align-items: center; flex-wrap: nowrap; gap: 14px; border: 0; margin: 12px 0 0; padding: 0; }
     #wp-luxtronik-controls button { min-height: 48px; padding: 8px 14px; touch-action: manipulation; }
     #wp-luxtronik-press { min-width: 76px; }
     #wp-luxtronik-controls:disabled { opacity: .45; }
     #wp-luxtronik-dialog button { font: inherit; color:inherit; background:color-mix(in srgb, var(--wp-dialog-color, CanvasText) 9%, var(--wp-dialog-background, Canvas)); border:1px solid var(--wp-dialog-border, GrayText); border-radius:4px; cursor:pointer; }
+    #wp-luxtronik-dialog .wp-luxtronik-header button,
+    #wp-luxtronik-dialog .wp-luxtronik-header a { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; box-sizing: border-box; width: 44px; height: 44px; padding: 0; font-size: 24px; line-height: 1; text-decoration: none; border: 1px solid var(--wp-dialog-border, GrayText); border-radius: 4px; }
     @media (max-width: 480px) {
         #wp-luxtronik-device { padding: 12px; }
         #wp-luxtronik-controls { gap: 6px; }
@@ -518,16 +521,15 @@ trait LuxtronikVisualization
     <p id="wp-fault-source"></p>
     <ol id="wp-fault-list"></ol>
 </dialog>
-<dialog id="wp-luxtronik-dialog" aria-labelledby="wp-luxtronik-title">
+<dialog id="wp-luxtronik-dialog" aria-label="LUX Bedienfeld">
     <div class="wp-luxtronik-header">
-        <strong id="wp-luxtronik-title">LUX Bedienfeld</strong>
-        <a id="wp-luxtronik-external" target="_blank" rel="noopener noreferrer">Originalinterface öffnen</a>
-        <button id="wp-luxtronik-close" type="button">Schließen</button>
+        <a id="wp-luxtronik-external" target="_blank" rel="noopener noreferrer" aria-label="Originalinterface öffnen" title="Originalinterface öffnen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 17L17 7M7 7H17V17"/></svg></a>
+        <form id="wp-luxtronik-login">
+            <button type="submit" aria-label="Erneut verbinden" title="Erneut verbinden"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 3V9H15M21 9A9 9 0 1 0 18.35 18.35"/></svg></button>
+        </form>
+        <button id="wp-luxtronik-close" type="button" aria-label="Schließen" title="Schließen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6L18 18M18 6L6 18"/></svg></button>
     </div>
     <p id="wp-luxtronik-help" role="status" aria-live="polite"></p>
-    <form id="wp-luxtronik-login">
-        <button type="submit">Erneut verbinden</button>
-    </form>
     <div id="wp-luxtronik-device">
         <canvas id="wp-luxtronik-display" width="160" height="64" tabindex="0" role="img" aria-label="Luxtronik-Gerätedisplay; Bedienung mit Pfeiltasten und Enter"></canvas>
         <fieldset id="wp-luxtronik-controls" disabled aria-label="Luxtronik bedienen">
@@ -2561,7 +2563,7 @@ window.SymconHeatPump = {
             luxtronikReady = true;
             luxtronikControls.disabled = false;
             if (firstFrame && document.activeElement?.tagName !== 'INPUT') luxtronikCanvas.focus({preventScroll: true});
-            luxtronikHelp.textContent = 'Verbunden.';
+            luxtronikHelp.textContent = '';
         };
         const readLuxtronikResponse = (text) => {
             if (typeof text !== 'string' || text.length > 262144) throw new Error('Invalid response');

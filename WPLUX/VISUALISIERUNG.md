@@ -288,4 +288,8 @@ zusätzlichen Messwertobjekte und kein eigener Abtau-Countdown erzeugt.
 Das LUX-Fenster übernimmt Hintergrund, Text und Buttons aus dem Symcon-Design,
 unabhängig von der Hell-/Dunkel-Voreinstellung des Browsers. Es verwendet das
 Webinterface-Passwort der Instanzkonfiguration (Standard 999999); ein zweites
-Passwortfeld entfällt. **Erneut verbinden** bleibt für getrennte Sitzungen erhalten.
+Passwortfeld entfällt. Oben stehen nur die drei Symbole für **Originalinterface öffnen** (↗),
+**Erneut verbinden** (↻) und **Schließen** (×) in einer Zeile. Überschrift und
+Verbindungsstatus entfallen bei vorhandenem Displaybild; Hinweise erscheinen,
+wenn noch kein Bild empfangen wurde oder die Verbindung scheitert. Das Display
+passt sich auch der verfügbaren Höhe an, damit die Bedienpfeile sichtbar bleiben.
