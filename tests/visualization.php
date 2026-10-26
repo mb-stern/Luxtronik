@@ -667,24 +667,43 @@ $tests['valve change times distinguish first observation stable commands and sou
     check(invoke($module,'BuildVisualizationData')['mixerOpen1']['changedAt']===0,'Change times leaked across devices');
 };
 
-$tests['saved mixer sensor bindings survive removal of mixer configuration without object creation'] = static function (): void {
+$tests['numbered heating circuits ignore obsolete mixer and external sensor assignments'] = static function (): void {
     $module = new Luxtronik();
+    $module->properties['TankHP']=true;
+    $module->properties['VisualizationHeatingCircuit2']=true;
     $module->properties['VisualizationHeatingCircuitMixer1']=3;
+    $module->properties['VisualizationHeatingCircuitMixer2']=1;
     $required=invoke($module,'GetVisualizationRequiredPointIDs');
-    foreach ([136,137,138,139,140] as $id) check(isset($required[$id]),'Selected mixer 3 not read on heating place 1');
-    foreach ([21,22,40,41,24,25,51,54,55] as $id) check(!isset($required[$id]),'Unselected mixer requested');
-    invoke($module,'StoreVisualizationPoints',[136=>32.0,137=>30.0,138=>false,139=>true,140=>false]);
+    foreach ([21,22,40,41,24,25,51,54,55] as $id) check(isset($required[$id]),'Fixed circuit point not requested: '.$id);
+    foreach ([136,137,138,139,140] as $id) check(!isset($required[$id]),'Obsolete MK3 assignment still polled: '.$id);
+    invoke($module,'StoreVisualizationPoints',[21=>31.5,24=>28.0,137=>65.0,22=>29.0,25=>27.0]);
     $payload=visualizationPayload($module);
-    $mixer=$payload['config']['mixers'][0];
-    check(count($payload['config']['mixers'])===1 && $mixer['circuit']===1 && $mixer['number']===3,'Mixer attached to wrong branch');
-    check($payload['data'][$mixer['actual']]['value']===30.0 && $payload['data'][$mixer['target']]['value']===32.0,'Cross-mapped temperatures incorrect');
-    check($payload['data'][$mixer['pump']]['value']===false,'Pump signal not associated with selected mixer');
-    check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Mixer creates measurement objects');
+    check(array_column($payload['config']['mixers'],'number')===[1,2],'Circuit bindings are not fixed 1:1');
+    foreach (['supplyTemperatureHeating'=>['Mischkreis_1_Vorlauftemperatur',31.5],
+        'supplyTemperatureHeating2'=>['Mischkreis_2_Vorlauftemperatur',28.0]] as $key=>[$ident,$value]) {
+        check($payload['data'][$key]['ident']===$ident && $payload['data'][$key]['value']===$value,'Wrong circuit source: '.$key);
+    }
+    check($module->properties['VisualizationHeatingCircuitMixer1']===3 && $module->properties['VisualizationHeatingCircuitMixer2']===1,'Saved configuration was overwritten');
+    check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Fixed mapping creates measurement objects');
     $form=fields(json_decode($module->GetConfigurationForm(),true));
     foreach ([1,2] as $n) check(!isset($form['VisualizationHeatingCircuitMixer'.$n]),'Removed mixer setting still exposed');
-    check($payload['data']['supplyTemperatureHeating']['value']===30.0,'Saved circuit temperature assignment lost');
-    $module->properties['VisualizationHeatingCircuitMixer1']=0;
-    check(invoke($module,'BuildCardConfig')['mixers']===[],'Direct branch retains mixer');
+    invoke($module,'StoreVisualizationPoints',[21=>0.0,24=>29.2]);
+    check(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating']['value']===0.0,'Valid zero circuit temperature lost');
+    invoke($module,'StoreVisualizationPoints',[21=>31.7]);
+    check(!isset(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating2']),'Missing MK2 replaced by MK1');
+};
+
+$tests['old held circuit values cannot survive the fixed-source mapping migration'] = static function (): void {
+    $m=new Luxtronik();$m->properties['TankHP']=false;$m->properties['VisualizationHeatingCircuit2']=true;
+    $m->properties['VisualizationHeatingCircuitMixer1']=3;$m->properties['VisualizationHeatingCircuitMixer2']=1;
+    $oldSignature=hash('sha256',json_encode([invoke($m,'VisualizationSourceKey'),false,3,1,
+        $m->properties['SupplyTemperature'],$m->properties['SupplyTemperatureHeating1'],$m->properties['SupplyTemperatureHeating2']],JSON_THROW_ON_ERROR));
+    $m->buffers['HeatingTemperatureHold']=json_encode(['signature'=>$oldSignature,'last'=>[],
+        'held'=>['supplyTemperatureHeating2'=>['value'=>31.5,'formatted'=>'31.5 °C','ident'=>'Mischkreis_1_Vorlauftemperatur']],
+        'pending'=>true,'threshold'=>31.5,'since'=>time()]);
+    invoke($m,'StoreVisualizationPoints',[10=>55.0,21=>50.0,24=>27.0,38=>true]);
+    $data=invoke($m,'BuildVisualizationData');
+    check($data['supplyTemperatureHeating2']['value']===null && $data['supplyTemperatureHeating2']['displayHold'],'Previously held MK1 value survives in HK2');
 };
 
 $tests['configuration panels precede the native list without footer settings'] = static function (): void {
@@ -996,7 +1015,7 @@ $tests['WP temperatures and numbered circuit supplies remain separate during hot
     }
     check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$module->InstanceID)===[],'Temperature binding creates objects');
     $module->properties['VisualizationHeatingCircuitMixer1']=3;
-    check(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating']['value']===34.0,'Selected mixer ignored');
+    check(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating']['value']===30.0,'Obsolete mixer selection overrides HK1');
     invoke($module,'StoreVisualizationPoints',[10=>65.0,11=>60.0,12=>28.0,39=>true]);
     $p=visualizationPayload($module);
     check(!isset($p['data'][$p['config']['supplyTemperatureHeating']]),'Absent mixer temperature replaced by WP temperature');
@@ -1006,7 +1025,7 @@ $tests['WP temperatures and numbered circuit supplies remain separate during hot
     check($module->properties['SupplyTemperatureHeating1']===$wp,'Saved binding was rewritten');
     $external=new Luxtronik();$sensor=visualizationVariable($external,'ExistingCircuitSensor',22.0);
     $module->properties['SupplyTemperatureHeating2']=$sensor;
-    check(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating2']['value']===22.0,'Explicit external circuit sensor lost without internal MK sensor');
+    check(!isset(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating2']),'Legacy external assignment replaces missing MK2');
 };
 
 $tests['hot gas suction temperature defrost timer and fan speed read converted native points without creating objects'] = static function (): void {
@@ -1078,7 +1097,7 @@ $tests['room setpoint uses native Java readback with room limits and supports th
     });
 };
 
-$tests['HUP percentage remains available when mixer one belongs to a different visible branch'] = static function (): void {
+$tests['HUP percentage remains available independently of obsolete mixer assignments'] = static function (): void {
     $module = new Luxtronik();
     $module->properties['VisualizationHeatingCircuit1'] = false;
     $module->properties['VisualizationHeatingCircuit2'] = true;

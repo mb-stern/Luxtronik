@@ -666,12 +666,11 @@ HTML;
             $config['heatingCircuitMixed' . $i] = false;
         }
         $config['mixers'] = [];
-        // Retain saved sensor/pump bindings internally; mixer hardware is no longer
-        // drawn or configurable in the simplified hydraulic view.
+        // Fixed circuit identity: HK1 uses MK1 and HK2 uses MK2. Obsolete saved
+        // mixer assignments must not silently override the displayed source.
         for ($circuit = 1; $circuit <= 2; ++$circuit) {
             if (!$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $circuit)) continue;
-            $i = $this->ReadPropertyInteger('VisualizationHeatingCircuitMixer' . $circuit);
-            if ($i < 1 || $i > 3) continue;
+            $i = $circuit;
             $config['mixers'][] = ['number' => $i, 'circuit' => $circuit,
                 'actual' => $this->DataKey('MixerActual' . $i, 'mixerActual' . $i),
                 'target' => $this->DataKey('MixerTarget' . $i, 'mixerTarget' . $i),
@@ -842,7 +841,7 @@ HTML;
     private function ApplyHeatingTemperatureHold(array $data): array
     {
         $signature=hash('sha256',json_encode([$this->VisualizationSourceKey(),$this->ReadPropertyBoolean('TankHP'),
-            $this->ReadPropertyInteger('VisualizationHeatingCircuitMixer1'),$this->ReadPropertyInteger('VisualizationHeatingCircuitMixer2'),
+            'fixed-circuit-sources-v1',
             $this->ReadPropertyInteger('SupplyTemperature'),$this->ReadPropertyInteger('SupplyTemperatureHeating1'),
             $this->ReadPropertyInteger('SupplyTemperatureHeating2')],JSON_THROW_ON_ERROR));
         $state=json_decode($this->GetBuffer('HeatingTemperatureHold'),true)??[];
@@ -858,8 +857,7 @@ HTML;
         $keys=['supplyTemperatureHeating','supplyTemperatureHeating2'];
         for($i=1;$i<=2;++$i) {
             if(!$this->ReadPropertyBoolean('VisualizationHeatingCircuit'.$i)) continue;
-            $mixer=$this->ReadPropertyInteger('VisualizationHeatingCircuitMixer'.$i);
-            if($mixer>=1 && $mixer<=3) $keys[]='mixerActual'.$mixer;
+            $keys[]='mixerActual'.$i;
         }
         $keys=array_values(array_unique($keys));
         if($hotwater===true && empty($state['pending'])) {
@@ -3351,8 +3349,8 @@ window.SymconHeatPump = {
                 return {active, percent};
             };
             const relay = key => raw(key) === null || raw(key) === undefined ? '—' : (binary(key) ? 'Ein' : 'Aus');
-            // Mixer hardware is deliberately omitted. Saved mappings still supply
-            // each heating circuit's measured temperature and pump telemetry.
+            // Mixer hardware is omitted; numbered sources supply each circuit's
+            // own measured temperature and pump telemetry.
             // The information panel keeps its size; operating data replaces VL/RL.
             const info = svg.querySelector('#info');
             const infoLeft = 363;
@@ -3479,8 +3477,6 @@ window.SymconHeatPump = {
                 [2, cfg.supplyTemperatureHeating2],
                 [3, cfg.supplyTemperatureHeating3]
             ].forEach(([n, supply]) => {
-                const mixer = mixers.find(item => (item.circuit || item.number) === n);
-                if (mixer) supply = mixer.actual;
                 const pumpValueItem = circuitPumpValue(n);
                 const supplySelector = n === 1 ? '#textSupplyTemperatureHeating' : '#textSupplyTemperatureHeating' + n;
                 const value = svg.querySelector(supplySelector);
@@ -3489,9 +3485,13 @@ window.SymconHeatPump = {
                 branch?.setAttribute('data-hydraulic-state',directHeatingInterrupted ? 'dhw-priority' : 'available');
                 show('#gHKPumpIcon' + n, false);
                 const offset = (n - 1) * 120;
+                const source = group('gHeatingCircuitSource' + n, branch);
+                if (n <= 2 && [hk1,hk2][n - 1]) fittedText(source,{
+                    id:'textHeatingCircuitSource' + n,class:'sm',x:1370,y:242 + offset,
+                    'dominant-baseline':'text-before-edge',style:'font-size:18px'},'ab Mischer ' + n,140);
                 if (name) {
                     const fullName = cfg['heatingCircuitName' + n] || 'HK' + n;
-                    name.setAttribute('y',String(232.5 + offset));
+                    name.setAttribute('y',String(210 + offset));
                     name.setAttribute('x','1370');
                     name.setAttribute('text-anchor','start');
                     name.setAttribute('dominant-baseline','text-before-edge');
@@ -3510,15 +3510,15 @@ window.SymconHeatPump = {
                 if (value) {
                     const reading = temperature(supply);
                     const held = data[supply]?.displayHold === true;
-                    value.textContent = held ? 'VL: ' + (reading || '—') + ' ⏸' : reading ? 'VL: ' + reading : '';
-                    value.style.display = held || reading !== '' ? 'inline' : 'none';
+                    value.textContent = 'VL: ' + (reading || '—') + (held ? ' ⏸' : '');
+                    value.style.display = 'inline';
                     value.setAttribute('data-held',String(held));
                     value.setAttribute('aria-label',held
                         ? 'Heizkreistemperatur gehalten während Boilerladung und bis zur Abkühlung des WP-Vorlaufs'
                         : reading ? 'Heizkreis-Vorlauf ' + reading : 'Keine Heizkreistemperatur verfügbar');
                     value.style.fontSize = '18px';
                     value.setAttribute('x','1370');
-                    value.setAttribute('y',String(260.5 + offset));
+                    value.setAttribute('y',String(274 + offset));
                     value.setAttribute('text-anchor','start');
                     value.setAttribute('dominant-baseline','text-before-edge');
                     value.removeAttribute('textLength');
@@ -3631,26 +3631,26 @@ window.SymconHeatPump = {
                     visibleStatus=visibleStatus.slice(0,-1);status.textContent=visibleStatus+'…';
                 }
             }
-            const waterLineGap = 18;
+            const waterLineGap = 10;
             const flow = formatted(cfg.heatingFlow);
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:710, y:695,
-                    'text-anchor':'start', 'dominant-baseline':'text-after-edge', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:710, y:742,
+                    'text-anchor':'start', 'dominant-baseline':'middle', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 90);
             }
             // Common WP temperatures belong before the DHW/heating split, in every operating mode.
             const wpTemperatures = group('gHeatPumpTemperatures', svg.querySelector('#heatPump'));
             wpTemperatures.setAttribute('transform','translate(710 0)');
             [
-                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,waterSupplyY + 40,90],
-                ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,725,90],
-                ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint,waterReturnY + waterLineGap,155]
-            ].forEach(([id,label,key,y,width]) => {
+                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,waterSupplyY + 40,90,'text-before-edge'],
+                ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,waterReturnY - waterLineGap,90,'text-after-edge'],
+                ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint,waterReturnY + waterLineGap,155,'text-before-edge']
+            ].forEach(([id,label,key,y,width,baseline]) => {
                 const reading = temperature(key);
                 if (!reading) return;
-                fittedText(wpTemperatures,{id,class:'sm',x:0,y,'dominant-baseline':'text-before-edge'},
+                fittedText(wpTemperatures,{id,class:'sm',x:0,y,'dominant-baseline':baseline},
                     label + ': ' + reading,width);
             });
 
@@ -4117,8 +4117,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return [];
         if (preg_match('/^SupplyTemperatureHeating([1-3])$/D', $property, $match)) {
             $circuit = (int)$match[1];
-            $mixer = $this->ReadPropertyInteger('VisualizationHeatingCircuitMixer' . $circuit);
-            return self::VISUALIZATION_EXTRA_IDENT_MAP['MixerActual' . ($mixer > 0 ? $mixer : $circuit)];
+            return self::VISUALIZATION_EXTRA_IDENT_MAP['MixerActual' . $circuit];
         }
 
         return self::VISUALIZATION_EXTRA_IDENT_MAP[$property] ?? self::LUXTRONIK_IDENT_MAP[$property] ?? [];
@@ -4141,6 +4140,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             }
         }
         if ($property === 'InputPower') return 0;
+        if (in_array($property, ['SupplyTemperatureHeating1','SupplyTemperatureHeating2'], true)) return 0;
         if (isset(self::VISUALIZATION_EXTRA_IDENT_MAP[$property])
             && !in_array($property, ['ThermalSolarPump','HeatPumpReturnTemperature','TankTempHPMiddle','SupplyTemperatureHeating2','SupplyTemperatureHeating3'], true)) return 0;
         $configured = $this->ReadPropertyInteger($property);
@@ -4649,7 +4649,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         $mixers = [];
         for ($i = 1; $i <= 3; ++$i) {
             if ($this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $i)) {
-                $mixers[$this->ReadPropertyInteger('VisualizationHeatingCircuitMixer' . $i)] = true;
+                $mixers[$i] = true;
             }
         }
         foreach (self::LUXTRONIK_IDENT_MAP + self::VISUALIZATION_EXTRA_IDENT_MAP as $property => $candidates) {
@@ -4671,9 +4671,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
 
     private function GetVisualizationExtraPointIDs(): array
     {
-        foreach(range(1,3) as $i) if($this->ReadPropertyBoolean('VisualizationHeatingCircuit'.$i)
-            && $this->ReadPropertyInteger('VisualizationHeatingCircuitMixer'.$i)===1) return [110351=>true];
-        return [];
+        return $this->ReadPropertyBoolean('VisualizationHeatingCircuit1') ? [110351=>true] : [];
     }
 
     private function VisualizationHeaterPower(int $number): ?array

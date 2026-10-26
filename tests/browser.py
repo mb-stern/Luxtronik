@@ -338,7 +338,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#gHeatPumpFlow > text').count()==1
                 assert page.locator('#heatPump #textWPSupplyTemperature').text_content()=='VL: 25.5 °C'
                 assert page.locator('#textHeatingFlow').get_attribute('x')=='710'
-                assert page.locator('#textHeatingFlow').get_attribute('y')=='695'
+                assert page.locator('#textHeatingFlow').get_attribute('y')=='742'
                 assert 'Ansteuerung' not in page.locator('#textHeatingPump1').text_content()
                 small_labels=page.evaluate('''()=>{
                     const svg=document.querySelector('#wp-card svg');
@@ -694,6 +694,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert not mixed.locator('#gHKPumpIcon1').is_visible() and not mixed.locator('#gHKPumpIcon2').is_visible()
                     for n in [1,2]:
                         assert mixed.locator('#textHeatingCircuitName'+str(n)).text_content()=='HK'+str(n)
+                        assert mixed.locator('#textHeatingCircuitSource'+str(n)).text_content()=='ab Mischer '+str(n)
                         assert str(25+n*5) in mixed.locator('#textSupplyTemperatureHeating'+('' if n==1 else str(n))).text_content()
                         assert mixed.locator('[id^="gMixerValveSymbol"],#gMixerValveReadings,[id^="pathHKMixingReturn"]').count()==0
                     if has_buffer:
@@ -924,7 +925,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert hybrid.locator('#wp-error').text_content()==''
                 assert hybrid.locator('#textHeatingFlow').text_content()=='612 l/h'
                 assert hybrid.locator('#textHeatingFlow').get_attribute('x')=='710'
-                assert hybrid.locator('#textHeatingFlow').get_attribute('y')=='695'
+                assert hybrid.locator('#textHeatingFlow').get_attribute('y')=='742'
                 assert hybrid.locator('#textCompressorSpeedValue').text_content()=='55 rpm'
                 assert hybrid.locator('#textCondenserTemperature').text_content()=='8.2 °C'
                 assert hybrid.locator('#textHeatPumpCycle').text_content()=='Läuft seit 2h 3m'

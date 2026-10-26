@@ -398,7 +398,7 @@ $tests['Java supplementation is optional source-bound and does not introduce Jav
 
 $tests['optional Modbus reads in Java mode fetch only missing selected fields and never enable SHI writes'] = static function():void {
     $requests=withSHI(static function(Luxtronik $m):void {
-        $m->properties['CommunicationMode']='java';$m->properties['ModbusReadSupplement']=true;$m->properties['VisualizationHeatingCircuitMixer1']=0;
+        $m->properties['CommunicationMode']='java';$m->properties['ModbusReadSupplement']=true;$m->properties['VisualizationHeatingCircuit1']=false;
         $m->properties['IDListe']='[{"id":15,"enabled":true},{"id":110310,"enabled":true},{"id":310041,"enabled":true}]';
         $outdoor=shiVariable($m,'Aussentemperatur',0.0,'Mein Außenfühler','~Temperature');
         invoke($m,'StoreVisualizationPoints',[15=>0.0]);
@@ -526,7 +526,7 @@ $tests['preferred Modbus measurement overrides Java zeroes remain valid and writ
     $values=array_fill(0,276,0);$values[15]=123;
     withServer([[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $m):void {
         $requests=withSHI(static function(Luxtronik $m):void {
-            $m->properties['CommunicationMode']='java';$m->properties['VisualizationHeatingCircuitMixer1']=0;
+            $m->properties['CommunicationMode']='java';$m->properties['VisualizationHeatingCircuit1']=false;
             $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"modbus"}]';
             $id=shiVariable($m,'Aussentemperatur',99.0,'Mein Außenfühler','~Temperature');
             $m->Update();$point=invoke($m,'GetVisualizationPointData','OutdoorTemperature');
