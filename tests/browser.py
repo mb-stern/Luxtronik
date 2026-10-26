@@ -836,6 +836,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 service=browser.new_page(viewport={'width':width,'height':900})
                 service.goto(f'http://127.0.0.1:{server.server_port}/service-values.html')
                 assert service.locator('#textHotGasTemperature').text_content()=='Heißgas: 86.5 °C'
+                assert service.locator('#textSuctionTemperature').text_content()=='Ansaug: 24.4 °C'
+                assert service.evaluate("document.getElementById('textSuctionTemperature').getBoundingClientRect().right < document.getElementById('textHotGasTemperature').getBoundingClientRect().left")
                 assert service.locator('#textFanSpeed').text_content()=='Lüfter: 489 rpm'
                 assert service.locator('#textTimeUntilDefrost').text_content()=='Abtauen in 0h 33m'
                 time_gap=service.evaluate("""()=>{
@@ -847,11 +849,12 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 zero=json.loads(Path(artifacts,'service-values-zero.json').read_text())
                 service.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',zero)
                 assert service.locator('#textHotGasTemperature').text_content()=='Heißgas: 0.0 °C'
+                assert service.locator('#textSuctionTemperature').text_content()=='Ansaug: 0.0 °C'
                 assert service.locator('#textFanSpeed').text_content()=='Lüfter: 0 rpm'
                 assert service.locator('#textTimeUntilDefrost').text_content()=='Abtauen in 0h 0m'
                 missing=json.loads(Path(artifacts,'service-values-missing.json').read_text())
                 service.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',missing)
-                assert service.locator('#textHotGasTemperature,#textFanSpeed,#textTimeUntilDefrost').count()==0
+                assert service.locator('#textHotGasTemperature,#textSuctionTemperature,#textFanSpeed,#textTimeUntilDefrost').count()==0
                 service.close()
 
             # SHI has its own states, current measurements and shared numeric controls.

@@ -292,8 +292,13 @@ von der WP zum Puffer werden während Boilerladung nicht als durchströmt gezeic
 Die Grafik stellt die konfigurierte Umschalthydraulik schematisch dar; sie bestimmt
 nicht den tatsächlichen Einbauort von Pumpe oder Ventil im konkreten Gerät.
 
-Die Heißgastemperatur (`Heisgastemperatur`, Java-ID 14) steht nach dem Verdichter
-vor dem Kondensator. Die Lüfterdrehzahl (`Ventilator_Drehzahl`, ID 184) steht
+Die Ansaugtemperatur (`Temperatur_Ansaug_Verdichter`, Java-ID 176; im Regler
+„Ansaug VD“) steht als „Ansaug: … °C“ an der blauen Leitung vor dem Verdichter.
+Gegenüber steht die Heißgastemperatur (`Heisgastemperatur`, Java-ID 14) nach dem
+Verdichter vor dem Kondensator. Beide verwenden die vorhandene Lesequellenauswahl
+mit automatischer Ergänzung fehlender Werte; nicht gelieferte Temperaturen
+werden ausgeblendet, 0 °C bleibt ein gültiger Messwert.
+Die Lüfterdrehzahl (`Ventilator_Drehzahl`, ID 184) steht
 über dem Lüfterrad. Unter dem Gerätebild ergänzt `Zeit_bis_Abtauen` (ID 141)
 die Lauf-/Standzeit, sofern der Regler den Wert liefert. Im SHI-Betrieb können
 beide Werte über die vorhandene optionale Java-Ergänzung kommen. Es werden keine

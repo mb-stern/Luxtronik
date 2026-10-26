@@ -64,6 +64,7 @@ trait LuxtronikVisualization
         // Confirmed WebSocket engineering values; no numeric Java indices are invented.
         'EEVHeatingOpening' => ['EEV_Heizen'], 'EEVCoolingOpening' => ['EEV_Kuehlen'],
         'HotGasTemperature' => ['Heisgastemperatur'],
+        'SuctionTemperature' => ['Temperatur_Ansaug_Verdichter'],
         'TimeUntilDefrost' => ['Zeit_bis_Abtauen'],
         'SolarStorageTemperature' => ['Fuehler_Solarspeicher'],
         'ThermalSolarPump' => ['Ausgang_Solarladepumpe']
@@ -681,6 +682,7 @@ HTML;
         $config['circulation'] = $this->ReadPropertyBoolean('VisualizationCirculation');
         $config['heatingFlow'] = $this->DataKey('HeatingFlow', 'heatingFlow');
         $config['hotGasTemperature'] = $this->DataKey('HotGasTemperature', 'hotGasTemperature');
+        $config['suctionTemperature'] = $this->DataKey('SuctionTemperature', 'suctionTemperature');
         $config['timeUntilDefrost'] = $this->DataKey('TimeUntilDefrost', 'timeUntilDefrost');
         $config['solarStorageTemperature'] = $this->DataKey('SolarStorageTemperature', 'solarStorageTemperature');
         $config['solarTarget'] = $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer'
@@ -3574,8 +3576,14 @@ window.SymconHeatPump = {
                 .forEach(([id,y])=>svg.querySelector('#'+id)?.setAttribute('y',String(y)));
             const hotGasReadings = group('gHotGasReadings', svg.querySelector('#gRefrigerantCircuit'));
             const hotGas = temperature(cfg.hotGasTemperature);
-            if (hotGas) fittedText(hotGasReadings,{id:'textHotGasTemperature',class:'sm',x:compact ? 422.5 : 630,
-                y:575 - temperatureLineGap,'text-anchor':compact ? 'middle' : 'end','dominant-baseline':'text-after-edge'},'Heißgas: ' + hotGas,compact ? 250 : 150);
+            const suctionReadings = group('gSuctionReadings', svg.querySelector('#gRefrigerantCircuit'));
+            const suction = temperature(cfg.suctionTemperature);
+            if (suction) fittedText(suctionReadings,{id:'textSuctionTemperature',class:'sm',x:215,
+                y:575 - temperatureLineGap,'text-anchor':'start','dominant-baseline':'text-after-edge',
+                'aria-label':'Ansaug VD: ' + suction},'Ansaug: ' + suction,compact ? 200 : 150);
+            if (hotGas) fittedText(hotGasReadings,{id:'textHotGasTemperature',class:'sm',x:compact && !suction ? 422.5 : 630,
+                y:575 - temperatureLineGap,'text-anchor':compact && !suction ? 'middle' : 'end',
+                'dominant-baseline':'text-after-edge'},'Heißgas: ' + hotGas,compact ? (suction ? 200 : 250) : 150);
             setText('#textExpansionValveOpening', formatted(cfg.expansionValveOpening));
             const eevCooling = binary(cfg.heatingPumpCoolingMode);
             const eevKey = eevCooling ? cfg.eevCoolingOpening : cfg.eevHeatingOpening;

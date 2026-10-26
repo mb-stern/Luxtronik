@@ -1008,23 +1008,24 @@ $tests['WP temperatures and numbered circuit supplies remain separate during hot
     check(invoke($module,'BuildVisualizationData')['supplyTemperatureHeating2']['value']===22.0,'Explicit external circuit sensor lost without internal MK sensor');
 };
 
-$tests['hot gas defrost timer and fan speed read converted native points without creating objects'] = static function (): void {
+$tests['hot gas suction temperature defrost timer and fan speed read converted native points without creating objects'] = static function (): void {
     $module=new Luxtronik();$module->properties['IDListe']='[]';
     $required=invoke($module,'GetVisualizationRequiredPointIDs');
-    foreach([14,141,184] as $id) check(isset($required[$id]),'Graphic point not read independently: '.$id);
-    invoke($module,'StoreVisualizationPoints',[14=>86.5,141=>'0h 33m',184=>489]);
+    foreach([14,176,141,184] as $id) check(isset($required[$id]),'Graphic point not read independently: '.$id);
+    invoke($module,'StoreVisualizationPoints',[14=>86.5,176=>24.4,141=>'0h 33m',184=>489]);
     $p=visualizationPayload($module);
-    foreach(['hotGasTemperature'=>['Heisgastemperatur',86.5], 'timeUntilDefrost'=>['Zeit_bis_Abtauen','0h 33m'], 'fanSpeed'=>['Ventilator_Drehzahl',489]] as $key=>[$ident,$expected]) {
+    foreach(['hotGasTemperature'=>['Heisgastemperatur',86.5], 'suctionTemperature'=>['Temperatur_Ansaug_Verdichter',24.4], 'timeUntilDefrost'=>['Zeit_bis_Abtauen','0h 33m'], 'fanSpeed'=>['Ventilator_Drehzahl',489]] as $key=>[$ident,$expected]) {
         $point=$p['data'][$p['config'][$key]];
         check($point['ident']===$ident && $point['value']===$expected,'Ident or converted value changed: '.$key);
         check($module->GetIDForIdent($ident)===false,'Graphic created a measurement object: '.$ident);
     }
     $GLOBALS['testServiceValuesHtml']=$module->GetVisualizationTile();
-    invoke($module,'StoreVisualizationPoints',[14=>0.0,141=>'0h 0m',184=>0]);
+    invoke($module,'StoreVisualizationPoints',[14=>0.0,176=>0.0,141=>'0h 0m',184=>0]);
     $GLOBALS['testServiceValuesZero']=visualizationPayload($module);
     invoke($module,'StoreVisualizationPoints',[]);
     $GLOBALS['testServiceValuesMissing']=visualizationPayload($module);
     check(!isset($GLOBALS['testServiceValuesMissing']['data']['hotGasTemperature']),'Missing hot gas field fabricated');
+    check(!isset($GLOBALS['testServiceValuesMissing']['data']['suctionTemperature']),'Missing suction field fabricated');
     check(!isset($p['config']['bufferReturnTemperature']),'External return exposed as a buffer measurement');
 };
 
