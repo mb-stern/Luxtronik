@@ -4352,11 +4352,13 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
     {
         if (IPS_GetKernelRunlevel() !== KR_READY) return;
-        $own = $SenderID === $this->InstanceID && in_array($Message, [OM_CHILDADDED, OM_CHILDREMOVED, IM_CHANGESTATUS], true);
-        $ids = json_decode($this->GetBuffer('VisualizationRegisteredVariables'), true);
-        if ($own || (is_array($ids) && in_array($SenderID, $ids, true) && in_array($Message, [VM_UPDATE, VM_DELETE, VM_CHANGEPROFILEACTION], true))) {
-            $this->RefreshVisualization($own || $Message === VM_DELETE);
-        }
+        $this->RunWithInstanceInterface(function () use ($SenderID, $Message): void {
+            $own = $SenderID === $this->InstanceID && in_array($Message, [OM_CHILDADDED, OM_CHILDREMOVED, IM_CHANGESTATUS], true);
+            $ids = json_decode($this->GetBuffer('VisualizationRegisteredVariables'), true);
+            if ($own || (is_array($ids) && in_array($SenderID, $ids, true) && in_array($Message, [VM_UPDATE, VM_DELETE, VM_CHANGEPROFILEACTION], true))) {
+                $this->RefreshVisualization($own || $Message === VM_DELETE);
+            }
+        }, 'Variablenmeldung');
     }
 
     private function RefreshVisualization(bool $rebuild = false): void
@@ -4379,6 +4381,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             }
         } catch (Throwable $error) {
+            if ($error instanceof LuxtronikInstanceUnavailable) throw $error;
             $this->LogMessage('Visualisierung: ' . $error->getMessage(), KL_ERROR);
         }
     }

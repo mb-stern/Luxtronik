@@ -921,6 +921,49 @@ $tests['obsolete timer callbacks stop at the first unavailable interface and res
     check($module->interfaceReads===$before,'Deleted instance still accessed');
 };
 
+$tests['obsolete variable callbacks stop before buffer reads or during refresh and recover on the next notification'] = static function (): void {
+    foreach ([false,true] as $failOnBuffer) {
+        $module=$failOnBuffer ? new class extends Luxtronik {
+            protected function GetBuffer(string $name): string {
+                if ($this->interfaceWarning!==null) {
+                    ++$this->interfaceReads;
+                    trigger_error($this->interfaceWarning,E_USER_WARNING);
+                }
+                return parent::GetBuffer($name);
+            }
+        } : new Luxtronik();
+        $module->buffers['VisualizationRegisteredVariables']='[12345]';
+        $module->interfaceWarning='InstanceInterface is not available';
+        foreach ([VM_UPDATE,VM_DELETE,VM_CHANGEPROFILEACTION] as $message) {
+            $GLOBALS['testGlobalLogs']=[];$before=$module->interfaceReads;
+            $module->MessageSink(1,12345,$message,[]);
+            check($module->interfaceReads===$before+1,'Obsolete notification continued after interface loss');
+            check(count($GLOBALS['testGlobalLogs'])===1 && $module->errors===[],'Interface loss logged repeatedly or caught as a visualization error');
+            check($module->updates===[] && $module->writes===0,'Unavailable notification published or wrote values');
+            try {trigger_error('Message handler restored',E_USER_WARNING);throw new LogicException('Previous handler not restored');}
+            catch (ErrorException $expected) {check($expected->getMessage()==='Message handler restored','Wrong restored handler');}
+        }
+        $module->interfaceWarning=null;
+        $module->MessageSink(1,12345,VM_UPDATE,[]);
+        check(count($module->updates)===1,'New notification did not recover after interface became available');
+        unset($GLOBALS['testInstances'][$module->InstanceID]);
+        $module->interfaceWarning='InstanceInterface is not available';$before=$module->interfaceReads;
+        $module->MessageSink(1,$module->InstanceID,IM_CHANGESTATUS,[]);
+        check($module->interfaceReads===$before,'Deleted instance still processed a notification');
+    }
+};
+
+$tests['variable callbacks retain ordinary visualization errors and restore the previous PHP handler'] = static function (): void {
+    $module=new Luxtronik();$GLOBALS['testGlobalLogs']=[];
+    $module->buffers['VisualizationRegisteredVariables']='[12345]';
+    $module->interfaceWarning='An unrelated visualization warning';
+    $module->MessageSink(1,12345,VM_UPDATE,[]);
+    check($module->errors===['Visualisierung: An unrelated visualization warning'] && $GLOBALS['testGlobalLogs']===[],
+        'Unrelated warning incorrectly treated as an unavailable instance');
+    try {trigger_error('Handler still restored',E_USER_WARNING);throw new LogicException('Previous handler not restored');}
+    catch (ErrorException $expected) {check($expected->getMessage()==='Handler still restored','Wrong restored handler');}
+};
+
 $tests['retired footer selections neither create variables nor subscribe external values'] = static function (): void {
     $values=array_fill(0,301,0);$values[15]=80;$values[300]=123;
     withServer([[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $module):void {

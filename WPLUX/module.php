@@ -5,7 +5,7 @@ require_once __DIR__ . '/Visualization.php';
 require_once __DIR__ . '/WebEEV.php';
 require_once __DIR__ . '/DataSources.php';
 
-// Abort an obsolete timer invocation as soon as its Symcon interface disappears.
+// Abort obsolete callbacks as soon as their Symcon interface disappears.
 class LuxtronikInstanceUnavailable extends Exception {}
 
 class Luxtronik extends IPSModuleStrict
@@ -1241,6 +1241,11 @@ class Luxtronik extends IPSModuleStrict
 
     public function Update(): void
     {
+        $this->RunWithInstanceInterface(fn() => $this->UpdateInstance(), 'Aktualisierung');
+    }
+
+    private function RunWithInstanceInterface(callable $callback, string $operation): void
+    {
         if (!IPS_InstanceExists($this->InstanceID)) return;
         $previous = null;
         $previous = set_error_handler(static function (int $severity, string $message, string $file, int $line) use (&$previous): bool {
@@ -1250,9 +1255,9 @@ class Luxtronik extends IPSModuleStrict
             return $previous !== null ? (bool)$previous($severity, $message, $file, $line) : false;
         });
         try {
-            $this->UpdateInstance();
+            $callback();
         } catch (LuxtronikInstanceUnavailable $error) {
-            IPS_LogMessage('Luxtronik ' . $this->InstanceID, 'Aktualisierung abgebrochen: Instanzschnittstelle nicht verfügbar.');
+            IPS_LogMessage('Luxtronik ' . $this->InstanceID, $operation . ' abgebrochen: Instanzschnittstelle nicht verfügbar.');
         } finally {
             restore_error_handler();
         }
