@@ -59,3 +59,5 @@ Bedienaktion oder ein expliziter Schreibaufruf sendet einen Wert. Der Modbus-Weg
 Verfügbarkeit, Wertebereich und Voraussetzungen am Regler und liest die Bestätigung
 zurück. Bei fehlender Kommunikation bleiben reine Modbus-Bedienaktionen gesperrt.
 Modbus benötigt die passende Reglerfirmware und eine aktive SHI-Schnittstelle.
+
+Unter **Timer / Zusatzfunktionen** steht der gewählte Schreibweg direkt an den sieben Steuerschaltern. Die Kennzeichnung aktualisiert sich beim Umschalten von **Schreibbefehle über Modbus/SHI senden** sofort. Temperaturkorrektur, Warmwasser-Soll und Raumtemperatur-Soll wechseln auf Modbus/SHI; die Betriebsarten Heizung, Warmwasser, Kühlung und Schwimmbad bleiben Java. Die Beschriftung bezeichnet den Befehlsweg, nicht die Erreichbarkeit des Reglers.

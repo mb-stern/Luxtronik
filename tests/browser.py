@@ -381,10 +381,10 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert align['nameFont']==align['valueFont'],align
 
                 assert page.locator('#textWPSupplyTemperatureLabel,#textWPReturnTemperatureLabel,#textWPReturnTargetLabel').count()==0
-                assert page.locator('#switchValve').get_attribute('transform')=='translate(825 640)'
-                assert page.locator('#main > path.hot').get_attribute('d')=='M650 680H670V640H825'
-                assert page.locator('#main > path.cold').get_attribute('d')=='M875 847H670V705H650'
-                assert page.locator('#gDHW > path.hot').get_attribute('d')=='M826 601H900'
+                assert page.locator('#switchValve').get_attribute('transform')=='translate(785 640)'
+                assert page.locator('#main > path.hot').get_attribute('d')=='M650 680H670V640H785'
+                assert page.locator('#main > path.cold').get_attribute('d')=='M825 847H670V705H650'
+                assert page.locator('#gDHW > path.hot').get_attribute('d')=='M786 601H900'
                 assert float(page.locator('#textWPSupplyTemperature').get_attribute('y'))>640
                 assert float(page.locator('#textWPReturnTemperature').get_attribute('y'))<847
 
@@ -697,10 +697,11 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                         assert str(25+n*5) in mixed.locator('#textSupplyTemperatureHeating'+('' if n==1 else str(n))).text_content()
                         assert mixed.locator('[id^="gMixerValveSymbol"],#gMixerValveReadings,[id^="pathHKMixingReturn"]').count()==0
                     if has_buffer:
-                        assert mixed.locator('#pathBufferChargeReturn').get_attribute('d')=='M900 380H875V847'
-                        assert mixed.locator('#pathBufferManifoldReturn').get_attribute('d')=='M1160 415H1100V380H1070'
-                        assert mixed.locator('#gHK1 > path.hot').get_attribute('d')=='M1120 245H1260'
-                        assert mixed.locator('#gHK2 > path.hot').get_attribute('d')=='M1120 365H1260'
+                        assert mixed.locator('#pathBufferChargeReturn').get_attribute('d')=='M840 380H825V847'
+                        assert mixed.locator('#pathBufferManifoldReturn').get_attribute('d')=='M1100 415H1040V380H1010'
+                        shift=mixed.locator('#gHeating').evaluate('e=>e.transform.baseVal.getItem(0).matrix.e')
+                        assert mixed.locator('#gHK1 > path.hot').get_attribute('d')==f'M{1060-int(shift)} 245H1260'
+                        assert mixed.locator('#gHK2 > path.hot').get_attribute('d')==f'M{1060-int(shift)} 365H1260'
                     assert mixed.locator('#textComputedCOP').text_content()=='4.25'
                     assert mixed.locator('#textComputedJAZ').text_content()=='3.75'
                     screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
@@ -973,14 +974,14 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gCirculatingPumpVisual').evaluate('e=>getComputedStyle(e).display')=='none'
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert comp.locator('#gSolar > path.sol').get_attribute('d').startswith('M1064 235')
+                assert comp.locator('#gSolar > path.sol').get_attribute('d').startswith('M1004 235')
                 screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                 if screenshot_dir: comp.screenshot(path=str(Path(screenshot_dir)/f'solar-buffer-{width}.png'))
                 changed['config'].update(tankHP=False,tankWW=False,solarTarget='buffer')
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')!='none'
                 assert comp.locator('#gDHW').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert comp.locator('#gSolar > path.sol').get_attribute('d').startswith('M1088 829')
+                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M1088 680H1260M1260 820H1088'
                 changed['config']['thermalSolarAvailable']=False
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')=='none'

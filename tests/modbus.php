@@ -2,6 +2,11 @@
 
 require __DIR__.'/regression.php';
 
+function WPLUX_RefreshWriteSourceLabels(int $id, bool $enabled): void
+{
+    $GLOBALS['testWriteSourceRefreshes'][] = [$id, $enabled];
+}
+
 function IPS_SetProperty(int $id,string $name,mixed $value): bool
 {
     $GLOBALS['testPropertyChanges'][]=[$id,$name,$value];
@@ -485,10 +490,36 @@ $tests['write checkbox preserves the original configuration property and measure
     $id=$m->InstanceID;$ModbusWrites=true;eval($form['ModbusWrites']['onChange']);
     $ModbusWrites=false;eval($form['ModbusWrites']['onChange']);
     check(array_slice($GLOBALS['testPropertyChanges'],-2)===[[$id,'CommunicationMode','modbus'],[$id,'CommunicationMode','java']],'Checkbox rewrote an unrelated setting or lost existing write mode values');
+    check(array_slice($GLOBALS['testWriteSourceRefreshes'],-2)===[[$id,true],[$id,false]],'Write switch did not refresh its source labels in both directions');
     $java=invoke($m,'GetVisualizationIdents','MixerPump1');
     $m->properties['CommunicationMode']='modbus';
     check(invoke($m,'GetVisualizationIdents','MixerPump1')===$java && $java===['SHI_Pumpe_Mischkreis_1'],'Write transport changes the physical pump measurement');
     check(fields(json_decode($m->GetConfigurationForm(),true))['ModbusWrites']['value'],'Existing Modbus configuration not reflected in checkbox');
+};
+
+$tests['timer control source labels match actual write routing and refresh without sending commands'] = static function():void {
+    $m=new Luxtronik();
+    $controls=['HeizungVisible'=>'Mode_Heizung','WarmwasserVisible'=>'Mode_WW','SchwimmbadVisible'=>'Mode_Schwimmbad',
+        'KuehlungVisible'=>'Mode_Kuehlung','TempsetVisible'=>'Anpassung_Temp','WWsetVisible'=>'Anpassung_WW','RBEsetVisible'=>'Anpassung_RBE'];
+    foreach (['java','modbus'] as $mode) {
+        $m->properties['CommunicationMode']=$mode;
+        $form=fields(json_decode($m->GetConfigurationForm(),true));
+        foreach ($controls as $property=>$ident) {
+            $source=invoke($m,'UsesModbusWrite',$ident)?'Modbus/SHI':'Java';
+            check(str_ends_with($form[$property]['caption'],' ('.$source.')'),'Source caption disagrees with RequestAction routing: '.$ident);
+        }
+    }
+    $before=[$m->writes,$m->properties,$m->buffers,$m->actions];
+    foreach ([true,false] as $enabled) {
+        $m->formUpdates=[];
+        $m->RefreshWriteSourceLabels($enabled);
+        check(count($m->formUpdates)===7,'Not all seven controls refreshed');
+        foreach ($m->formUpdates as [$property,$parameter,$caption]) {
+            $modbus=$enabled && in_array($controls[$property],['Anpassung_Temp','Anpassung_WW','Anpassung_RBE'],true);
+            check($parameter==='caption' && str_ends_with($caption,$modbus?' (Modbus/SHI)':' (Java)'),'Incorrect immediate write-source label');
+        }
+    }
+    check([$m->writes,$m->properties,$m->buffers,$m->actions]===$before,'Refreshing captions changed configuration, variables or sent commands');
 };
 
 $tests['preferred Modbus measurement overrides Java zeroes remain valid and writing stays disabled'] = static function():void {

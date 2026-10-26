@@ -163,6 +163,11 @@ trait LuxtronikDataSources
     private function UsesModbusWrite(string $ident): bool
     {
         if($this->ReadPropertyString('CommunicationMode')!=='modbus') return false;
+        return $this->SupportsModbusWrite($ident);
+    }
+
+    private function SupportsModbusWrite(string $ident): bool
+    {
         foreach(self::SHI_REGISTERS as $point) if($point['bank']==='holding' && $point['ident']===$ident) return true;
         return false;
     }

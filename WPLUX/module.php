@@ -988,6 +988,7 @@ class Luxtronik extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
+        $controlCaptions = $this->TimerControlWriteCaptions();
         // Namen und IDs kommen direkt aus der zentralen ID-Konfiguration
         // am Schluss dieser module.php. Eine separate Java-Datensatzdatei ist
         // dafür nicht mehr erforderlich.
@@ -1069,37 +1070,37 @@ class Luxtronik extends IPSModuleStrict
                         [
                         'type'    => 'CheckBox',
                         'name'    => 'HeizungVisible',
-                            'caption' => 'Steuervariable für Heizungs-Modus aktivieren'
+                            'caption' => $controlCaptions['HeizungVisible']
                         ],
                         [
                             'type'    => 'CheckBox',
                             'name'    => 'WarmwasserVisible',
-                            'caption' => 'Steuervariable für Warmwasser-Modus aktivieren'
+                            'caption' => $controlCaptions['WarmwasserVisible']
                         ],
                         [
                             'type'    => 'CheckBox',
                             'name'    => 'SchwimmbadVisible',
-                            'caption' => 'Steuervariable für Schwimmbad-Modus aktivieren'
+                            'caption' => $controlCaptions['SchwimmbadVisible']
                         ],
                         [
                         'type'    => 'CheckBox',
                         'name'    => 'KuehlungVisible',
-                        'caption' => 'Steuervariable für Kühlungs-Modus aktivieren'
+                        'caption' => $controlCaptions['KuehlungVisible']
                         ],
                         [
                             'type'    => 'CheckBox',
                             'name'    => 'TempsetVisible',
-                            'caption' => 'Steuervariable für Temperaturkorrektur aktivieren'
+                            'caption' => $controlCaptions['TempsetVisible']
                         ],
                         [
                         'type'    => 'CheckBox',
                         'name'    => 'WWsetVisible',
-                        'caption' => 'Steuervariable für Warmwasser-Soll aktivieren'
+                        'caption' => $controlCaptions['WWsetVisible']
                         ],
                         [
                             'type'    => 'CheckBox',
                             'name'    => 'RBEsetVisible',
-                            'caption' => 'Steuervariable für Raumbedieneinheit aktivieren'
+                            'caption' => $controlCaptions['RBEsetVisible']
                         ],
                         [
                             'type'    => 'Select',

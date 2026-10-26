@@ -8,6 +8,33 @@ trait LuxtronikModbusSHI
 {
     use LuxtronikSHIRegisters;
 
+    private function TimerControlWriteCaptions(?bool $modbusWrites = null): array
+    {
+        $modbusWrites ??= $this->ReadPropertyString('CommunicationMode') === 'modbus';
+        $controls = [
+            'HeizungVisible'=>['Mode_Heizung','Steuervariable für Heizungs-Modus aktivieren'],
+            'WarmwasserVisible'=>['Mode_WW','Steuervariable für Warmwasser-Modus aktivieren'],
+            'SchwimmbadVisible'=>['Mode_Schwimmbad','Steuervariable für Schwimmbad-Modus aktivieren'],
+            'KuehlungVisible'=>['Mode_Kuehlung','Steuervariable für Kühlungs-Modus aktivieren'],
+            'TempsetVisible'=>['Anpassung_Temp','Steuervariable für Temperaturkorrektur aktivieren'],
+            'WWsetVisible'=>['Anpassung_WW','Steuervariable für Warmwasser-Soll aktivieren'],
+            'RBEsetVisible'=>['Anpassung_RBE','Steuervariable für Raumbedieneinheit aktivieren']
+        ];
+        $captions = [];
+        foreach ($controls as $property=>[$ident,$label]) {
+            $source = $modbusWrites && $this->SupportsModbusWrite($ident) ? 'Modbus/SHI' : 'Java';
+            $captions[$property] = $label . ' (' . $source . ')';
+        }
+        return $captions;
+    }
+
+    public function RefreshWriteSourceLabels(bool $ModbusWrites): void
+    {
+        foreach ($this->TimerControlWriteCaptions($ModbusWrites) as $property=>$caption) {
+            $this->UpdateFormField($property, 'caption', $caption);
+        }
+    }
+
     private function SHIKey(array $point): string
     {
         return $point['bank'] . ':' . $point['address'];
@@ -571,7 +598,7 @@ trait LuxtronikModbusSHI
         $panel=['type'=>'ExpansionPanel','caption'=>'Modbus TCP / SHI','items'=>[
             ['type'=>'Label','caption'=>'Luxtronik 2.1 ab V3.90.1 mit aktivem SHI. Die Lesequelle wird je Messwert gewählt; Java ist Standard, andere Quellen ergänzen fehlende Werte.'],
             ['type'=>'CheckBox','name'=>'ModbusWrites','caption'=>'Unterstützte Schreibbefehle über Modbus/SHI senden','value'=>$modbus,
-                'onChange'=>'IPS_SetProperty($id, "CommunicationMode", $ModbusWrites ? "modbus" : "java");'],
+                'onChange'=>'IPS_SetProperty($id, "CommunicationMode", $ModbusWrites ? "modbus" : "java"); WPLUX_RefreshWriteSourceLabels($id, $ModbusWrites);'],
             ['type'=>'Label','caption'=>'Gemeinsame Sollwerte verwenden dieselben Variablen. Betriebsarten und Zeitprogramme ohne gleichbedeutenden Modbus-Befehl bleiben über Java bedienbar. Reine Modbus-Steuervariablen sind bei ausgeschaltetem Schalter nicht bedienbar.'],
             ['type'=>'NumberSpinner','name'=>'ModbusPort','caption'=>'Modbus-Port'],
             ['type'=>'NumberSpinner','name'=>'ModbusUnitID','caption'=>'Modbus-Geräteadresse (Unit-ID)'],
