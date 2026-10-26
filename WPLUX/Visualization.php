@@ -2824,6 +2824,15 @@ window.SymconHeatPump = {
             }
 
             const svg = card.content;
+            // Restore the base sizes before applying the current responsive minimum.
+            svg.querySelectorAll('text,tspan').forEach(el => {
+                if (!el.__wpMinimumFont) return;
+                const previous = el.__wpMinimumFont;
+                if (previous.value) el.style.setProperty('font-size',previous.value,previous.priority);
+                else el.style.removeProperty('font-size');
+                delete el.__wpMinimumFont;
+            });
+            const compact = (card.getBoundingClientRect().width || window.innerWidth) <= 600;
             const cfg = currentConfig || {};
             const data = currentData || {};
             const controls = currentControls || {};
@@ -3068,6 +3077,7 @@ window.SymconHeatPump = {
             };
             const fittedText = (parent, attrs, text, width) => {
                 const el = node(parent, 'text', attrs, text);
+                el.__wpTextWidth = width;
                 if (el.getComputedTextLength() > width) {
                     el.setAttribute('textLength', width);
                     el.setAttribute('lengthAdjust', 'spacingAndGlyphs');
@@ -3330,10 +3340,10 @@ window.SymconHeatPump = {
                 const scale = radius / 18;
                 const actuator = node(symbol, 'g', {transform:'scale(' + scale + ')'});
                 node(actuator, 'path', {d:'M18 0H23',fill:'none',stroke:'var(--wp-icon)','stroke-width':1.5});
-                node(actuator, 'rect', {x:23,y:-24,width:26,height:48,rx:3,fill:'var(--wp-button)',
+                node(actuator, 'rect', {x:23,y:-24,width:compact ? 30 : 26,height:48,rx:3,fill:'var(--wp-button)',
                     stroke:state === 'conflict' ? '#f04444' : 'var(--wp-icon)','stroke-width':1.5});
-                node(actuator, 'text', {x:36,y:-4,'text-anchor':'middle',style:'font-size:18px;font-weight:bold'}, 'M'+mixer.number);
-                node(actuator, 'text', {x:36,y:16,'text-anchor':'middle',class:recent ? 'wp-valve-recent' : '',
+                node(actuator, 'text', {x:compact ? 38 : 36,y:-4,'text-anchor':'middle',style:'font-size:18px;font-weight:bold'}, 'M'+mixer.number);
+                node(actuator, 'text', {x:compact ? 38 : 36,y:16,'text-anchor':'middle',class:recent ? 'wp-valve-recent' : '',
                     style:'font-size:18px;font-weight:bold'},
                     {opening:'↑',closing:'↓',stopped:'•',unknown:'?',conflict:'!'}[state]);
                 return symbol;
@@ -3556,17 +3566,25 @@ window.SymconHeatPump = {
             setText('#textEvaporatorTemperature', formatted(cfg.evaporatorTemperature));
             setText('#textCondenserPressure', formatted(cfg.condenserPressure));
             setText('#textCondenserTemperature', formatted(cfg.condenserTemperature));
+            svg.querySelectorAll('#gRefrigerantCircuit > text:not([id]), #textCompressorLabel, #textExpansionValveLabel').forEach(el => {
+                el.style.setProperty('display',compact ? 'none' : 'inline','important');
+            });
+            [['textEvaporatorPressure',compact ? 682 : 698],['textCondenserPressure',compact ? 682 : 698],
+                ['textEvaporatorTemperature',compact ? 714 : 720],['textCondenserTemperature',compact ? 714 : 720]]
+                .forEach(([id,y])=>svg.querySelector('#'+id)?.setAttribute('y',String(y)));
             const hotGasReadings = group('gHotGasReadings', svg.querySelector('#gRefrigerantCircuit'));
             const hotGas = temperature(cfg.hotGasTemperature);
-            if (hotGas) fittedText(hotGasReadings,{id:'textHotGasTemperature',class:'sm',x:630,
-                y:575 - temperatureLineGap,'text-anchor':'end','dominant-baseline':'text-after-edge'},'Heißgas: ' + hotGas,150);
+            if (hotGas) fittedText(hotGasReadings,{id:'textHotGasTemperature',class:'sm',x:compact ? 422.5 : 630,
+                y:575 - temperatureLineGap,'text-anchor':compact ? 'middle' : 'end','dominant-baseline':'text-after-edge'},'Heißgas: ' + hotGas,compact ? 250 : 150);
             setText('#textExpansionValveOpening', formatted(cfg.expansionValveOpening));
             const eevCooling = binary(cfg.heatingPumpCoolingMode);
             const eevKey = eevCooling ? cfg.eevCoolingOpening : cfg.eevHeatingOpening;
             const eevValue = raw(eevKey);
             const validEEV = eevValue !== null && eevValue !== '' && typeof eevValue !== 'boolean'
                 && Number.isFinite(Number(eevValue)) && Number(eevValue) >= 0 && Number(eevValue) <= 100;
-            setText('#textExpansionValveOpening', 'EEV ' + (eevCooling ? 'Kühlen' : 'Heizen') + ': ' + (validEEV ? Number(eevValue).toFixed(1) + ' %' : '—'));
+            const eevText = validEEV ? Number(eevValue).toFixed(1) + ' %' : '—';
+            setText('#textExpansionValveOpening', eevText);
+            svg.querySelector('#textExpansionValveOpening')?.setAttribute('aria-label','EEV ' + (eevCooling ? 'Kühlen' : 'Heizen') + ': ' + eevText);
 
             const expansionLabel = svg.querySelector('#textExpansionValveLabel');
             const expansionSymbol = svg.querySelector('#expansionValveSymbol');
@@ -3604,15 +3622,8 @@ window.SymconHeatPump = {
                 valveActivityTimer = setTimeout(() => applyModernDashboard(card), Math.min(...valveExpiries) + 50);
             }
             setText('#textPowerValue', formatted(cfg.heatingPumpPower));
-            setText('#textCompressorSpeedValue', formatted(cfg.compressorValue));
-            const frequencyReadings = group('gCompressorFrequencyReadings', svg.querySelector('#gRefrigerantCircuit'));
-            if (formatted(cfg.compressorFrequencyTarget)) {
-                const frequencyActual = data[cfg.compressorValue]?.ident === 'Verdichterfrequenz';
-                setText('#textCompressorSpeedValue', 'Ist ' + (formatted(cfg.compressorValue) || '—'));
-                const targetText = frequencyActual ? 'Soll ' + formatted(cfg.compressorFrequencyTarget)
-                    : 'Frequenz Ist ' + (formatted(cfg.compressorFrequencyActual) || '—') + ' / Soll ' + formatted(cfg.compressorFrequencyTarget);
-                node(frequencyReadings,'text',{id:'textCompressorFrequencyTarget',class:'sm',x:422.5,y:644,'text-anchor':'middle',style:'font-size:16px'},targetText);
-            }
+            setText('#textCompressorSpeedValue', formatted(cfg.compressorValue) || '—');
+            group('gCompressorFrequencyReadings', svg.querySelector('#gRefrigerantCircuit'));
             setText('#textThermalSolarPanelTemp', formatted(cfg.thermalSolarPanelTemp));
             setText('#textThermalSolarPumpSpeed', formatted(cfg.thermalSolarPumpSpeed) || (cfg.thermalSolarPump ? relay(cfg.thermalSolarPump) : '—'));
 
@@ -3911,9 +3922,16 @@ window.SymconHeatPump = {
             // Heater power is aggregated in the backend and shown only inside DHW.
 
             // Keep every schematic label at least as large as the refrigerant labels.
-            const minimumFont = parseFloat(getComputedStyle(svg.querySelector('#textEvaporatorPressure')).fontSize) || 18;
+            const minimumFont = Math.max(compact ? 20 : 18,parseFloat(getComputedStyle(svg.querySelector('#textEvaporatorPressure')).fontSize) || 18);
             svg.querySelectorAll('text,tspan').forEach(el => {
-                if (parseFloat(getComputedStyle(el).fontSize) < minimumFont) el.style.setProperty('font-size',minimumFont + 'px','important');
+                if (parseFloat(getComputedStyle(el).fontSize) < minimumFont) {
+                    el.__wpMinimumFont = {value:el.style.getPropertyValue('font-size'),priority:el.style.getPropertyPriority('font-size')};
+                    el.style.setProperty('font-size',minimumFont + 'px','important');
+                }
+                if (el.__wpTextWidth && el.getComputedTextLength() > el.__wpTextWidth) {
+                    el.setAttribute('textLength',String(el.__wpTextWidth));
+                    el.setAttribute('lengthAdjust','spacingAndGlyphs');
+                }
             });
 
             return true;
@@ -4076,6 +4094,11 @@ window.SymconHeatPump = {
             applyCardData();
         };
 
+        let dashboardResizeFrame = null;
+        window.addEventListener('resize', () => {
+            if (dashboardResizeFrame !== null) cancelAnimationFrame(dashboardResizeFrame);
+            dashboardResizeFrame = requestAnimationFrame(() => {dashboardResizeFrame=null;applyCardData();});
+        });
         if (window.matchMedia) {
             const scheme = window.matchMedia('(prefers-color-scheme: dark)');
             const onSchemeChange = () => {

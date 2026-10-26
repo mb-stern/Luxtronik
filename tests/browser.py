@@ -189,13 +189,13 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 eev['config'].update(eevHeatingOpening='testEEVHeating',eevCoolingOpening='testEEVCooling',heatingPumpCoolingMode='testCoolingMode')
                 eev['data'].update(testEEVHeating={'value':52.5},testEEVCooling={'value':100},testCoolingMode={'value':False})
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',eev)
-                assert page.locator('#textExpansionValveOpening').text_content()=='EEV Heizen: 52.5 %'
+                assert page.locator('#textExpansionValveOpening').text_content()=='52.5 %'
                 eev['data']['testCoolingMode']['value']=True
                 page.evaluate('(data)=>window.handleMessage({type:"update",data})',eev['data'])
-                assert page.locator('#textExpansionValveOpening').text_content()=='EEV Kühlen: 100.0 %'
+                assert page.locator('#textExpansionValveOpening').text_content()=='100.0 %'
                 eev['data']['testEEVCooling']['value']=1000
                 page.evaluate('(data)=>window.handleMessage({type:"update",data})',eev['data'])
-                assert page.locator('#textExpansionValveOpening').text_content()=='EEV Kühlen: —'
+                assert page.locator('#textExpansionValveOpening').text_content()=='—'
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',payload)
                 assert page.locator('#gFooter').count()==0
                 assert page.locator('#wp-card svg').evaluate('e=>e.viewBox.baseVal.height')==925
@@ -346,6 +346,8 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     return [...svg.querySelectorAll('text,tspan')].filter(e=>getComputedStyle(e).display!=='none' && parseFloat(getComputedStyle(e).fontSize)<minimum).map(e=>e.id||e.textContent);
                 }''')
                 assert small_labels==[],small_labels
+                assert page.locator('#textEvaporatorPressure').evaluate('e=>getComputedStyle(e).fontSize')==('20px' if width<=600 else '18px')
+                assert page.locator('#textCompressorLabel,#textExpansionValveLabel').evaluate_all('els=>els.every(e=>getComputedStyle(e).display==="none")')==(width<=600)
                 for suffix in ['Up','Middle','Down']:
                     assert page.locator('#textTankTempWW'+suffix).count()==0
                 assert page.locator('#symconBoilerSupplyTemperature,#symconBoilerRefluxTemperature').count()==0
@@ -777,16 +779,16 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 frequency=browser.new_page(viewport={'width':width,'height':850})
                 frequency.goto(f'http://127.0.0.1:{server.server_port}/compressor-frequency.html')
                 assert frequency.locator('#wp-error').text_content()==''
-                assert frequency.locator('#textCompressorSpeedValue').text_content()=='Ist 55 rpm'
-                assert frequency.locator('#textCompressorFrequencyTarget').text_content()=='Soll 60 rpm'
+                assert frequency.locator('#textCompressorSpeedValue').text_content()=='55 rpm'
+                assert frequency.locator('#textCompressorFrequencyTarget').count()==0
                 assert frequency.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='symcon-modern-rotate'
                 assert frequency.locator('#textHeatPumpCycle').text_content()=='Läuft seit 2h 3m'
                 assert frequency.locator('#gHeatPumpCycle > text').count()==1
                 assert frequency.locator('#textHeatPumpCycle').evaluate('e=>e.getBBox().width')<=175.5
                 update=json.loads(Path(artifacts,'compressor-frequency-update.json').read_text())
                 frequency.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',update)
-                assert frequency.locator('#textCompressorSpeedValue').text_content()=='Ist 0 rpm'
-                assert frequency.locator('#textCompressorFrequencyTarget').text_content()=='Soll 60 rpm'
+                assert frequency.locator('#textCompressorSpeedValue').text_content()=='0 rpm'
+                assert frequency.locator('#textCompressorFrequencyTarget').count()==0
                 assert frequency.locator('#pathCompressor').evaluate('e=>getComputedStyle(e).animationName')=='none'
                 assert frequency.locator('#textHeatPumpCycle').text_content()=='Steht seit 1h 14m'
                 assert frequency.locator('#gHeatPumpCycle > text').count()==1
@@ -928,7 +930,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert hybrid.locator('#textHeatingFlow').text_content()=='612 l/h'
                 assert hybrid.locator('#textHeatingFlow').get_attribute('x')=='680'
                 assert hybrid.locator('#textHeatingFlow').get_attribute('y')=='785'
-                assert hybrid.locator('#textCompressorSpeedValue').text_content()=='Ist 55 rpm'
+                assert hybrid.locator('#textCompressorSpeedValue').text_content()=='55 rpm'
                 assert hybrid.locator('#textCondenserTemperature').text_content()=='8.2 °C'
                 assert hybrid.locator('#textHeatPumpCycle').text_content()=='Läuft seit 2h 3m'
                 update=json.loads(Path(artifacts,'hybrid-update.json').read_text())
@@ -1047,9 +1049,9 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 opened=[]
                 readings.on('websocket',lambda socket:opened.append(socket.url))
                 readings.goto(f'http://127.0.0.1:{server.server_port}/web-eev.html')
-                assert readings.locator('#textExpansionValveOpening').text_content()=='EEV Heizen: 42.9 %'
+                assert readings.locator('#textExpansionValveOpening').text_content()=='42.9 %'
                 readings.evaluate('(p)=>window.handleMessage(p)',json.loads(Path(artifacts,'web-eev-cooling.json').read_text()))
-                assert readings.locator('#textExpansionValveOpening').text_content()=='EEV Kühlen: 100.0 %'
+                assert readings.locator('#textExpansionValveOpening').text_content()=='100.0 %'
                 assert opened==[],'EEV measurement incorrectly depends on a browser WebSocket'
                 readings.close()
 

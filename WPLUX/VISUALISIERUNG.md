@@ -120,8 +120,9 @@ Solarthermie nutzt
 und die interne Datenauswahl. Das Solarziel muss zur tatsächlichen Anlage passen.
 
 Jedes Grafikfeld verwendet genau einen festen Ident. Die Kondensatortemperatur
-liest `Liquefaction_Temperature` (233), Verdichter Ist `Verdichterfrequenz` (231)
-und Verdichter Soll `Verdichterfrequenz_Soll` (236). Es gibt keine automatische
+liest `Liquefaction_Temperature` (233), die Verdichterdrehzahl `Verdichterfrequenz` (231).
+Die Solldrehzahl bleibt als Datenpunkt verfügbar, wird aber nicht in der Grafik angezeigt.
+Es gibt keine automatische
 Auswahl anhand von Null-/Nichtnullwerten. Echte Nullwerte bleiben sichtbar.
 Für die Animation zählt der Istwert; ein positiver Sollwert allein startet sie
 nicht. Das Relais dient nur bei fehlendem Istwert als Rückfall. Einheiten werden
@@ -249,11 +250,16 @@ und sichere Symbolklassen geprüft. Eine echte Symcon-Instanz mit Wärmepumpe
 wurde in dieser Cloud-Umgebung nicht verwendet.
 
 
-EEV Heizen/Kühlen wird abhängig vom Kühlstatus am Expansionsventil beschriftet.
+Am Expansionsventil steht nur der Prozentwert, abhängig vom Kühlstatus aus EEV Heizen oder EEV Kühlen.
 Die Prozentwerte kommen aus den bestätigten WebSocket-Feldern, nicht aus Java-ID 247.
 Die Grafik benötigt dafür keine angelegten Messvariablen. Diagnose und JSON-Download
 stehen unter WebSocket-Ergänzung in der Instanzkonfiguration; das LUX-Fenster enthält
 nur die bisherige Geräteanzeige mit Bedienung.
+
+Bis 600 px Kachelbreite entfallen die Bauteilnamen Verdichter, Verdampfer,
+Kondensator und Expansionsventil. Die Mindestschrift in der gesamten Grafik
+steigt dabei moderat von 18 auf 20 SVG-Einheiten; bereits größere Texte bleiben
+unverändert. Bei breiteren Ansichten erscheinen die Bauteilnamen wieder.
 
 In der COP-/JAZ-Zeile öffnet „Fehler: Anzahl“ die gespeicherte Historie mit Datum,
 Fehlercode und vollständigem Meldungstext. WebSocket wird für diese Daten bevorzugt;
