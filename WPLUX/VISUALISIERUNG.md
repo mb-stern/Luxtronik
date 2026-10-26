@@ -77,8 +77,9 @@ Das Schema enthält eine gemeinsame HUP im roten Steigstrang. In Flussrichtung
 folgt darüber unmittelbar das Boiler-Umschaltventil. Die kurzen Anschlussstücke am
 Kondensator sind nur leicht verlängert; der blaue Rücklauf behält den unteren
 Knick. Pumpe und Ventil stehen nahe am Kondensator. Blau liegt parallel
-zum roten Steigstrang. Der Warmwasserspeicher steht höher und ist nach oben verlängert. Sein roter
-Abzweig liegt höher, untere Anschlüsse und Anbauteile behalten ihre Höhe. Die
+zum roten Steigstrang. Der Warmwasserspeicher steht höher und ist nach oben verlängert. Beim Kompaktieren ziehen Boiler und
+Leitungsanschlüsse mit nach oben; Solarleitungen und Zirkulationsabgang bleiben
+frei von den Beschriftungen. Die
 blaue Steigleitung steht weiter rechts, ohne den Puffer zu verschieben. VL steht
 am roten Strang vor dem Ventil, der Prozentwert neben der Pumpe und RL direkt
 neben dem blauen Kondensatoraustritt. Dahinter
@@ -336,5 +337,10 @@ wenn noch kein Bild empfangen wurde oder die Verbindung scheitert. Das Display
 passt sich auch der verfügbaren Höhe an, damit die Bedienpfeile sichtbar bleiben.
 
 Der Wärmepumpenrahmen hat oben und unten am Kältekreis denselben Innenabstand
-von 15 SVG-Einheiten. Die obere Rahmenkante liegt näher an Gerätebild und
-Kältekreis; deren Positionen und die Leitungsführung bleiben erhalten.
+von 15 SVG-Einheiten. Der gesamte untere
+Diagrammbereich steht höher; auch zwischen Infokachel und Gehäuse bleiben nur
+15 SVG-Einheiten. Boiler und Verbindungsleitungen ziehen mit, die Anordnung
+von Pumpe, Ventil und Messwerten bleibt erhalten. Die Solar-Kachel zeigt unter
+dem Panel zwei kompakte Zeilen für Kollektor und Solarspeicher, ohne eigenes
+großes Wertefeld. Ihr unterer Rand liegt auf der Gehäuseunterkante der WP. Ein
+vorhandener numerischer Pumpenwert steht in der Solar-Kopfzeile.

@@ -3157,6 +3157,8 @@ window.SymconHeatPump = {
 
             const waterSupplyY = 560;
             const waterReturnY = 795;
+            const lowerLift = 55;
+            const boilerAlignment = 20;
             const buffered = previewAll || !!cfg.tankHP;
             const boilerValveX = 700;
             const primaryPumpY = 650;
@@ -3173,6 +3175,8 @@ window.SymconHeatPump = {
             const coldHeaderLocalX = coldHeaderX - heatingShift;
             const heatingSupplyX = buffered ? 1060 : boilerValveX;
             svg.querySelector('#gBufferTankBody')?.setAttribute('transform','translate(840 180)');
+            svg.querySelector('#heatPump')?.setAttribute('transform','translate(0 -'+lowerLift+')');
+            svg.querySelector('#main')?.setAttribute('transform','translate(0 -'+lowerLift+')');
             svg.querySelector('#heatPumpPanel')?.setAttribute('width','862');
             svg.querySelector('#main > path.hot')?.setAttribute('d','M650 680H'+boilerValveX+'V'+waterSupplyY);
             svg.querySelector('#main > path.cold')?.setAttribute('d','M810 '+waterReturnY+'H700V705H650');
@@ -3192,16 +3196,16 @@ window.SymconHeatPump = {
             });
             const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
             // Four-port separator: primary left, secondary right, no return bypass.
-            const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25) + 'V245H840',
-                'M840 380H810V' + waterReturnY,
+            const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25 - lowerLift) + 'V245H840',
+                'M840 380H810V' + (waterReturnY - lowerLift),
                 'M1010 245H1060V'+(lastReturn-50),
                 lastReturn <= 380 ? 'M1100 '+lastReturn+'V380H1010' : 'M1100 '+lastReturn+'H1040V380H1010'];
             bufferPaths.forEach((path,index) => {
                 path.setAttribute('d',bufferGeometry[index]);
                 path.setAttribute('id',['pathBufferChargeSupply','pathBufferChargeReturn','pathBufferManifoldSupply','pathBufferManifoldReturn'][index]);
             });
-            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M'+boilerValveX+' ' + (waterSupplyY - 25) + 'V'+(firstReturn-50));
-            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M810 '+lastReturn+'V' + waterReturnY);
+            svg.querySelector('#gNoBuffer > path.hot')?.setAttribute('d','M'+boilerValveX+' ' + (waterSupplyY - 25 - lowerLift) + 'V'+(firstReturn-50));
+            svg.querySelector('#gNoBuffer > path.cold')?.setAttribute('d','M810 '+lastReturn+'V' + (waterReturnY - lowerLift));
             // Gaps mark crossings without creating apparent hydraulic junctions.
             let crossings = svg.querySelector('#maskHydraulicCrossings');
             if (!crossings) crossings = node(svg.querySelector('defs'),'mask',{
@@ -3221,7 +3225,7 @@ window.SymconHeatPump = {
             const solarBuffer = cfg.solarTarget === 'buffer' && !!cfg.tankHP;
             const solarHotWater = !!cfg.thermalSolarAvailable && !solarBuffer;
             show('#gDHW', previewAll || !!cfg.tankWW || solarHotWater);
-            svg.querySelector('#gDHW')?.setAttribute('transform','translate(' + dhwShift + ' ' + dhwLift + ')');
+            svg.querySelector('#gDHW')?.setAttribute('transform','translate(' + dhwShift + ' ' + (dhwLift - lowerLift + boilerAlignment) + ')');
             // Extend the boiler upward while retaining its base and lower fittings.
             const boilerBody = svg.querySelector('#gDHWTankBody');
             boilerBody?.setAttribute('transform','translate(900 545)');
@@ -3229,25 +3233,33 @@ window.SymconHeatPump = {
             boilerRects?.[0]?.setAttribute('height','290');
             boilerRects?.[1]?.setAttribute('height','242');
             boilerBody?.querySelector(':scope > ellipse:last-of-type')?.setAttribute('cy','308');
-            svg.querySelector('#gDHW > path.hot')?.setAttribute('d','M' + (boilerValveX + 25 - dhwShift) + ' ' + (waterSupplyY - dhwLift) + 'H900');
-            svg.querySelector('#gDHW > path.cold')?.setAttribute('d','M900 ' + (waterReturnY - dhwLift) + 'H' + (810 - dhwShift));
+            boilerBody?.querySelector(':scope > text.hd')?.setAttribute('y','-6');
+            svg.querySelector('#gDHW > path.hot')?.setAttribute('d','M' + (boilerValveX + 25 - dhwShift) + ' ' + (waterSupplyY - dhwLift - boilerAlignment) + 'H900');
+            svg.querySelector('#gDHW > path.cold')?.setAttribute('d','M900 ' + (waterReturnY - dhwLift - boilerAlignment) + 'H' + (810 - dhwShift));
             let boilerCrossing = svg.querySelector('#maskBoilerCrossing');
             if (!boilerCrossing) boilerCrossing = node(svg.querySelector('defs'),'mask',{
                 id:'maskBoilerCrossing',maskUnits:'userSpaceOnUse',x:0,y:0,width:1600,height:1000});
             boilerCrossing.replaceChildren();
             node(boilerCrossing,'rect',{x:0,y:0,width:1600,height:1000,fill:'#fff'});
-            node(boilerCrossing,'rect',{x:800-dhwShift,y:waterSupplyY-dhwLift-9,width:20,height:18,fill:'#000'});
+            node(boilerCrossing,'rect',{x:800-dhwShift,y:waterSupplyY-dhwLift-boilerAlignment-9,width:20,height:18,fill:'#000'});
             svg.querySelector('#gDHW > path.hot')?.setAttribute('mask','url(#maskBoilerCrossing)');
-            svg.querySelector('#gCirculatingPumpVisual')?.setAttribute('transform','translate(-16 70)');
+            svg.querySelector('#gCirculatingPumpVisual')?.setAttribute('transform','translate(-16 '+(70 + lowerLift - boilerAlignment)+')');
             show('#gSolar', previewAll || (!!cfg.thermalSolarAvailable && (solarBuffer ? heating : true)));
             // Solar enters the buffer from below, clear of the heating outlets.
             const solar = svg.querySelector('#gSolar');
             if (solar) svg.insertBefore(solar,svg.querySelector('#heatPump'));
+            solar?.querySelector(':scope > rect.pn')?.setAttribute('y','595');
+            solar?.querySelector(':scope > rect.pn')?.setAttribute('height','260');
+            show('#gSolar > rect.bt',false);
+            [...solar.querySelectorAll(':scope > text')].forEach(el=>{
+                if (el.textContent.trim()==='Solar') el.setAttribute('y','625');
+                if (el.textContent.trim()==='Kollektor') el.style.setProperty('display','none','important');
+            });
             const solarPipe = svg.querySelector('#gSolar > path.sol');
             const solarBoilerTopY = 575 + dhwLift + 66;
             const solarBoilerBottomY = 575 + dhwLift + 206;
             if (solarPipe) solarPipe.setAttribute('d', solarBuffer
-                ? 'M920 410V475H1230V680H1260M1260 820H1245V450H960V410'
+                ? 'M920 410V445H1230V680H1260M1260 820H1245V435H960V410'
                 : 'M' + (1064 + dhwShift) + ' '+solarBoilerTopY+'H1260M1260 '+solarBoilerBottomY+'H' + (1064 + dhwShift));
             const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
             if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(45 -155)' : 'translate(35 '+(solarBoilerTopY-755)+')');
@@ -3463,11 +3475,10 @@ window.SymconHeatPump = {
                 node(bufferReading,'title',{},'Externer Rücklauffühler im Trennspeicher (Luxtronik ID 13)');
             }
             const solarReading = group('gSolarStorageReading', svg.querySelector('#gSolar'));
-            if (formatted(cfg.solarStorageTemperature)) {
-                fittedText(solarReading, {id:'textSolarStorageTemperature', class:'sm', x:1295, y:900,
-                    style:'font-size:14px'}, 'Solarspeicher ' + temperature(cfg.solarStorageTemperature), 215);
-                node(solarReading,'title',{},'Separater Solarspeicherfühler (Luxtronik ID 27); eigener Fühlereingang, nicht die Warmwasser- oder Puffertemperatur');
-            }
+            fittedText(solarReading, {id:'textSolarStorageTemperature', class:'sm', x:1280, y:815,
+                'dominant-baseline':'text-before-edge',style:'font-size:18px'},
+                'Solarspeicher: ' + (temperature(cfg.solarStorageTemperature) || '—'),225);
+            node(solarReading,'title',{},'Separater Solarspeicherfühler (Luxtronik ID 27); eigener Fühlereingang, nicht die Warmwasser- oder Puffertemperatur');
 
             setText('#textHeatingCircuitName1', cfg.heatingCircuitName1 || 'HK1');
             setText('#textHeatingCircuitName2', cfg.heatingCircuitName2 || 'HK2');
@@ -3616,7 +3627,14 @@ window.SymconHeatPump = {
             setText('#textPowerValue', formatted(cfg.heatingPumpPower));
             setText('#textCompressorSpeedValue', formatted(cfg.compressorValue) || '—');
             group('gCompressorFrequencyReadings', svg.querySelector('#gRefrigerantCircuit'));
-            setText('#textThermalSolarPanelTemp', formatted(cfg.thermalSolarPanelTemp));
+            setText('#textThermalSolarPanelTemp', 'Kollektor: ' + (temperature(cfg.thermalSolarPanelTemp) || '—'));
+            const collectorReading = svg.querySelector('#textThermalSolarPanelTemp');
+            if (collectorReading) {
+                collectorReading.setAttribute('x','1280');collectorReading.setAttribute('y','780');
+                collectorReading.setAttribute('dominant-baseline','text-before-edge');
+                collectorReading.removeAttribute('textLength');collectorReading.removeAttribute('lengthAdjust');
+                collectorReading.__wpTextWidth=225;
+            }
             const solarPumpNumber = measuredNumber(cfg.thermalSolarPumpSpeed);
             const solarUnit = (data[cfg.thermalSolarPumpSpeed]?.unit || formatted(cfg.thermalSolarPumpSpeed)).toLowerCase();
             const hasSolarSpeed = solarPumpNumber !== null && solarPumpNumber >= 0
@@ -3626,9 +3644,15 @@ window.SymconHeatPump = {
                 .find(el=>el.id==='textSolarPumpLabel' || el.textContent.trim()==='Pumpe');
             if (solarPumpLabel) {
                 solarPumpLabel.id='textSolarPumpLabel';
-                show('#textSolarPumpLabel',hasSolarSpeed);
+                show('#textSolarPumpLabel',false);
             }
             show('#textThermalSolarPumpSpeed',hasSolarSpeed);
+            const solarSpeedReading = svg.querySelector('#textThermalSolarPumpSpeed');
+            if (solarSpeedReading) {
+                solarSpeedReading.setAttribute('x','1505');solarSpeedReading.setAttribute('y','625');
+                solarSpeedReading.removeAttribute('textLength');solarSpeedReading.removeAttribute('lengthAdjust');
+                solarSpeedReading.setAttribute('text-anchor','end');solarSpeedReading.__wpTextWidth=130;
+            }
 
             // Wärmepumpen-Status: ausschließlich der formatierte Profilwert
             // der konfigurierten Betriebsstatusvariable. Keine erfundenen Texte.
@@ -3841,7 +3865,7 @@ window.SymconHeatPump = {
                 );
             }
 
-            svg.setAttribute('viewBox','15 0 ' + contentRight + ' 925');
+            svg.setAttribute('viewBox','15 0 ' + contentRight + ' ' + (925 - lowerLift));
 
             // Live flow overlays use actual running variables; no idle animation.
             const heatingActive = pumpStates.some((state,index) => [hk1,hk2,hk3][index] && state.active);
