@@ -77,7 +77,10 @@ Vieranschluss-Trennspeicher gezeichnet: WP-Vorlauf/Rücklauf links,
 Heizkreis-Vorlauf/Rücklauf rechts. Zwischen den beiden Rückläufen gibt es keine
 zusätzliche äußere Verbindung. Kurze gemeinsame Leitungen verteilen das Wasser
 auf die Heizkreisabgänge; kleine Unterbrechungen kennzeichnen Kreuzungen ohne
-Verbindung. Ein Reihenpuffer entspricht diesem Schema nicht.
+Verbindung. Ein Reihenpuffer entspricht diesem Schema nicht. Der Speicher steht rechts über dem
+Boiler; der rote Steigstrang läuft gerade ab dem Umschaltventil nach oben, der
+blaue Rücklauf parallel daneben außerhalb der WP-Temperaturbeschriftungen. Beide
+Solaranschlüsse liegen oberhalb des roten Heizkreisabgangs.
 
 Die Grafik ist kein vollständiger Installationsplan: Bei hydraulischer Trennung
 können weitere reale Pumpen nötig sein, die hier nicht zusätzlich gezeichnet werden.
