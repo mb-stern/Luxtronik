@@ -337,7 +337,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert page.locator('#main #textHeatingFlow').text_content()=='607 l/h'
                 assert page.locator('#gHeatPumpFlow > text').count()==1
                 assert page.locator('#heatPump #textWPSupplyTemperature').text_content()=='VL: 25.5 °C'
-                assert page.locator('#textHeatingFlow').get_attribute('x')=='670'
+                assert page.locator('#textHeatingFlow').get_attribute('x')=='760'
                 assert page.locator('#textHeatingFlow').get_attribute('y')=='733'
                 assert 'Ansteuerung' not in page.locator('#textHeatingPump1').text_content()
                 small_labels=page.evaluate('''()=>{
@@ -381,10 +381,10 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert align['nameFont']==align['valueFont'],align
 
                 assert page.locator('#textWPSupplyTemperatureLabel,#textWPReturnTemperatureLabel,#textWPReturnTargetLabel').count()==0
-                assert page.locator('#switchValve').get_attribute('transform')=='translate(785 590)'
-                assert page.locator('#main > path.hot').get_attribute('d')=='M650 680H785V590'
-                assert page.locator('#main > path.cold').get_attribute('d')=='M825 795V705H650'
-                assert page.locator('#gDHW > path.hot').get_attribute('d')=='M786 615H900'
+                assert page.locator('#switchValve').get_attribute('transform')=='translate(700 590)'
+                assert page.locator('#main > path.hot').get_attribute('d')=='M650 680H700V590'
+                assert page.locator('#main > path.cold').get_attribute('d')=='M750 795H700V705H650'
+                assert page.locator('#gDHW > path.hot').get_attribute('d')=='M701 615H900'
                 assert float(page.locator('#textWPSupplyTemperature').get_attribute('y'))>590
                 assert float(page.locator('#textWPReturnTemperature').get_attribute('y'))<795
 
@@ -697,7 +697,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                         assert str(25+n*5) in mixed.locator('#textSupplyTemperatureHeating'+('' if n==1 else str(n))).text_content()
                         assert mixed.locator('[id^="gMixerValveSymbol"],#gMixerValveReadings,[id^="pathHKMixingReturn"]').count()==0
                     if has_buffer:
-                        assert mixed.locator('#pathBufferChargeReturn').get_attribute('d')=='M840 380H825V795'
+                        assert mixed.locator('#pathBufferChargeReturn').get_attribute('d')=='M840 380H750V795'
                         assert mixed.locator('#pathBufferManifoldReturn').get_attribute('d')=='M1100 415H1040V380H1010'
                         shift=mixed.locator('#gHeating').evaluate('e=>e.transform.baseVal.getItem(0).matrix.e')
                         assert mixed.locator('#gHK1 > path.hot').get_attribute('d')==f'M{1060-int(shift)} 245H1260'
@@ -923,7 +923,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 hybrid.goto(f'http://127.0.0.1:{server.server_port}/hybrid.html')
                 assert hybrid.locator('#wp-error').text_content()==''
                 assert hybrid.locator('#textHeatingFlow').text_content()=='612 l/h'
-                assert hybrid.locator('#textHeatingFlow').get_attribute('x')=='670'
+                assert hybrid.locator('#textHeatingFlow').get_attribute('x')=='760'
                 assert hybrid.locator('#textHeatingFlow').get_attribute('y')=='733'
                 assert hybrid.locator('#textCompressorSpeedValue').text_content()=='55 rpm'
                 assert hybrid.locator('#textCondenserTemperature').text_content()=='8.2 °C'

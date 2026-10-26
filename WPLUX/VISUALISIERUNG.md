@@ -71,8 +71,9 @@ Sensorzuordnungen bleiben intern erhalten; eine zusätzliche Mischerauswahl entf
 Der dritte Regler-Mischkreis bleibt als Datenquelle und in der ID-Liste erhalten.
 
 Das Schema enthält eine gemeinsame HUP im roten Steigstrang. In Flussrichtung
-folgt darüber unmittelbar das Boiler-Umschaltventil. Die Rohrstücke am
-Kondensator führen zunächst länger waagerecht nach außen; Blau liegt parallel
+folgt darüber unmittelbar das Boiler-Umschaltventil. Die kurzen Anschlussstücke am
+Kondensator sind nur leicht verlängert; der blaue Rücklauf behält den unteren
+Knick. Pumpe und Ventil stehen nahe am Kondensator. Blau liegt parallel
 zum roten Steigstrang. Der Warmwasserspeicher mit seinen Anschlüssen,
 Solarleitungen und der Zirkulation steht höher. Dahinter
 zweigt die Boilerladung ab; der Heizungszweig führt direkt zum optionalen Puffer
