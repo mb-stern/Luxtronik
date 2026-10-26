@@ -437,6 +437,14 @@ trait LuxtronikVisualization
         font-weight: 600;
     }
 
+    #wp-mode-menu .wp-heater-row { display: grid; grid-template-columns: minmax(0, 1fr) auto max-content; align-items: center; gap: 8px; padding: 4px 8px; }
+    #wp-mode-menu .wp-heater-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #wp-mode-menu .wp-heater-power { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #wp-mode-menu .wp-heater-row button,
+    #wp-mode-menu .wp-heater-row select { box-sizing: border-box; width: auto; min-width: 60px; max-width: 105px; min-height: 36px; margin: 0; padding: 6px 10px; border: 1px solid rgba(127,127,127,.45); border-radius: 6px; font: inherit; color: inherit; background-color: transparent; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #wp-mode-menu .wp-heater-row button:disabled { cursor: default; opacity: .5; }
+    #wp-mode-menu .wp-heater-row select option { background: Canvas; color: CanvasText; }
+
     #wp-mode-menu .wp-numeric-row {
         display: flex;
         align-items: center;
@@ -2262,29 +2270,60 @@ window.SymconHeatPump = {
             menu.appendChild(title);
             const heaters = Array.isArray(currentControls.heaterSwitches) ? currentControls.heaterSwitches : [];
             heaters.forEach((heater) => {
-                const heading = document.createElement('div');
-                heading.className = 'wp-mode-title';
+                const row = document.createElement('div');
+                row.className = 'wp-heater-row';
+                const name = document.createElement('span');
+                name.className = 'wp-heater-name';
+                name.textContent = heater.label;
+                name.title = heater.label;
                 const power = typeof heater.powerWatts === 'number' ? (heater.powerWatts / 1000).toFixed(2) + ' kW' : '—';
-                heading.textContent = heater.label + ': ' + (heater.stateLabel || '—') + ' · ' + power;
-                menu.appendChild(heading);
-                const options = Array.isArray(heater.options) && heater.options.length ? heater.options : [{name:'Nicht schaltbar', value:null}];
-                options.forEach((option) => {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.dataset.heater = String(heater.number);
-                    button.dataset.value = String(option.value);
-                    button.disabled = !heater.configured;
-                    button.textContent = (option.role === 'on' ? 'Einschalten: ' : option.role === 'off' ? 'Ausschalten: ' : '') + String(option.name);
-                    if (option.value === heater.currentValue) button.classList.add('active');
-                    button.addEventListener('click', (clickEvent) => {
+                const options = Array.isArray(heater.options) ? heater.options : [];
+                const on = options.find(option => option.role === 'on') || (heater.boolean ? options.find(option => option.value === true) : null);
+                const off = options.find(option => option.role === 'off') || (heater.boolean ? options.find(option => option.value === false) : null);
+                const send = (value) => {
+                    if (!heater.configured) return;
+                    requestAction('SetHeaterSwitch', JSON.stringify({number:heater.number, value}));
+                    closeModeMenu();
+                };
+                let control;
+                if (!on && !off && options.length > 1) {
+                    // Keep unmapped multi-state controls selectable without guessing Ein/Aus.
+                    control = document.createElement('select');
+                    options.forEach((option, index) => {
+                        const item = document.createElement('option');
+                        item.value = String(index);
+                        item.textContent = String(option.name);
+                        item.selected = option.value === heater.currentValue;
+                        control.appendChild(item);
+                    });
+                    if (!options.some(option => option.value === heater.currentValue)) control.selectedIndex = -1;
+                    control.setAttribute('aria-label', heater.label + ' Modus');
+                    control.addEventListener('change', () => {
+                        const option = options[control.selectedIndex];
+                        if (option) send(option.value);
+                    });
+                } else {
+                    control = document.createElement('button');
+                    control.type = 'button';
+                    const option = heater.enabled === true ? (off || on) : (on || off || options[0]);
+                    const action = !option ? '—' : option === on ? 'Ein' : option === off ? 'Aus' : String(option.name);
+                    control.textContent = action;
+                    control.dataset.value = String(option?.value);
+                    control.setAttribute('aria-label', heater.label + ': ' + action);
+                    control.addEventListener('click', (clickEvent) => {
                         clickEvent.preventDefault();
                         clickEvent.stopPropagation();
-                        if (!heater.configured) return;
-                        requestAction('SetHeaterSwitch', JSON.stringify({number:heater.number, value:option.value}));
-                        closeModeMenu();
+                        if (option) send(option.value);
                     });
-                    menu.appendChild(button);
-                });
+                }
+                control.dataset.heater = String(heater.number);
+                control.disabled = !heater.configured || options.length === 0;
+                control.title = heater.stateLabel || 'Nicht schaltbar';
+                const reading = document.createElement('span');
+                reading.className = 'wp-heater-power';
+                reading.textContent = power;
+                row.append(name, control, reading);
+                menu.appendChild(row);
             });
             menu.style.display = 'block';
         };

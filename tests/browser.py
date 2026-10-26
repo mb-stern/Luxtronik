@@ -476,14 +476,14 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 heater_controls['heaterSwitches'][1].update(type=1,boolean=False,enabled=None,currentValue=20,stateLabel='Automatik',options=[{'value':10,'name':'Aus'},{'value':20,'name':'Automatik'},{'value':30,'name':'Ein'}])
                 page.evaluate('(controls)=>window.handleMessage({type:"update",controls})',heater_controls)
                 page.locator('#gHeaterControlButton').dispatch_event('click')
-                assert page.locator('#wp-mode-menu [data-heater="2"][data-value="20"]').text_content()=='Automatik'
-                page.locator('#wp-mode-menu [data-heater="2"][data-value="30"]').click()
+                assert page.locator('#wp-mode-menu select[data-heater="2"]').input_value()=='1'
+                page.locator('#wp-mode-menu select[data-heater="2"]').select_option(index=2)
                 assert page.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':2,'value':30}}
                 heater_controls['heaterSwitches'][1].update(currentValue=1,stateLabel='Automatik',options=[{'value':0,'name':'Aus','role':'off'},{'value':2,'name':'Ein','role':'on'}])
                 page.evaluate('(controls)=>window.handleMessage({type:"update",controls})',heater_controls)
                 page.locator('#gHeaterControlButton').dispatch_event('click')
                 assert page.locator('#wp-mode-menu [data-heater="2"][data-value="1"]').count()==0
-                assert page.locator('#wp-mode-menu [data-heater="2"][data-value="2"]').text_content()=='Einschalten: Ein'
+                assert page.locator('#wp-mode-menu [data-heater="2"][data-value="2"]').text_content()=='Ein'
                 page.locator('#wp-mode-menu [data-heater="2"][data-value="2"]').click()
                 assert page.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':2,'value':2}}
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,controls:p.controls})',payload)
@@ -804,8 +804,10 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert heaters.locator(target).text_content()=='1.36 kW'
                 heaters.evaluate('() => {window.testActions=[];window.requestAction=(ident,value)=>window.testActions.push({ident,payload:JSON.parse(value)});}')
                 heaters.locator('#gHeaterControlButton').dispatch_event('click')
-                titles=heaters.locator('#wp-mode-menu .wp-mode-title').all_text_contents()
-                assert titles[1:]==['Heizstab 1: Automatisch · 0.00 kW','Heizstab 2: Automatisch · 0.00 kW','Heizstab 3: Aktiv · 1.36 kW'],titles
+                assert heaters.locator('#wp-mode-menu .wp-mode-title').all_text_contents()==['Heizstäbe']
+                assert heaters.locator('#wp-mode-menu .wp-heater-name').all_text_contents()==['Heizstab 1','Heizstab 2','Heizstab 3']
+                assert heaters.locator('#wp-mode-menu .wp-heater-row button').all_text_contents()==['Ein','Ein','Aus']
+                assert heaters.locator('#wp-mode-menu .wp-heater-power').all_text_contents()==['0.00 kW','0.00 kW','1.36 kW']
                 heaters.locator('#wp-mode-menu [data-heater="1"][data-value="2"]').click()
                 assert heaters.evaluate('window.testActions.at(-1)')=={'ident':'SetHeaterSwitch','payload':{'number':1,'value':2}}
                 assert heaters.locator('#textHeaterButtonState').text_content()=='1.36 kW'

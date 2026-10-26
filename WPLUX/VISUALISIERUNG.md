@@ -152,15 +152,18 @@ werden nur einmal summiert. Ohne gültige konfigurierte Leistungsquelle erschein
 
 Der Button **Heizstäbe** zwischen Heizkorrektur und LUX-Bedienfeld zeigt die
 summierte Ist-Leistung in kW. Er öffnet die
-konfigurierten Heizstäbe mit Ein-/Ausschaltung. Geschaltet wird ausschließlich
+konfigurierten Heizstäbe mit einer Zeile je Heizstab: Name, Ein/Aus-Aktion und
+gemessene Leistung. Der Button nennt den nächsten Schaltbefehl; der gemeldete
+Zustand steht im Tooltip. Geschaltet wird ausschließlich
 über `RequestAction` der in der Konfiguration ausgewählten externen
 Variable mit aktiver Aktion. Die Bedienung übernimmt Beschriftungen und
 tatsächliche Assoziationswerte, auch für Integer, Float und String. Eine
 Integer-Auswahl wird nicht auf Boolean oder 0/1 reduziert. Für Boolean ohne
 eigene Assoziationen stehen Ein/Aus zur Verfügung. Im Konfigurationsbereich jedes
 Heizstabs lassen sich **Ein-Wert** und **Aus-Wert** aus dessen Assoziationen wählen,
-beispielsweise Ein = 2 und Aus = 0. Ohne Auswahl bleiben alle Profilwerte bedienbar.
-Ein Zwischenzustand wie Automatik wird weiterhin mit seinem Namen angezeigt.
+beispielsweise Ein = 2 und Aus = 0. Ohne Ein/Aus-Zuordnung bleiben mehrstufige
+Profilwerte über ein kompaktes Auswahlfeld in derselben Zeile bedienbar,
+einschließlich Zwischenzuständen wie Automatik.
 Die Grafik setzt den Variablenwert nicht
 direkt, sondern wartet auf dessen gemeldeten Zustand. Ohne Schaltaktion bleibt
 der Eintrag lesend. Bei deaktivierter Luxtronik-Instanz wird nicht geschaltet.
