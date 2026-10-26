@@ -3155,13 +3155,13 @@ window.SymconHeatPump = {
             });
 
 
-            const waterSupplyY = 560;
-            const waterReturnY = 795;
+            const waterSupplyY = 580;
+            const waterReturnY = 815;
             const lowerLift = 55;
             const boilerAlignment = 20;
             const buffered = previewAll || !!cfg.tankHP;
             const boilerValveX = 700;
-            const primaryPumpY = 650;
+            const primaryPumpY = 655;
             // Keep the former short condenser stubs and the return's lower elbow.
             const dhwLift = -25;
             const mixers = Array.isArray(cfg.mixers) ? cfg.mixers.slice(0,3) : [];
@@ -3672,7 +3672,7 @@ window.SymconHeatPump = {
             const flowReadings = group('gHeatPumpFlow', svg.querySelector('#main'));
             if (flow !== '') {
                 node(flowReadings,'title',{},'Durchflussquelle: ' + (data[cfg.heatingFlow]?.ident || 'nicht verfügbar'));
-                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:710, y:742,
+                fittedText(flowReadings, {id:'textHeatingFlow', class:'sm', x:710, y:(705 + waterReturnY) / 2 - 8,
                     'text-anchor':'start', 'dominant-baseline':'middle', style:'font-size:18px', 'aria-label':'Durchfluss: ' + flow},
                     flow + (/l\s*\/\s*h/i.test(flow) ? '' : ' l/h'), 90);
             }
@@ -3680,7 +3680,7 @@ window.SymconHeatPump = {
             const wpTemperatures = group('gHeatPumpTemperatures', svg.querySelector('#heatPump'));
             wpTemperatures.setAttribute('transform','translate(710 0)');
             [
-                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,waterSupplyY + 40,90,'text-before-edge'],
+                ['textWPSupplyTemperature','VL',cfg.supplyTemperature,waterSupplyY + 28,90,'text-before-edge'],
                 ['textWPReturnTemperature','RL',cfg.heatPumpReturnTemperature,waterReturnY - waterLineGap,90,'text-after-edge'],
                 ['textWPReturnTarget','RL Soll',cfg.returnTemperatureSetpoint,waterReturnY + waterLineGap,155,'text-before-edge']
             ].forEach(([id,label,key,y,width,baseline]) => {

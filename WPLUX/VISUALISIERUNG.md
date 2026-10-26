@@ -344,3 +344,7 @@ von Pumpe, Ventil und Messwerten bleibt erhalten. Die Solar-Kachel zeigt unter
 dem Panel zwei kompakte Zeilen für Kollektor und Solarspeicher, ohne eigenes
 großes Wertefeld. Ihr unterer Rand liegt auf der Gehäuseunterkante der WP. Ein
 vorhandener numerischer Pumpenwert steht in der Solar-Kopfzeile.
+
+Boilerabzweig und Rücklaufanschluss liegen etwas tiefer innerhalb des
+Warmwasserspeichers. VL, Pumpenanzeige, Durchfluss und Rücklaufbeschriftungen
+sind passend dazu mit Abstand zueinander angeordnet.
