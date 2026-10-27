@@ -3187,7 +3187,7 @@ window.SymconHeatPump = {
             const bufferPaths = svg.querySelectorAll('#gBuffer > path.hot, #gBuffer > path.cold');
             // Both heating supplies bypass the compact two-port return tank.
             // Only the heating return enters its side and leaves through the bottom.
-            const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25 - lowerLift) + 'V'+(hk2 && !hk1 ? 215 : firstReturn-50+heatingY),
+            const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25 - lowerLift) + 'V'+(firstReturn-50+heatingY),
                 'M810 466V' + (waterReturnY - lowerLift),
                 '',
                 'M990 '+(lastReturn+heatingY)+'V395H895'];
@@ -3210,13 +3210,6 @@ window.SymconHeatPump = {
             }
             ['#main > path.hot','#pathBufferChargeSupply','#gNoBuffer > path.hot','#gHK1 > path.hot','#gHK2 > path.hot']
                 .forEach(selector=>svg.querySelector(selector)?.setAttribute('mask','url(#maskHydraulicCrossings)'));
-
-            const bypassY = hk2 ? 215 : 270;
-            const bypass = group('gReturnBufferBypass',svg.querySelector('#gBuffer'));
-            node(bypass,'title',{},'Überströmventil im Bypass zwischen Vorlauf und Heizungsrücklauf, vor dem Reihenpuffer; schematisch, ohne Stellungsrückmeldung');
-            node(bypass,'path',{d:hk2 && !hk1 ? 'M700 215H990V300M990 320V360' : 'M700 '+bypassY+'H990V'+(bypassY+25),fill:'none',stroke:'var(--wp-icon)','stroke-width':3,'stroke-dasharray':'5 5'});
-            node(bypass,'circle',{cx:980,cy:bypassY,r:10,fill:'var(--wp-button)',stroke:'var(--wp-icon)','stroke-width':2});
-            node(bypass,'path',{d:'M976 '+(bypassY-6)+'L984 '+bypassY+'L976 '+(bypassY+6),fill:'none',stroke:'var(--wp-icon)','stroke-width':2});
 
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
             show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);

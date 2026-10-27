@@ -85,9 +85,10 @@ mit zwei Anschlüssen gezeichnet, links unterhalb der Heizkreisabgänge. Der Hei
 tritt seitlich ein und verlässt den Speicher unten direkt in Richtung WP.
 Der Warmwasser-Rücklauf mündet erst hinter diesem Puffer in die gemeinsame
 WP-Rücklaufleitung. Ohne Puffer führt der Heizungsrücklauf direkt zur WP.
-Ein gestrichelt gezeichneter Bypass mit Überströmventil verbindet den Heizungs-Vorlauf
-mit dem Heizungsrücklauf vor dem Puffer. Er hat keine angebundene Stellungsrückmeldung
-und wird daher nicht als geöffnet oder durchströmt animiert.
+Ein Überströmventil arbeitet üblicherweise mechanisch über den Differenzdruck.
+In den angebundenen LUX-Daten gibt es dafür keine eigene Ansteuerung oder
+Stellungsrückmeldung; deshalb zeigt die Grafik weder das Ventil noch einen
+zusätzlichen Überström-Bypass.
 
 Der Speicher erhöht das verfügbare Wasservolumen, etwa für das Abtauen. Er allein
 sichert keinen Mindestvolumenstrom bei geschlossenen Heizkreisen: Dafür sind der

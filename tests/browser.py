@@ -722,7 +722,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                             assert mixed.locator('#pathBufferChargeReturn').get_attribute('d')=='M810 466V785'
                             assert mixed.locator('#pathBufferManifoldReturn').get_attribute('d')==('M990 360V395H895' if dual else 'M990 295V395H895')
                             assert mixed.locator('#pathBufferManifoldSupply').get_attribute('d')==''
-                            assert mixed.locator('#gReturnBufferBypass').is_visible()
+                        assert mixed.locator('#gReturnBufferBypass').count()==0
                         assert mixed.locator('#gBuffer').is_visible()==has_buffer
                         assert mixed.locator('#gNoBuffer').is_visible()!=has_buffer
                         assert mixed.locator('#textComputedCOP').text_content()=='4.25'
