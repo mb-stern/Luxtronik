@@ -3157,10 +3157,11 @@ window.SymconHeatPump = {
             const coldHeaderLocalX = coldHeaderX - heatingShift;
             const heatingSupplyX = boilerValveX;
             const returnTank = svg.querySelector('#gBufferTankBody');
-            returnTank?.setAttribute('transform','translate(725 330)');
-            returnTank?.querySelector(':scope > rect')?.setAttribute('height','100');
-            returnTank?.querySelector(':scope > ellipse:last-of-type')?.setAttribute('cy','118');
-            returnTank?.querySelector(':scope > rect[rx]')?.setAttribute('height','68');
+            const bufferExtension = hk2 ? 0 : 60;
+            returnTank?.setAttribute('transform','translate(725 '+(330-bufferExtension)+')');
+            returnTank?.querySelector(':scope > rect')?.setAttribute('height',String(100+bufferExtension));
+            returnTank?.querySelector(':scope > ellipse:last-of-type')?.setAttribute('cy',String(118+bufferExtension));
+            returnTank?.querySelector(':scope > rect[rx]')?.setAttribute('height',String(68+bufferExtension));
             returnTank?.querySelector(':scope > path')?.setAttribute('d','M28 88H150');
             const returnTankTitle = returnTank?.querySelector(':scope > text.hd');
             returnTankTitle?.setAttribute('y','48');
@@ -3190,7 +3191,7 @@ window.SymconHeatPump = {
             const bufferGeometry = ['M'+boilerValveX+' ' + (waterSupplyY - 25 - lowerLift) + 'V'+(firstReturn-50+heatingY),
                 'M810 466V' + (waterReturnY - lowerLift),
                 '',
-                'M990 '+(lastReturn+heatingY)+'V395H895'];
+                'M990 '+(lastReturn+heatingY)+'V'+(395-bufferExtension)+'H895'];
             bufferPaths.forEach((path,index) => {
                 path.setAttribute('d',bufferGeometry[index]);
                 path.setAttribute('id',['pathBufferChargeSupply','pathBufferChargeReturn','pathBufferManifoldSupply','pathBufferManifoldReturn'][index]);
@@ -3456,7 +3457,7 @@ window.SymconHeatPump = {
 
             placeTankValues([
                 ['#textTankTempHPUp', '', 82],
-                ['#textTankTempHPMiddle', cfg.tankTempHPMiddle, 92],
+                ['#textTankTempHPMiddle', cfg.tankTempHPMiddle, 92+bufferExtension/2],
                 ['#textTankTempHPDown', '', 150]
             ]);
             const bufferReading = svg.querySelector('#textTankTempHPMiddle');

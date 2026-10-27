@@ -81,7 +81,9 @@ Die gemeinsame HUP sitzt im roten Steigstrang, darüber folgt das
 Boiler-Umschaltventil. Der rote Heizungs-Vorlauf geht gerade nach oben zu den Heizkreisabgängen.
 Bei zwei Kreisen rücken beide Abgänge nach oben, oberhalb des Rücklaufpuffers.
 Ein aktivierter Puffer ist ausschließlich als kompakter **Reihen-Rücklaufpuffer**
-mit zwei Anschlüssen gezeichnet, links unterhalb der Heizkreisabgänge. Der Heizungsrücklauf
+mit zwei Anschlüssen gezeichnet, links unterhalb der Heizkreisabgänge. Bei nur
+einem Heizkreis wird der Speicher nach oben verlängert; Unterkante und unterer
+Rücklaufanschluss bleiben an derselben Stelle. Bei zwei Kreisen bleibt er kompakt. Der Heizungsrücklauf
 tritt seitlich ein und verlässt den Speicher unten direkt in Richtung WP.
 Der Warmwasser-Rücklauf mündet erst hinter diesem Puffer in die gemeinsame
 WP-Rücklaufleitung. Ohne Puffer führt der Heizungsrücklauf direkt zur WP.
