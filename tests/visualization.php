@@ -108,7 +108,7 @@ $tests['visualization settings expose only external additions and layout without
     check(array_keys($pickers) === ['VisualizationWeatherCode', 'HeaterRod1', 'VisualizationHeaterSwitch1', 'HeaterRod2', 'VisualizationHeaterSwitch2', 'HeaterRod3', 'VisualizationHeaterSwitch3', 'VisualizationRoomVariable1', 'VisualizationRoomVariable2', 'VisualizationRoomVariable3'], 'Incorrect external variable pickers');
     check(!str_contains(json_encode($sdkFields),'Mischerdaten stehen beim Ventil'),'Obsolete hint retained');
     $solarRow=array_values(array_filter($panel[0]['items'],fn($item)=>($item['type']??'')==='RowLayout' && isset(fields($item)['ThermalSolarAvailable'])));
-    check(isset($sdkFields['ThermalSolarAvailable']) && !isset($sdkFields['VisualizationSolarTarget']),'Solar must have a single DHW connection');
+    check(count($solarRow)===1 && isset(fields($solarRow[0])['VisualizationSolarTarget']),'Solar destination separated from its switch');
     foreach (['LuxtronikInstanceID', 'ManualConfiguration', 'OperatingStatusVariable', 'OutdoorTemperature', 'CompressorValue', 'ExpansionValveOpening'] as $property) {
         check(!isset($fields[$property]), 'Unwanted assignment UI: ' . $property);
     }
@@ -602,9 +602,9 @@ $tests['renderer changes request one HTML reload and solar destination stays bes
         foreach($node as $v) if(is_array($v)) $collect($v);
     };
     $collect($form);
-    check($labels===[],'Obsolete solar fallback explanation retained');
+    check(count($labels)===1 && $labels[0]['visible']===true,'Missing buffer does not explain the hot-water fallback');
     $all=fields($form);
-    check(!isset($all['VisualizationSolarTarget']) && isset($all['VisualizationHeatingCircuit2']),'Solar target retained or optional second circuit removed');
+    check(isset($all['VisualizationSolarTarget'],$all['VisualizationHeatingCircuit2']),'Solar target or optional second circuit removed');
 };
 
 $tests['heater configuration selects exact Ein and Aus associations and refreshes unsaved choices'] = static function (): void {
@@ -720,7 +720,7 @@ $tests['configuration panels precede the native list without footer settings'] =
 
 
 
-$tests['solar always charges DHW and retains obsolete saved destination without using it'] = static function (): void {
+$tests['solar uses the selected storage and falls back to DHW without rewriting the saved target'] = static function (): void {
     $module=new Luxtronik();
     $module->properties['ThermalSolarAvailable']=true;
     $module->properties['VisualizationSolarTarget']='buffer';
@@ -728,7 +728,9 @@ $tests['solar always charges DHW and retains obsolete saved destination without 
     check(invoke($module,'BuildCardConfig')['solarTarget']==='hotwater','No buffer hides solar instead of selecting hot water');
     check($module->properties['VisualizationSolarTarget']==='buffer','Display fallback rewrites the saved preference');
     $module->properties['TankHP']=true;
-    check(invoke($module,'BuildCardConfig')['solarTarget']==='hotwater','Series return buffer incorrectly selected for solar charging');
+    check(invoke($module,'BuildCardConfig')['solarTarget']==='buffer','Available buffer not selected');
+    $module->properties['VisualizationSolarTarget']='hotwater';
+    check(invoke($module,'BuildCardConfig')['solarTarget']==='hotwater','Explicit hot-water target ignored');
 };
 
 

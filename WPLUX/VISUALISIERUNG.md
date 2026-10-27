@@ -48,8 +48,9 @@ ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
 - Unter **Heizstäbe** bis zu drei Ist-Leistungsvariablen (W oder kW laut Profil;
   ohne Einheit W) und jeweils eine optionale Schaltvariable mit Aktion und
   Assoziationen. Legacy-Profile und moderne Aufzählungen werden unterstützt.
-- Solarthermie ausschließlich am bivalenten Warmwasserspeicher, mit zwei
-  getrennten gelben Leitungen. Keine Auswahl zur Ladung des Heizpuffers.
+- Solarthermie wahlweise an Warmwasserspeicher oder Puffer; die Zielauswahl
+  steht neben dem Solarthermie-Schalter. Ohne aktivierten Puffer erfolgt die
+  Darstellung am Warmwasserspeicher, ohne die gespeicherte Auswahl zu ändern.
 - Ansteuerung der Heizwasserpumpe über ID 183 in Prozent. Eine separate
   U/min-Drehzahl ist nicht bestätigt und wird nicht angezeigt.
 - Eingangsleistung aus der bereits konfigurierten COP-Quelle `kwin` (kW), ohne
@@ -74,8 +75,9 @@ fehlende Mischkreistemperatur eingesetzt: Fehlt der Messwert, erscheint **VL: �
 Beim Wechsel zwischen einem und zwei Kreisen werden zuvor gehaltene Werte aus der
 anderen Quelle verworfen. Native Mischkreiswerte und ihre Idents bleiben in der
 ID-Liste verfügbar; zusätzliche Reglerobjekte werden nicht erstellt.
-Gespeicherte Mischerzuordnungen und das alte Solarziel bleiben unverändert erhalten,
-beeinflussen diese Darstellung aber nicht und sind nicht mehr im Formular.
+Gespeicherte Mischerzuordnungen bleiben unverändert erhalten, beeinflussen diese
+Darstellung aber nicht und sind nicht mehr im Formular. Die vorhandene
+Solarziel-Einstellung wird wieder verwendet und im Formular angeboten.
 
 Die gemeinsame HUP sitzt im roten Steigstrang, darüber folgt das
 Boiler-Umschaltventil. Der rote Heizungs-Vorlauf geht gerade nach oben zu den Heizkreisabgängen.
@@ -106,9 +108,14 @@ Die Anordnung von Kondensator, Pumpe, Ventil und Temperaturwerten im Gerätebere
 bleibt erhalten. VL steht vor dem Ventil, der Prozentwert neben der Pumpe,
 Durchfluss mittig zwischen den blauen Querleitungen; RL und RL Soll mit gleichem
 Abstand oberhalb/unterhalb der unteren Querleitung. Die Solarthermie führt
-kreuzungsfrei an den unteren Wärmetauscher des bivalenten Warmwasserspeichers;
-die WP lädt den oberen Bereich über ihren eigenen Kreis. Der Wasserhahn bleibt
-zwischen den beiden gelben Leitungen. Solar-Kachel und WP-Gehäuse schließen unten
+bei Warmwasser-Ziel kreuzungsfrei an den unteren Wärmetauscher des bivalenten
+Warmwasserspeichers; die WP lädt den oberen Bereich über ihren eigenen Kreis.
+Der Wasserhahn bleibt zwischen den beiden gelben Leitungen. Bei Puffer-Ziel
+führen zwei getrennte gelbe Leitungen unterhalb der Heizkreise an die Unterseite
+des Puffers. Der untere Diagrammbereich einschließlich Boiler und Solar rückt
+dann um 40 SVG-Einheiten nach unten, damit die Leitungen oberhalb des Boilers
+und außerhalb des WP-Gehäuses bleiben. Die Wahl muss zum tatsächlich vorhandenen
+Solarwärmetauscher passen; sie ändert die Darstellung, keine Reglerparameter. Solar-Kachel und WP-Gehäuse schließen unten
 bündig ab. Ohne Solarthermie fällt die Zeichenfläche schmaler aus.
 
 Die Solarpumpe zeigt keinen zusätzlichen Ein/Aus-Text. Ohne numerischen
@@ -353,7 +360,7 @@ passt sich auch der verfügbaren Höhe an, damit die Bedienpfeile sichtbar bleib
 Der Wärmepumpenrahmen hat oben und unten am Kältekreis denselben Innenabstand
 von 15 SVG-Einheiten. Der gesamte untere
 Diagrammbereich steht wieder etwas tiefer, mit 40 SVG-Einheiten Abstand
-zwischen Infokachel und Gehäuse. Boiler und Verbindungsleitungen ziehen mit, die Anordnung
+zwischen Infokachel und Gehäuse, bei Solarwärme zum Puffer mit 80 SVG-Einheiten. Boiler und Verbindungsleitungen ziehen mit, die Anordnung
 von Pumpe, Ventil und Messwerten bleibt erhalten. Die Solar-Kachel zeigt unter
 dem Panel zwei kompakte Zeilen für Kollektor und Solarspeicher, ohne eigenes
 großes Wertefeld. Ihr unterer Rand liegt auf der Gehäuseunterkante der WP. Ein

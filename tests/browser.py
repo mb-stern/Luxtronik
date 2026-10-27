@@ -985,8 +985,14 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 comp.evaluate('(p)=>window.handleMessage({type:"update",config:p.config,data:p.data,controls:p.controls})',changed)
                 assert comp.locator('#gCirculatingPumpVisual').evaluate('e=>getComputedStyle(e).display')=='none'
                 assert comp.locator('#gSolar').evaluate('e=>getComputedStyle(e).display')!='none'
-                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M1088 616H1260M1260 756H1088'
+                assert comp.locator('#gSolar > path.sol').get_attribute('d')=='M880 383V415H1250V615H1260M1260 820H1218V435H850V383'
+                assert comp.evaluate("""()=>{
+                    const point=(selector,end)=>{const e=document.querySelector(selector),p=e.getPointAtLength(end?e.getTotalLength():0);return new DOMPoint(p.x,p.y).matrixTransform(e.getScreenCTM());};
+                    const a=point('#pathBufferChargeReturn',true),b=point('#main > path.cold',false);
+                    return Math.hypot(a.x-b.x,a.y-b.y)<.1;
+                }""")
                 assert_solar_pipe_clearance(comp.locator('#gSolar > path.sol').get_attribute('d'))
+                assert comp.locator('#gDHW').evaluate('e=>getComputedStyle(e).display')=='none'
                 screenshot_dir=os.environ.get('WP_BROWSER_SCREENSHOT_DIR')
                 if screenshot_dir: comp.screenshot(path=str(Path(screenshot_dir)/f'solar-buffer-{width}.png'))
                 changed['config'].update(tankHP=False,tankWW=False,solarTarget='buffer')

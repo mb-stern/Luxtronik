@@ -674,7 +674,8 @@ HTML;
         $config['suctionTemperature'] = $this->DataKey('SuctionTemperature', 'suctionTemperature');
         $config['timeUntilDefrost'] = $this->DataKey('TimeUntilDefrost', 'timeUntilDefrost');
         $config['solarStorageTemperature'] = $this->DataKey('SolarStorageTemperature', 'solarStorageTemperature');
-        $config['solarTarget'] = 'hotwater'; // Series return buffer is never a solar charging target.
+        $config['solarTarget'] = $this->ReadPropertyString('VisualizationSolarTarget') === 'buffer'
+            && $this->ReadPropertyBoolean('TankHP') ? 'buffer' : 'hotwater';
         $config['computedCOP'] = $this->DataKey('ComputedCOP', 'computedCOP');
         $config['computedJAZ'] = $this->DataKey('ComputedJAZ', 'computedJAZ');
         $config['circuitWarning'] = '';
@@ -3137,7 +3138,9 @@ window.SymconHeatPump = {
 
             const waterSupplyY = 580;
             const waterReturnY = 815;
-            const lowerLift = 30;
+            const solarBuffer = (previewAll || !!cfg.thermalSolarAvailable) && cfg.solarTarget === 'buffer'
+                && (previewAll || (!!cfg.tankHP && heating));
+            const lowerLift = solarBuffer ? -10 : 30;
             const lowerDrop = 55 - lowerLift;
             const boilerAlignment = 20;
             const buffered = previewAll || !!cfg.tankHP;
@@ -3166,8 +3169,8 @@ window.SymconHeatPump = {
             const returnTankTitle = returnTank?.querySelector(':scope > text.hd');
             returnTankTitle?.setAttribute('y','48');
             if (returnTankTitle) returnTankTitle.style.fontSize='18px';
-            svg.querySelector('#heatPump')?.setAttribute('transform','translate(0 -'+lowerLift+')');
-            svg.querySelector('#main')?.setAttribute('transform','translate(0 -'+lowerLift+')');
+            svg.querySelector('#heatPump')?.setAttribute('transform','translate(0 '+(-lowerLift)+')');
+            svg.querySelector('#main')?.setAttribute('transform','translate(0 '+(-lowerLift)+')');
             svg.querySelector('#heatPumpPanel')?.setAttribute('width','862');
             svg.querySelector('#main > path.hot')?.setAttribute('d','M650 680H'+boilerValveX+'V'+waterSupplyY);
             svg.querySelector('#main > path.cold')?.setAttribute('d','M810 '+waterReturnY+'H700V705H650');
@@ -3214,7 +3217,7 @@ window.SymconHeatPump = {
 
             show('#gBuffer', heating && (previewAll || !!cfg.tankHP));
             show('#gNoBuffer', heating && !previewAll && !cfg.tankHP);
-            const solarHotWater = !!cfg.thermalSolarAvailable;
+            const solarHotWater = !!cfg.thermalSolarAvailable && !solarBuffer;
             show('#gDHW', previewAll || !!cfg.tankWW || solarHotWater);
             svg.querySelector('#gDHW')?.setAttribute('transform','translate(' + dhwShift + ' ' + (dhwLift - lowerLift + boilerAlignment) + ')');
             // Extend the boiler upward while retaining its base and lower fittings.
@@ -3236,7 +3239,7 @@ window.SymconHeatPump = {
             svg.querySelector('#gDHW > path.hot')?.setAttribute('mask','url(#maskBoilerCrossing)');
             svg.querySelector('#gCirculatingPumpVisual')?.setAttribute('transform','translate(-31 '+(85 + lowerLift - boilerAlignment + lowerDrop)+')');
             show('#gSolar', previewAll || !!cfg.thermalSolarAvailable);
-            // Solar exclusively charges the lower heat exchanger of the DHW tank.
+            // Route the separate solar circuit to the selected storage heat exchanger.
             const solar = svg.querySelector('#gSolar');
             if (solar) svg.insertBefore(solar,svg.querySelector('#heatPump'));
             solar?.setAttribute('transform','translate(0 '+lowerDrop+')');
@@ -3250,9 +3253,11 @@ window.SymconHeatPump = {
             const solarPipe = svg.querySelector('#gSolar > path.sol');
             const solarBoilerTopY = 575 + dhwLift + 66;
             const solarBoilerBottomY = 575 + dhwLift + 206;
-            if (solarPipe) solarPipe.setAttribute('d', 'M' + (1064 + dhwShift) + ' '+solarBoilerTopY+'H1260M1260 '+solarBoilerBottomY+'H' + (1064 + dhwShift));
+            if (solarPipe) solarPipe.setAttribute('d', solarBuffer
+                ? 'M880 '+(448-lowerDrop)+'V'+(480-lowerDrop)+'H1250V615H1260M1260 820H1218V'+(500-lowerDrop)+'H850V'+(448-lowerDrop)
+                : 'M' + (1064 + dhwShift) + ' '+solarBoilerTopY+'H1260M1260 '+solarBoilerBottomY+'H' + (1064 + dhwShift));
             const solarPumpIcon = svg.querySelector('#gSolarPumpIcon');
-            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', 'translate(35 '+(solarBoilerTopY-755)+')');
+            if (solarPumpIcon) solarPumpIcon.setAttribute('transform', solarBuffer ? 'translate(65 -175)' : 'translate(35 '+(solarBoilerTopY-755)+')');
 
             // Optional DHW circulation uses its confirmed native output.
             show(
@@ -4509,7 +4514,13 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
                 ['type' => 'CheckBox', 'name' => 'TankWW', 'caption' => 'Warmwasserspeicher'],
                 ['type' => 'CheckBox', 'name' => 'VisualizationCirculation', 'caption' => 'Warmwasser-Zirkulation']
             ]],
-            ['type' => 'CheckBox', 'name' => 'ThermalSolarAvailable', 'caption' => 'Solarthermie am Warmwasserspeicher'],
+            ['type' => 'RowLayout', 'items' => [
+                ['type' => 'CheckBox', 'name' => 'ThermalSolarAvailable', 'caption' => 'Solarthermie'],
+                ['type' => 'Select', 'name' => 'VisualizationSolarTarget', 'caption' => 'Solarwärme an',
+                    'options' => [['caption'=>'Warmwasserspeicher','value'=>'hotwater'],['caption'=>'Pufferspeicher','value'=>'buffer']]]
+            ]],
+            ['type'=>'Label','caption'=>'Ohne Pufferspeicher wird Solarthermie am Warmwasserspeicher dargestellt.',
+                'visible'=>$this->ReadPropertyBoolean('ThermalSolarAvailable') && $this->ReadPropertyString('VisualizationSolarTarget')==='buffer' && !$this->ReadPropertyBoolean('TankHP')],
             ['type'=>'RowLayout','items'=>[
                 ['type'=>'CheckBox','name'=>'VisualizationHeatingCircuit1','caption'=>'Heizkreis 1 (Standard)'],
                 ['type'=>'ValidationTextBox','name'=>'HeatingCircuitName1','caption'=>'Bezeichnung']
