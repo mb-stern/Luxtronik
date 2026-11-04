@@ -347,7 +347,7 @@ $tests['Java stays default and successful Java values request only the EEV page'
         check(array_keys($cache['values'])===['EEV_Heizen','EEV_Kuehlen'],'Unneeded page fields retained as fallback values');
         check(invoke($module,'GetVisualizationPointData','SupplyTemperature')['value']===0.0,'Java zero was replaced');
         $form=fields(json_decode($module->GetConfigurationForm(),true));
-        check(!isset($form['CommunicationMode']) && $form['ModbusWrites']['type']==='CheckBox' && !$form['ModbusWrites']['value'],'Write selection is not simplified');
+        check(!isset($form['ModbusWrites']) && $form['CommunicationMode']['type']==='Select' && $form['CommunicationMode']['value']==='java','Write selection is not simplified');
         $rows=array_column($form['IDListe']['values'],null,'id');
         check($rows[10]['source']==='Java' && $rows[400019]['source']==='Keine aktuellen Daten','Coverage labels imply unrequested reads');
     },['expectPages'=>['Ausgänge'],'extra'=>[['name'=>'Temperaturen','id'=>'unused-temperatures','xml'=>'<Content><item><name>Vorlauf</name><value>99.0°C</value></item></Content>']]]);
@@ -369,8 +369,10 @@ $tests['fourteen additional fields have stable selectable IDs correct types and 
         invoke($module,'SetBuffer','JavaAvailability',json_encode(['source'=>invoke($module,'VisualizationSourceKey'),'count'=>276]));
         invoke($module,'UpdateWebEEV');
         $values=json_decode($module->GetWebSocketData(),true)['values'];
-        check(count($values)===20,'Additional values or required FUP1 reading incomplete');
         $definitions=invoke($module,'WebDefinitions');
+        $expectedKeys=array_map(static fn($id)=>$definitions[$id]['ident'],range(400001,400019));
+        $actualKeys=array_keys($values);sort($expectedKeys);sort($actualKeys);
+        check($actualKeys===$expectedKeys,'Selected additional fields incomplete or unrequested values polled');
         foreach(range(400001,400019) as $selection) {
             $id=$module->GetIDForIdent($definitions[$selection]['ident']);
             check($id!==false && IPS_GetObject($id)['ObjectPosition']===$selection,'Wrong ID position for '.$selection);

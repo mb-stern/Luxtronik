@@ -572,10 +572,16 @@ trait LuxtronikModbusSHI
             if($point['bank']!=='holding') continue;
             $reading=$writes?$this->GetSHIVisualizationPoint($point['ident']):null;
             $property=['Anpassung_WW'=>'WWsetVisible','Anpassung_Temp'=>'TempsetVisible','Anpassung_RBE'=>'RBEsetVisible'][$point['ident']]??null;
+            $activation=[];
+            $variableID=@$this->GetIDForIdent($point['ident']);
+            if(!empty($point['shared']) && $variableID!==false && IPS_VariableExists($variableID)) {
+                $activation[]='Vorhandene Variable: '.IPS_GetName($variableID).' (ID '.$variableID.')';
+            }
+            if($property!==null && $this->ReadPropertyBoolean($property)) $activation[]='Auch über Timer / Zusatzfunktionen aktiviert';
             $rows[]=['enabled'=>$selected[$point['selection']]??false,'id'=>$point['selection'],
                 'name'=>$point['label'],'register'=>$point['address'],
                 'range'=>$point['min'].' … '.$point['max'].($point['unit']!==''?' '.$point['unit']:''),
-                'activation'=>$property!==null && $this->ReadPropertyBoolean($property)?'Auch über Timer / Zusatzfunktionen aktiviert':'',
+                'activation'=>implode('; ',$activation),
                 'value'=>$reading['formatted']??'Keine aktuellen Modbus-Daten'];
         }
         return ['type'=>'List','name'=>'SHIControlList','caption'=>'Modbus-Steuervariablen','rowCount'=>10,
@@ -583,23 +589,24 @@ trait LuxtronikModbusSHI
             'sort'=>['column'=>'id','direction'=>'ascending'],
             'columns'=>[
                 ['name'=>'enabled','caption'=>'Variable anlegen','width'=>'130px','save'=>true,'edit'=>['type'=>'CheckBox']],
-                ['name'=>'id','caption'=>'ID','width'=>'95px','save'=>true],
+                ['name'=>'id','caption'=>'Auswahl-ID','width'=>'110px','save'=>true],
                 ['name'=>'name','caption'=>'Funktion','width'=>'auto','save'=>false,'quickFilter'=>true],
                 ['name'=>'register','caption'=>'Register','width'=>'90px','save'=>false],
                 ['name'=>'range','caption'=>'Bereich / Einheit','width'=>'150px','save'=>false],
-                ['name'=>'activation','caption'=>'Weitere Aktivierung','width'=>'240px','save'=>false],
+                ['name'=>'activation','caption'=>'Variable / Aktivierung','width'=>'240px','save'=>false],
                 ['name'=>'value','caption'=>'Aktueller Modbus-Wert','width'=>'200px','save'=>false]
             ],'values'=>$rows];
     }
 
     private function AddModbusForm(array $form): array
     {
-        $modbus=$this->ReadPropertyString('CommunicationMode')==='modbus';
         $panel=['type'=>'ExpansionPanel','caption'=>'Modbus TCP / SHI','items'=>[
             ['type'=>'Label','caption'=>'Luxtronik 2.1 ab V3.90.1 mit aktivem SHI. Die Lesequelle wird je Messwert gewählt; Java ist Standard, andere Quellen ergänzen fehlende Werte.'],
-            ['type'=>'CheckBox','name'=>'ModbusWrites','caption'=>'Unterstützte Schreibbefehle über Modbus/SHI senden','value'=>$modbus,
-                'onChange'=>'IPS_SetProperty($id, "CommunicationMode", $ModbusWrites ? "modbus" : "java"); WPLUX_RefreshWriteSourceLabels($id, $ModbusWrites);'],
-            ['type'=>'Label','caption'=>'Gemeinsame Sollwerte verwenden dieselben Variablen. Betriebsarten und Zeitprogramme ohne gleichbedeutenden Modbus-Befehl bleiben über Java bedienbar. Reine Modbus-Steuervariablen sind bei ausgeschaltetem Schalter nicht bedienbar.'],
+            ['type'=>'Select','name'=>'CommunicationMode','caption'=>'Schreibweg für unterstützte Befehle',
+                'value'=>$this->ReadPropertyString('CommunicationMode'),
+                'options'=>[['caption'=>'Java','value'=>'java'],['caption'=>'Modbus/SHI','value'=>'modbus']],
+                'onChange'=>'WPLUX_RefreshWriteSourceLabels($id, $CommunicationMode === "modbus");'],
+            ['type'=>'Label','caption'=>'Gemeinsame Sollwerte verwenden dieselben Variablen. Betriebsarten und Zeitprogramme ohne gleichbedeutenden Modbus-Befehl bleiben über Java bedienbar. Reine Modbus-Steuervariablen sind bei gewähltem Java-Schreibweg nicht bedienbar.'],
             ['type'=>'NumberSpinner','name'=>'ModbusPort','caption'=>'Modbus-Port'],
             ['type'=>'NumberSpinner','name'=>'ModbusUnitID','caption'=>'Modbus-Geräteadresse (Unit-ID)'],
             ['type'=>'NumberSpinner','name'=>'ModbusTimeout','caption'=>'Modbus-Timeout (Millisekunden, 100–5000)'],

@@ -2,8 +2,8 @@
 
 Java ist die voreingestellte Lesequelle. Unter **Bevorzugte Quelle** kann je Messwert
 auch WebSocket oder Modbus gewählt werden; fehlende Werte ergänzen die übrigen
-zugeordneten Schnittstellen automatisch. Null und Aus sind gültige Werte. Der Schalter
-**Unterstützte Schreibbefehle über Modbus/SHI senden** ändert nur den Schreibweg.
+zugeordneten Schnittstellen automatisch. Null und Aus sind gültige Werte. Die Auswahl
+**Schreibweg für unterstützte Befehle** ändert nur den Schreibweg.
 Vorhandene Idents und Objekt-IDs bleiben erhalten. [Konfiguration](DATENQUELLEN.md).
 
 ## Konfiguration und Quellenanzeige

@@ -41,15 +41,18 @@ Funktionen stehen nicht mehr in der lesenden ID-Liste.
 
 Die drei gemeinsamen Variablen WW-Soll, Heizkorrektur und Raumtemperatur-Soll können
 auch über **Timer / Zusatzfunktionen** aktiviert werden. Eine der beiden Auswahlen
-genügt; es gibt jeweils nur ein Objekt. Die Spalte **Weitere Aktivierung** nennt
-eine zusätzlich aktive Timer-Option. Vorhandene gemeinsame Variablentypen, Namen,
-Profile und Objekt-IDs bleiben erhalten. Alte Modbus-Auswahlen aus der ID-Liste
+genügt; es gibt jeweils nur ein Objekt. Die Spalte **Variable / Aktivierung** nennt bei
+gemeinsamen Sollwerten die vorhandene Variable mit ihrer Objekt-ID sowie eine zusätzlich aktive Timer-Option.
+So ist sichtbar, dass zum Beispiel Auswahl-ID **310002** die bestehende
+**Temperaturkorrektur** (`Anpassung_Temp`) verwendet und kein zweites Objekt erzeugt. Vorhandene gemeinsame Variablentypen, Namen, Profile und Objekt-IDs bleiben erhalten. Alte Modbus-Auswahlen aus der ID-Liste
 erscheinen automatisch in der neuen Steuerliste; neue Einstellungen haben Vorrang.
 
-**Unterstützte Schreibbefehle über Modbus/SHI senden** wählt den Schreibweg:
+**Schreibweg für unterstützte Befehle** ist eine direkt an die bestehende
+Konfiguration gebundene Auswahl. Änderungen werden regulär mit **Übernehmen**
+aktiviert; das Auswählen allein ändert den laufenden Schreibweg nicht:
 
-- Aus: gemeinsame Sollwerte über Java; reine Modbus-Variablen sind nicht bedienbar.
-- Ein: unterstützte gemeinsame Sollwerte und reine Modbus-Funktionen über Modbus.
+- **Java**: gemeinsame Sollwerte über Java; reine Modbus-Variablen sind nicht bedienbar.
+- **Modbus/SHI**: unterstützte gemeinsame Sollwerte und reine Modbus-Funktionen über Modbus.
   Java-Betriebsarten und Zeitprogramme ohne gleichbedeutende Modbus-Funktion bleiben
   über Java bedienbar. Fehlgeschlagene Modbus-Schreibbefehle werden nicht automatisch
   zusätzlich über Java gesendet.
@@ -60,4 +63,11 @@ Verfügbarkeit, Wertebereich und Voraussetzungen am Regler und liest die Bestät
 zurück. Bei fehlender Kommunikation bleiben reine Modbus-Bedienaktionen gesperrt.
 Modbus benötigt die passende Reglerfirmware und eine aktive SHI-Schnittstelle.
 
-Unter **Timer / Zusatzfunktionen** steht der gewählte Schreibweg direkt an den sieben Steuerschaltern. Die Kennzeichnung aktualisiert sich beim Umschalten von **Schreibbefehle über Modbus/SHI senden** sofort. Temperaturkorrektur, Warmwasser-Soll und Raumtemperatur-Soll wechseln auf Modbus/SHI; die Betriebsarten Heizung, Warmwasser, Kühlung und Schwimmbad bleiben Java. Die Beschriftung bezeichnet den Befehlsweg, nicht die Erreichbarkeit des Reglers.
+Unter **Timer / Zusatzfunktionen** steht der gewählte Schreibweg direkt an den sieben Steuerschaltern. Die Kennzeichnung aktualisiert sich beim Ändern von **Schreibweg für unterstützte Befehle** sofort. Temperaturkorrektur, Warmwasser-Soll und Raumtemperatur-Soll wechseln auf Modbus/SHI; die Betriebsarten Heizung, Warmwasser, Kühlung und Schwimmbad bleiben Java. Die Beschriftung bezeichnet den Befehlsweg, nicht die Erreichbarkeit des Reglers.
+
+Die Auswahl-IDs der Liste sind keine Registeradressen: **310000** bezeichnet
+Holding-Register **10000** (SHI-Modus Heizen), **310002** bezeichnet **10002**
+(Heizungs-Offset). **320002** ist kein zugeordneter Steuerpunkt.
+Negative Heizungs-Offsets verwenden ein einzelnes vorzeichenbehaftetes 16-Bit-Wort
+in Big-Endian mit Faktor 0,1; Beispiel −1,0 K: `0xFFF6` (signed −10).
+[Umstieg und Protokollbeispiele](SHI-JAVA-VERGLEICH.md#heizungs-offset-und-negative-werte).

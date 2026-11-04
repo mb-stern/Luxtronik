@@ -12,8 +12,8 @@ echten SHI-Luxtronik. Java bleibt Standard; der Java-Protokollpfad bleibt erhalt
 - Voraussetzung laut Handbuch: Luxtronik 2.1 ab V3.90.1 mit verfügbarer/aktiver
   SHI-Schnittstelle. Neuere Funktionen können auf älteren Firmwareständen fehlen.
   Ob die konkrete CTA-Firmware SHI bereitstellt, muss am Gerät geprüft werden.
-- Unter **Modbus TCP / SHI** den Schalter **Unterstützte Schreibbefehle über Modbus/SHI senden**
-  bei Bedarf aktivieren und übernehmen. Standardmäßig wird über Java geschrieben.
+- Unter **Modbus TCP / SHI** unter **Schreibweg für unterstützte Befehle** bei Bedarf
+  **Modbus/SHI** wählen und übernehmen. Standardmäßig wird über Java geschrieben.
 - Java ist unabhängig davon die voreingestellte Lesequelle. **Bevorzugte Quelle**
   kann je Messwert geändert werden. Fehlende Werte werden
   automatisch über WebSocket und bei Bedarf über Modbus ergänzt. Es gibt keine
@@ -80,8 +80,8 @@ beispielsweise `Aussentemperatur: Modbus = -2.5 °C` oder
 
 Die Messwertergänzung ist **ausschließlich lesend**. Davon unabhängig werden
 aktivierte Java-Steuervariablen mit 3003 gelesen und bei einer Bedienaktion mit 3002
-geschrieben. Unterstützte gemeinsame Sollwerte nutzen bei eingeschaltetem
-Modbus-Schreibschalter Modbus. Ein fehlgeschlagener Modbus-Schreibbefehl wird nicht
+geschrieben. Unterstützte gemeinsame Sollwerte nutzen bei
+gewähltem Modbus-Schreibweg Modbus. Ein fehlgeschlagener Modbus-Schreibbefehl wird nicht
 automatisch zusätzlich über Java gesendet. Für gemeinsame Funktionen gibt es keine
 doppelten Sollwertvariablen.
 

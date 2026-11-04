@@ -31,7 +31,7 @@ Reglerparameter; Modbus bleibt auch für zusätzliche Messwerte sinnvoll.
 
 Java ist die voreingestellte Lesequelle. Eine andere bevorzugte Quelle kann je Messwert
 in der ID-Liste gewählt werden. Fehlende benötigte Werte werden automatisch ergänzt.
-Der Schalter „Unterstützte Schreibbefehle über Modbus/SHI senden“ ändert nur den
+Die Auswahl „Schreibweg für unterstützte Befehle“ ändert nach Übernehmen nur den
 Schreibweg; Nur über Java unterstützte Betriebsarten und Zeitprogramme bleiben über Java bedienbar.
 Alle 41 Modbus-Steuervariablen stehen in einer eigenen Auswahlliste. [Konfiguration](DATENQUELLEN.md).
 
@@ -70,3 +70,36 @@ drei gemeinsamen Sollwerte bestimmt der gewählte Schreibweg auch die Steuerwert
 
 Vollständige Register und Bedienhinweise: [SHI-REGISTER.md](SHI-REGISTER.md) und
 [SHI-TEST.md](SHI-TEST.md).
+
+## Heizungs-Offset und negative Werte
+
+Der Praxistest meldet getrennte Java- und SHI-Korrekturen: Der Java-Wert in der
+App ändert sich beim Schreiben von HR 10002 nicht. Im Offset-Modus können sich
+die Korrekturen addieren, etwa Java −1 K und SHI +1 K zu einer resultierenden
+Korrektur von 0 K. Die vorhandene Symcon-Variable `Anpassung_Temp` zeigt den Wert
+des gewählten Schreibwegs; sie synchronisiert die beiden Reglerparameter nicht.
+Beim Umstieg deshalb die bisherige Java-Korrektur prüfen und bei Bedarf bewusst
+am Regler bzw. über die App neutralisieren. Das Modul setzt sie nicht automatisch
+zurück und kopiert beim Umschalten auch keinen alten Sollwert auf den anderen Weg.
+
+HR 10002 ist **Int16, ein Register, Big-Endian, Faktor 0,1**. Der Faktor wird genau
+einmal angewendet. Beispiele für Lesen und Schreiben:
+
+| Offset | Signed-Rohwert | Datenwort | Derselbe Rohwert als UInt16 |
+| --- | --- | --- | --- |
+| −1,0 K | −10 | `0xFFF6` | 65526 |
+| −1,5 K | −15 | `0xFFF1` | 65521 |
+| +1,0 K | 10 | `0x000A` | 10 |
+
+Ein vorzeichenlos ausgelesenes `0xFFF6` ergäbe fälschlich 6552,6 K. Ein gemeldeter
+Wert von 6400,0 K lässt ohne Rohdaten noch keine genaue Fehlerzuordnung zu;
+Datentyp, Bytefolge und Skalierung der eigenen Modbus-Umsetzung müssen zusammen
+geprüft werden. Kein 32-Bit-Integer und kein IEEE-Float: Das Schreiben zweier Wörter
+würde auch das benachbarte Register betreffen. Das Modul schreibt nur ein Wort,
+liest den Wert vorzeichenbehaftet zurück und lehnt Vorgaben außerhalb −20…+20 K
+vor dem Verbindungsaufbau ab.
+
+Für die Übernahme von HR 10002 muss HR 10000 auf **2 (Offset)** stehen. Eine explizite
+Offset-Bedienaktion des Moduls bestätigt zuerst HR 10002 und aktiviert danach,
+falls nötig, HR 10065=0 und HR 10000=2. Im Modus **1 (Sollwert)** wird stattdessen
+die absolute Rücklauf-Solltemperatur vorgegeben; das ist keine additive Korrektur.

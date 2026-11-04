@@ -381,7 +381,7 @@ $tests['a failed Modbus scan discards staged readings and uses Java measurements
 $tests['Java supplementation is optional source-bound and does not introduce Java writes or control reads'] = static function ():void {
     $m=new Luxtronik();check($m->properties['ModbusJavaSupplement']===true,'Supplement not enabled by default');
     $m->properties['CommunicationMode']='modbus';$form=fields(json_decode($m->GetConfigurationForm(),true));
-    check(!isset($form['ModbusJavaSupplement']) && !isset($form['ModbusReadSupplement']) && $form['ModbusWrites']['value'],'Legacy read switches retained');
+    check(!isset($form['ModbusJavaSupplement']) && !isset($form['ModbusReadSupplement']) && $form['CommunicationMode']['value']==='modbus','Legacy read switches retained');
     $m->properties['ModbusJavaSupplement']=false;$form=fields(json_decode($m->GetConfigurationForm(),true));check(isset($form['Port']),'Java read port was hidden by write configuration');
     withServer([[pack('N*',3004,0),frame(3004,hybridFrameValues())]],static function(Luxtronik $m):void {
         withSHI(static function(Luxtronik $m):void {
@@ -473,8 +473,8 @@ $tests['normal update reads Java first while the configured write route sends on
 
 $tests['default list contains only additional Modbus measurements and retains selected advanced and legacy rows'] = static function():void {
     $m=new Luxtronik();$form=fields(json_decode($m->GetConfigurationForm(),true));$rows=array_column($form['IDListe']['values'],null,'id');
-    check($form['ModbusWrites']['type']==='CheckBox' && !$form['ModbusWrites']['value'],'Write switch does not retain Java default');
-    check(!isset($form['CommunicationMode']) && !isset($form['ModbusReadSupplement']) && !isset($form['ModbusJavaSupplement']) && !isset($form['WebSocketSupplement']),'Obsolete reading switches remain');
+    check($form['CommunicationMode']['type']==='Select' && $form['CommunicationMode']['value']==='java','Write selection is not bound to the existing Java-default property');
+    check(!isset($form['ModbusWrites']) && !isset($form['ModbusReadSupplement']) && !isset($form['ModbusJavaSupplement']) && !isset($form['WebSocketSupplement']),'Obsolete reading switches remain');
     check(!isset($rows[310041]) && !isset($rows[210000]) && !isset($rows[110103]) && !isset($rows[110350]) && !isset($rows[400003]),'Advanced or duplicate rows clutter the default list');
     check($rows[43]['interface']==='Java + Modbus + WebSocket' && isset($rows[110310],$rows[400020]),'Proven VBO mapping or actual extra measurements missing');
     check(count(array_filter($rows,static fn($row)=>$row['id']>=100000 && $row['id']<400000))===10,'Unexpected additional Modbus count');
@@ -486,16 +486,18 @@ $tests['default list contains only additional Modbus measurements and retains se
     check(isset($rows[210000],$rows[110103]),'Documented advanced API points became inaccessible');
 };
 
-$tests['write checkbox preserves the original configuration property and measurement bindings remain independent'] = static function():void {
+$tests['write selection edits the registered property as a draft and measurement bindings remain independent'] = static function():void {
     $m=new Luxtronik();$form=fields(json_decode($m->GetConfigurationForm(),true));
-    $id=$m->InstanceID;$ModbusWrites=true;eval($form['ModbusWrites']['onChange']);
-    $ModbusWrites=false;eval($form['ModbusWrites']['onChange']);
-    check(array_slice($GLOBALS['testPropertyChanges'],-2)===[[$id,'CommunicationMode','modbus'],[$id,'CommunicationMode','java']],'Checkbox rewrote an unrelated setting or lost existing write mode values');
+    $id=$m->InstanceID;$changes=count($GLOBALS['testPropertyChanges']??[]);
+    $CommunicationMode='modbus';eval($form['CommunicationMode']['onChange']);
+    $CommunicationMode='java';eval($form['CommunicationMode']['onChange']);
+    check(count($GLOBALS['testPropertyChanges']??[])===$changes && $m->properties['CommunicationMode']==='java','Changing the draft already changes the active write route');
+    check(array_column($form['CommunicationMode']['options'],'value')===['java','modbus'],'Existing write mode values were changed');
     check(array_slice($GLOBALS['testWriteSourceRefreshes'],-2)===[[$id,true],[$id,false]],'Write switch did not refresh its source labels in both directions');
     $java=invoke($m,'GetVisualizationIdents','MixerPump1');
     $m->properties['CommunicationMode']='modbus';
     check(invoke($m,'GetVisualizationIdents','MixerPump1')===$java && $java===['SHI_Pumpe_Mischkreis_1'],'Write transport changes the physical pump measurement');
-    check(fields(json_decode($m->GetConfigurationForm(),true))['ModbusWrites']['value'],'Existing Modbus configuration not reflected in checkbox');
+    check(fields(json_decode($m->GetConfigurationForm(),true))['CommunicationMode']['value']==='modbus','Existing Modbus configuration not reflected in selection');
 };
 
 $tests['timer control source labels match actual write routing and refresh without sending commands'] = static function():void {
@@ -592,6 +594,37 @@ $tests['preferred Modbus prefetch shares fresh readings with control polling and
     },['input'=>[10108=>0,10310=>8000],'holding'=>[10041=>100]]);
     check(array_column($requests,'address')===[10108,10310,10041,10108],'Prefetch duplicated fresh reads, polled an unneeded source, or refreshed cache timestamps without reading');
     check(array_filter($requests,static fn($r)=>$r['function']===16)===[],'Selecting controls wrote default values');
+};
+
+$tests['tester offset selection creates or reuses the shared control and signed writes stay one register'] = static function():void {
+    foreach(['IDListe','SHIControlList'] as $selectionProperty) {
+        $requests=withSHI(static function(Luxtronik $m) use($selectionProperty):void {
+            $m->properties[$selectionProperty]='[{"id":310000,"enabled":true},{"id":310002,"enabled":true}]';
+            $m->ApplyChanges();
+            $offset=$m->GetIDForIdent('Anpassung_Temp');
+            check($offset!==false && GetValue($offset)===-1.0,'Selected offset missing or negative raw word decoded unsigned');
+            check(GetValue($m->GetIDForIdent('SHI_Modus_Heizen'))===2,'Selected heating mode was not read from HR 10000');
+            $m->ApplyChanges();
+            check($m->GetIDForIdent('Anpassung_Temp')===$offset,'Applying the selected offset replaced its existing object');
+            $rows=array_column(fields(json_decode($m->GetConfigurationForm(),true))['SHIControlList']['values'],null,'id');
+            check(str_contains($rows[310002]['activation'],'ID '.$offset) && str_contains($rows[310002]['activation'],'Vorhandene Variable'),'Control list hides shared-object reuse');
+            $m->RequestAction('Anpassung_Temp',-1.5);
+            check(GetValue($offset)===-1.5 && $m->GetIDForIdent('Anpassung_Temp')===$offset,'Signed write/readback replaced or misdecoded the control');
+            foreach([-6400.0,6400.0,-64000.0,65526.0] as $invalid) shiThrows(fn()=>$m->RequestAction('Anpassung_Temp',$invalid),'Out-of-range raw/error value accepted');
+        },['discrete'=>[10000=>1],'holding'=>[10000=>2,10002=>0xFFF6,10065=>0]]);
+        $writes=array_values(array_filter($requests,static fn($r)=>$r['function']===16));
+        check($writes===[['function'=>16,'address'=>10002,'count'=>1,'words'=>[0xFFF1]]],'Selection/apply or invalid values wrote registers, or negative offset used wrong word order/width');
+    }
+};
+
+$tests['unknown selection 320002 neither aliases the heating offset nor sends a write'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m):void {
+        $m->properties['SHIControlList']='[{"id":320002,"enabled":true}]';
+        $m->ApplyChanges();
+        check($m->GetIDForIdent('Anpassung_Temp')===false,'Unknown selection silently aliases a supported offset');
+        shiThrows(fn()=>$m->SetSHIValue('320002',-1.0));
+    });
+    check(array_filter($requests,static fn($r)=>$r['function']===16)===[],'Unknown selection wrote a controller register');
 };
 
 $failed=0;foreach ($tests as $name=>$test) {try {$test();echo 'PASS '.$name."\n";}catch(Throwable $e){++$failed;fwrite(STDERR,'FAIL '.$name.': '.$e->getMessage()."\n");}}
