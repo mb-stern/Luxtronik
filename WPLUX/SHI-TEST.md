@@ -181,3 +181,17 @@ Lokal: `php tests/modbus.php`, `php tests/visualization.php` und optional
 `python3 tests/browser.py`. Die Protokolltests verwenden einen separaten lokalen
 Modbus-Peer mit fragmentierten Antworten, Ausnahmen, Zeitüberschreitungen und
 fehlerhaften Schreibbestätigungen. Sie ersetzen keinen Gerätetest.
+
+## Prüfung nach Firmware-Aktualisierung
+
+Die Firmwareversion und die verfügbaren SHI-Funktionen am Regler prüfen. Für die
+Warmwasser-Bedienung meldet DI 10001 die Freigabe; HR 10005 ist der externe
+Warmwasser-Modus und HR 10006 dessen Sollwert. Die Konfiguration zeigt die gelesene
+Warmwasser-Freigabe. Ein interner Java-Sollwert und die externe SHI-Vorgabe können
+unterschiedlich sein; bei einer Abweichung die Registerwerte vergleichen.
+
+Ein 5-Sekunden-Timer startet nach erfolgreichen Antworten auch im nächsten Zyklus
+neue Modbus-Leseabfragen. Die Vorabfrage wird innerhalb desselben Laufs wiederverwendet.
+100-W-Stufen der Leistungsregister und unveränderte Symcon-Änderungszeitstempel
+bei gleichbleibendem Wert bleiben erwartetes Verhalten. Verbindungsfehler haben
+weiterhin eine Wiederholpause; Diagnose und Freigabestatus dazu prüfen.

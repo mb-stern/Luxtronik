@@ -132,9 +132,10 @@ trait LuxtronikModbusSHI
     }
 
     /** Java and WebSocket remain preferred; Modbus supplies additional needed values. */
-    private function UpdateModbusSupplement(bool $preferredOnly=false): void
+    private function UpdateModbusSupplement(bool $preferredOnly=false, ?float $cycleStarted=null): void
     {
         if(!$this->ReadPropertyBoolean('InstanceStatus')) return;
+        $cycleStarted??=microtime(true);
         $writes=$this->ReadPropertyString('CommunicationMode')==='modbus';
         $needed=$this->HybridMeasurementIDs()+$this->GetVisualizationExtraPointIDs();
         foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
@@ -150,6 +151,7 @@ trait LuxtronikModbusSHI
                 if(!$writes || !$this->SHIControlEnabled($point)) continue;
             } elseif(!$this->ShouldReadMeasurement($id,'modbus')) continue;
             $requested[$point['key']]=$catalog[$point['key']];
+            if($point['bank']==='holding' && $point['di']!==null) $requested['discrete:'.$point['di']]=$catalog['discrete:'.$point['di']];
         }
         $written=json_decode($this->GetBuffer('SHIWrittenKeys'),true)??[];
         if(!$preferredOnly && $writes && ($written['source']??'')===$this->VisualizationSourceKey()) foreach($written['keys'] as $key)
@@ -158,7 +160,7 @@ trait LuxtronikModbusSHI
         $keys=array_keys($requested);
         $source=$this->VisualizationSourceKey();
         $previous=$this->SHICache();
-        if(microtime(true)<($previous['nextAttempt']??0) && (!empty($previous['error']) || ($previous['requestedKeys']??null)===$keys)) {
+        if(!empty($previous['error']) && microtime(true)<($previous['nextAttempt']??0)) {
             $previous['points']=array_intersect_key($previous['points']??[],$requested);
             $this->SetBuffer('SHICache',json_encode($previous,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
             if(!$preferredOnly) $this->PublishModbusSupplement();
@@ -174,8 +176,7 @@ trait LuxtronikModbusSHI
             try {
                 foreach($requested as $key=>$point) {
                     $old=$previous['points'][$key]??null;
-                    if(empty($previous['stale']) && ($previous['nextAttempt']??0)>microtime(true)
-                        && $old!==null && microtime(true)-($old['readAt']??$previous['updatedAt']??0)<5) {
+                    if(empty($previous['stale']) && $old!==null && ($old['readAt']??0)>=$cycleStarted) {
                         $cache['points'][$key]=$old;continue;
                     }
                     $queried=true;$client??=$this->NewSHIClient();
@@ -196,8 +197,7 @@ trait LuxtronikModbusSHI
                 $this->SendDebug('Modbus-Ergänzung',$cache['error'],0);
             }
             if(!$queried && $previous!==[]) $cache['updatedAt']=$previous['updatedAt'];
-            $cache['nextAttempt']=!$queried && $previous!==[] ? ($previous['nextAttempt']??0)
-                : microtime(true)+($cache['error']!==null?120:5);
+            $cache['nextAttempt']=$cache['error']!==null?microtime(true)+120:0;
             if($source!==$this->VisualizationSourceKey()) return;
             $this->SetBuffer('SHICache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
             if(!$preferredOnly) $this->PublishModbusSupplement();
@@ -211,6 +211,7 @@ trait LuxtronikModbusSHI
     {
         $this->PublishMeasurements();
         $this->SyncSHIControlVariables();
+        $this->UpdateFormField('SHIWarmWaterStatus','caption',$this->SHIWarmWaterStatus());
         $this->RefreshDerivedMeasurements();
     }
 
@@ -427,6 +428,7 @@ trait LuxtronikModbusSHI
     {
         $this->PublishMeasurements();
         $this->SyncSHIControlVariables();
+        $this->UpdateFormField('SHIWarmWaterStatus','caption',$this->SHIWarmWaterStatus());
         $this->RefreshDerivedMeasurements();
     }
 
@@ -500,7 +502,10 @@ trait LuxtronikModbusSHI
             $catalog=$this->SHICatalog();
             $deps=$point['deps'];
             if ($word===0 && str_starts_with($point['ident'],'SHI_Modus_')) $deps=[];
-            if ($point['di']!==null && $this->ReadSHIPoint($client,$catalog['discrete:'.$point['di']])!==true) throw new RuntimeException('Die zugehörige Funktion ist am Regler nicht aktiviert.');
+            if ($point['di']!==null && $this->ReadSHIPoint($client,$catalog['discrete:'.$point['di']])!==true) {
+                $function=$point['di']===10001?'Warmwasser':$catalog['discrete:'.$point['di']]['label'];
+                throw new RuntimeException('SHI-Funktion '.$function.' ist am Regler nicht freigegeben (Discrete Input '.$point['di'].'). Bitte die SHI-Freigabe am Regler prüfen. Es wurde kein Wert geschrieben.');
+            }
             $current=$this->ReadSHIPoint($client,$point);
             if ($current===null) throw new RuntimeException('Dieses SHI-Register ist am Regler nicht verfügbar.');
             $before=[];
@@ -564,6 +569,19 @@ trait LuxtronikModbusSHI
         }
     }
 
+    private function SHIControlPermission(array $point): ?bool
+    {
+        if($point['di']===null) return true;
+        return $this->GetSHIVisualizationPoint($this->SHICatalog()['discrete:'.$point['di']]['ident'])['value']??null;
+    }
+
+    private function SHIWarmWaterStatus(): string
+    {
+        $permission=$this->GetSHIVisualizationPoint('SHI_Konfig_Warmwasser');
+        return 'SHI-Warmwasser (Discrete Input 10001): '.($permission===null?'keine aktuelle Freigaberückmeldung'
+            : ($permission['value']===true?'freigegeben':'nicht freigegeben – SHI-Einstellung am Regler prüfen'));
+    }
+
     private function SHIControlForm(): array
     {
         $selected=$this->SHIControlSelection();$rows=[];
@@ -610,6 +628,7 @@ trait LuxtronikModbusSHI
             ['type'=>'NumberSpinner','name'=>'ModbusPort','caption'=>'Modbus-Port'],
             ['type'=>'NumberSpinner','name'=>'ModbusUnitID','caption'=>'Modbus-Geräteadresse (Unit-ID)'],
             ['type'=>'NumberSpinner','name'=>'ModbusTimeout','caption'=>'Modbus-Timeout (Millisekunden, 100–5000)'],
+            ['type'=>'Label','name'=>'SHIWarmWaterStatus','caption'=>$this->SHIWarmWaterStatus()],
             ['type'=>'ExpansionPanel','caption'=>'Modbus-Steuervariablen','items'=>[
                 ['type'=>'Label','caption'=>'Auswahl legt Variablen an. Erst eine Bedienaktion sendet einen Wert; Auswahl und Aktivierung senden keine Sollwerte. WW-Soll, Heizkorrektur und Raumtemperatur-Soll können auch unter Timer / Zusatzfunktionen aktiviert sein und werden nicht doppelt angelegt.'],
                 $this->SHIControlForm()]],

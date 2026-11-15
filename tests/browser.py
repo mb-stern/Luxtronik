@@ -163,6 +163,16 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     const script=[...document.scripts].find(s=>s.textContent.trim().startsWith('SymconHeatPump.init('));
                     return JSON.parse(script.textContent.trim().slice('SymconHeatPump.init('.length,-2));
                 }''')
+                # A profile without a unit must still show a normalized indoor temperature.
+                target=json.loads(json.dumps(payload))
+                target['config'].update(ambientTemperatureNormal='roomTarget',heatingPumpPartyMode='',heatingPumpNightMode='')
+                for raw,expected in [(21,'21,0 °C'),(0,'0,0 °C'),(None,'—')]:
+                    target['data']['roomTarget']={'value':raw,'formatted':'21,00','ident':'Desired_Room_Temperature'}
+                    page.evaluate('(p)=>window.handleMessage(p)',target)
+                    assert page.locator('#textIndoorTemperatureValue').text_content()==expected
+                    assert page.locator('#textIndoorTemperatureLabel').text_content()=='Soll-Innentemperatur'
+                page.evaluate('(p)=>window.handleMessage(p)',payload)
+
                 # OpenWeather codes replace the original sun without remote images.
                 assert page.locator('#gOutdoorWeatherIcon').count()==1
                 assert page.locator('#gOutdoorWeatherIcon circle').count()==1
@@ -237,7 +247,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 web_payload['config']['luxtronikWebSocketPassword']='123456'
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',web_payload)
                 assert page.locator('#gSettings').is_visible()
-                assert page.locator('#gSettings text').all_text_contents()==['LUX','Bedienfeld']
+                assert page.locator('#gSettings text').all_text_contents()==['Regler','Display']
                 lux_layout=page.locator('#gSettings').evaluate('''e=>{
                     const texts=[...e.querySelectorAll('text')];
                     return {width:Number(e.querySelector('rect').getAttribute('width')),
@@ -729,6 +739,18 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                         assert mixed.locator('#textComputedJAZ').text_content()=='3.75'
                 mixed.close()
             print(json.dumps({'optional_second_outlet':'PASS','series_return_buffer':'PASS','DHW_temperature_hold':'PASS'}))
+
+            # Symcon's title/maximize overlay must remain above the embedded diagram.
+            Path(artifacts,'embedded-title.html').write_text('<style>body{margin:0}iframe{width:100vw;height:100vh;border:0}#host-title{position:absolute;top:8px;left:12px;font:24px Arial;z-index:5}</style><div id="host-title">Luxtronik</div><iframe src="configured.html"></iframe>')
+            for width,height in [(1200,240),(390,400)]:
+                embedded=browser.new_page(viewport={'width':width,'height':height})
+                embedded.goto(f'http://127.0.0.1:{server.server_port}/embedded-title.html')
+                frame=embedded.frame_locator('iframe')
+                assert frame.locator('#wp-root').evaluate('e=>getComputedStyle(e).paddingTop')=='48px'
+                title=embedded.locator('#host-title').bounding_box()
+                button=frame.locator('#gHPStatusWW').bounding_box()
+                assert button['y']>title['y']+title['height'],(title,button)
+                embedded.close()
 
             # Selected room count controls the layout and scales a sole reading up.
             for width in [1200,390]:

@@ -651,7 +651,13 @@ trait LuxtronikWebEEV
             unset($row);
         }
         unset($element);
-        array_splice($form['elements'],$index,0,[$panel]);
+        $bulk=['type'=>'RowLayout','items'=>[
+            ['type'=>'Select','name'=>'MeasurementBulkSource','caption'=>'Lesequelle gesammelt auswählen',
+                'options'=>[['caption'=>'Java','value'=>'java'],['caption'=>'WebSocket','value'=>'websocket'],['caption'=>'Modbus/SHI','value'=>'modbus']]],
+            ['type'=>'Button','caption'=>'Für alle passenden Messwerte übernehmen',
+                'onClick'=>'WPLUX_ApplyMeasurementSource($id, $MeasurementBulkSource, is_string($IDListe) ? $IDListe : json_encode($IDListe));']
+        ]];
+        array_splice($form['elements'],$index,0,[$panel,$bulk,['type'=>'Label','name'=>'MeasurementBulkResult','caption'=>'']]);
         return $form;
     }
 }

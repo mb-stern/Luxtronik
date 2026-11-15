@@ -199,7 +199,7 @@ Assoziationen beeinflussen diese Rechnung nicht. Doppelt ausgewählte Quellen
 werden nur einmal summiert. Ohne gültige konfigurierte Leistungsquelle erscheint
 „—“; eine fehlende ausgewählte Quelle wird nicht als 0 ausgegeben.
 
-Der Button **Heizstäbe** zwischen Heizkorrektur und LUX-Bedienfeld zeigt die
+Der Button **Heizstäbe** zwischen Heizkorrektur und Reglerdisplay zeigt die
 summierte Ist-Leistung in kW. Er öffnet die
 konfigurierten Heizstäbe mit einer Zeile je Heizstab: Name, Ein/Aus-Aktion und
 gemessene Leistung. Der Button nennt den nächsten Schaltbefehl; der gemeldete
@@ -247,9 +247,9 @@ Geräteabfrage aus. Im SHI-Lesebetrieb und bei deaktivierter Instanz sind diese
 Grafikaktionen gesperrt. VM_UPDATE und Objektänderungen aktualisieren die Darstellung
 und ihre Variablenbindungen über UpdateVisualizationValue.
 
-## LUX-Bedienfeld
+## Reglerdisplay
 
-Das übernommene LUX-Bedienfeld nutzt die IP-Adresse dieser Instanz, nicht deren
+Das übernommene Reglerdisplay nutzt die IP-Adresse dieser Instanz, nicht deren
 Java-Datenport. Es verbindet sich nur nach bewusstem Öffnen im Browser über das
 ursprüngliche WebSocket-Protokoll mit dem Regler. Aus einer HTTPS-Visualisierung
 bietet es das separat geöffnete Originalinterface an. Im SHI-Lesebetrieb und bei
@@ -287,7 +287,7 @@ python3 tests/browser.py
 PHP-Prüfungen nutzen eine Symcon-Nachbildung und lokale Protokollsimulatoren.
 Die optionalen Browsertests benötigen Playwright und Chromium. Sie prüfen Desktop
 und Mobilansicht, Live-Aktualisierung, Speicherfühler, Bedienpopups,
-Raumquellen, Heizkreistemperaturen, COP/JAZ und das simulierte LUX-Bedienfeld.
+Raumquellen, Heizkreistemperaturen, COP/JAZ und das simulierte Reglerdisplay.
 Die echte Symbolbibliothek wird von Symcon bereitgestellt; lokal werden Bindung
 und sichere Symbolklassen geprüft. Eine echte Symcon-Instanz mit Wärmepumpe
 wurde in dieser Cloud-Umgebung nicht verwendet.
@@ -369,3 +369,12 @@ vorhandener numerischer Pumpenwert steht in der Solar-Kopfzeile.
 Boilerabzweig und Rücklaufanschluss liegen etwas tiefer innerhalb des
 Warmwasserspeichers. VL, Pumpenanzeige, Durchfluss und Rücklaufbeschriftungen
 sind passend dazu mit Abstand zueinander angeordnet.
+
+In eingebetteten HTML-SDK-Kacheln reserviert die Grafik oben 48 CSS-Pixel für die
+von Symcon eingeblendete Titel-/Maximierenzeile. Die Instanz behält ihren Namen;
+die Titelzeile überlagert die Bedienelemente nicht mehr. Ein separat geöffnetes
+Diagramm verwendet weiterhin die volle Fläche.
+Der Displayzugang trägt die zwei Zeilen **Regler / Display**. Die Standardanzeige
+der Raumtemperatur verwendet einen numerischen Wert mit einer Nachkommastelle und
+**°C**; der bestätigte Raum-Sollwert ist als **Soll-Innentemperatur** beschriftet.
+Raumlisten behalten ihre eigenen Namen und ihre bisherige Anordnung.

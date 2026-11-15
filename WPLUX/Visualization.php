@@ -338,6 +338,8 @@ trait LuxtronikVisualization
         overflow: hidden;
     }
 
+    html.wp-embedded #wp-root { padding-top: 48px; }
+
     #wp-error {
         display: none;
         margin: 8px;
@@ -530,7 +532,7 @@ trait LuxtronikVisualization
     <p id="wp-fault-source"></p>
     <ol id="wp-fault-list"></ol>
 </dialog>
-<dialog id="wp-luxtronik-dialog" aria-label="LUX Bedienfeld">
+<dialog id="wp-luxtronik-dialog" aria-label="Reglerdisplay">
     <div class="wp-luxtronik-header">
         <a id="wp-luxtronik-external" target="_blank" rel="noopener noreferrer" aria-label="Originalinterface öffnen" title="Originalinterface öffnen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 17L17 7M7 7H17V17"/></svg></a>
         <form id="wp-luxtronik-login">
@@ -1648,6 +1650,7 @@ window.customCards.push({
  */
 window.SymconHeatPump = {
   init(payload) {
+        document.documentElement.classList.toggle('wp-embedded', window.parent !== window);
         let currentConfig = payload.config || {};
         let currentControls = payload.controls || {};
         let embeddedSvg = payload.svg || '';
@@ -2855,12 +2858,12 @@ window.SymconHeatPump = {
             show('#gSettings', !!getLuxtronikWebURL());
             if (settings) {
                 const texts = settings.querySelectorAll('text');
-                if (texts[0]) texts[0].textContent = 'LUX';
-                if (texts[1]) texts[1].textContent = 'Bedienfeld';
+                if (texts[0]) texts[0].textContent = 'Regler';
+                if (texts[1]) texts[1].textContent = 'Display';
                 settings.style.cursor = 'pointer';
                 settings.setAttribute('role', 'button');
                 settings.setAttribute('tabindex', '0');
-                settings.setAttribute('aria-label', 'LUX Bedienfeld öffnen');
+                settings.setAttribute('aria-label', 'Reglerdisplay öffnen');
                 if (!settings.dataset.symconLuxtronikBound) {
                     bindTap(settings, openLuxtronikWebInterface);
                     settings.addEventListener('keydown', (event) => {
@@ -3298,7 +3301,9 @@ window.SymconHeatPump = {
             } else if (binary(cfg.heatingPumpNightMode) && formatted(cfg.ambientTemperatureReduced)) {
                 indoorKey = cfg.ambientTemperatureReduced;
             }
-            setText('#textIndoorTemperatureValue', formatted(indoorKey));
+            const indoorValue = measuredNumber(indoorKey);
+            setText('#textIndoorTemperatureValue', indoorValue === null ? '—'
+                : indoorValue.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' °C');
 
             // Room sources are explicit external additions; all other readings use own Idents.
             const rooms = Array.isArray(cfg.roomTemperatures) ? cfg.roomTemperatures.slice(0, 3) : [];
@@ -3306,7 +3311,10 @@ window.SymconHeatPump = {
             show('#textIndoorTemperatureValue', rooms.length === 0);
             show('#indoorDefaultIcon', rooms.length === 0);
             const roomHeading = svg.querySelector('#textIndoorTemperatureLabel');
-            if (roomHeading) { roomHeading.textContent = ''; show('#textIndoorTemperatureLabel', false); }
+            if (roomHeading) {
+                roomHeading.textContent = rooms.length ? '' : (data[indoorKey]?.ident === 'Desired_Room_Temperature' ? 'Soll-Innentemperatur' : 'Innentemperatur');
+                show('#textIndoorTemperatureLabel', rooms.length === 0);
+            }
             rooms.forEach((room, index) => {
                 const single = rooms.length === 1;
                 const size = single ? 54 : (rooms.length === 2 ? 31 : 27);
@@ -4224,7 +4232,8 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         [$ident, $visible] = $controls[$property];
         $shared = in_array($ident, ['Anpassung_WW', 'Anpassung_Temp', 'Anpassung_RBE'], true);
         if (!($shared ? $this->SharedNumericControlEnabled($ident) : $this->ReadPropertyBoolean($visible))) return false;
-        if ($shared && $this->UsesModbusWrite($ident) && $this->GetSHIVisualizationPoint($ident) === null) return false;
+        if ($shared && $this->UsesModbusWrite($ident)
+            && ($this->GetSHIVisualizationPoint($ident) === null || $this->SHIControlPermission($this->SHIWriteDefinition($ident)) !== true)) return false;
         if (@$this->GetIDForIdent($ident) !== $id) return false;
         $variable = IPS_GetVariable($id);
         return in_array((int)$variable['VariableType'], [1, 2], true)

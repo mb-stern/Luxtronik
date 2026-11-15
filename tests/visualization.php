@@ -839,7 +839,7 @@ $tests['SHI graphic uses its current internal snapshot and shared numeric contro
     foreach (['input:10002'=>0,'input:10000'=>1,'input:10105'=>34.5,'input:10100'=>30.0,'input:10101'=>32.0,
         'input:10108'=>-2.5,'input:10120'=>48.0,'input:10121'=>50.0,'input:10140'=>31.5,'input:10141'=>32.5,
         'input:10354'=>true,'input:10355'=>false,'input:10351'=>true,'input:10300'=>5.8,'input:10301'=>1200,
-        'holding:10006'=>50.0,'holding:10002'=>-1.5,'holding:10060'=>21.5] as $key=>$value) $points[$key]=['value'=>$value,'changedAt'=>0];
+        'holding:10006'=>50.0,'holding:10002'=>-1.5,'holding:10060'=>21.5,'discrete:10000'=>true,'discrete:10001'=>true,'discrete:10005'=>true] as $key=>$value) $points[$key]=['value'=>$value,'changedAt'=>0];
     $cache=['source'=>invoke($module,'VisualizationSourceKey'),'updatedAt'=>time(),'stale'=>false,'points'=>$points,'unavailable'=>[]];
     invoke($module,'SetBuffer','SHICache',json_encode($cache));
     $p=visualizationPayload($module);

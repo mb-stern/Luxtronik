@@ -31,6 +31,7 @@ class Luxtronik extends IPSModuleStrict
         );
 
         $this->RegisterPropertyString('CommunicationMode', 'java');
+        $this->RegisterPropertyString('MeasurementBulkSource', 'java');
         $this->RegisterPropertyInteger('ModbusPort', 502);
         $this->RegisterPropertyInteger('ModbusUnitID', 1);
         $this->RegisterPropertyInteger('ModbusTimeout', 500);

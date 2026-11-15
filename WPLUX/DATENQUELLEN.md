@@ -12,6 +12,14 @@ IDs, Idents und vorhandene Objekt-IDs ändern sich durch einen Quellenwechsel ni
 | Bevorzugte Quelle | Auswahl Java, WebSocket oder Modbus/SHI |
 | Aktuelle Quelle | Tatsächlich verwendete Quelle nach der letzten Aktualisierung |
 
+Über der Liste stehen **Lesequelle gesammelt auswählen** und **Für alle passenden
+Messwerte übernehmen**. Die Schaltfläche übernimmt die angezeigte Messwertliste
+und setzt die Quelle für alle passenden Datenpunkte; bestehende Einzelzuordnungen
+werden dabei ersetzt. Nicht unterstützte Quellen und Modbus-Steuervariablen
+bleiben unverändert. Nicht ausgewählte Messvariablen werden dadurch nicht aktiviert.
+Danach lassen sich einzelne Zeilen wieder abweichend einstellen und mit dem
+normalen **Übernehmen** speichern. Der Schreibweg wird dabei nicht geändert.
+
 Java ist Standard, wenn es für den Wert eine Java-Zuordnung gibt. Ohne Java-Zuordnung
 wird die erste zugeordnete Quelle verwendet. Eine Auswahl ohne passende Zuordnung
 wird übersprungen. Die Lesereihenfolge ist:
@@ -71,3 +79,21 @@ Holding-Register **10000** (SHI-Modus Heizen), **310002** bezeichnet **10002**
 Negative Heizungs-Offsets verwenden ein einzelnes vorzeichenbehaftetes 16-Bit-Wort
 in Big-Endian mit Faktor 0,1; Beispiel −1,0 K: `0xFFF6` (signed −10).
 [Umstieg und Protokollbeispiele](SHI-JAVA-VERGLEICH.md#heizungs-offset-und-negative-werte).
+
+## Abfragetakt und Freigaben
+
+Erfolgreiche Modbus-Abfragen werden in jedem neuen Aktualisierungslauf erneut
+angefordert. Vorabfrage und Ergänzung teilen ihre Messwerte nur innerhalb desselben
+Laufs; eine zusätzliche fünfsekündige Wartezeit entfällt. Bei einem
+Kommunikationsfehler bleibt die bestehende Wiederholpause von 120 Sekunden erhalten.
+Unveränderte Werte werden weiterhin nicht erneut in Symcon geschrieben: Ein alter
+Änderungszeitstempel oder eine konstante Archivkurve beweist daher keine ausgebliebene
+Abfrage. Die Leistungsregister haben weiterhin 100-W-Schritte; für feinere Daten
+kann Java je Leistungswert bevorzugt bleiben.
+
+Unter **Modbus TCP / SHI** zeigt **SHI-Warmwasser (Discrete Input 10001)** die aktuell
+gelesene Freigabe an. Bei aktivierter SHI-Steuervariable wird diese mit abgefragt.
+Ohne bestätigte Freigabe bleibt die SHI-Bedienaktion gesperrt. Ein direkter
+Schreibaufruf prüft die Freigabe unverändert erneut und nennt Funktion und
+Discrete Input bei einer Ablehnung. DI 10001 ist nur lesbar; die Freigabe wird
+am Regler eingerichtet, nicht durch das Modul erzwungen.

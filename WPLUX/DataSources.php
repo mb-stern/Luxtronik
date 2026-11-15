@@ -3,6 +3,42 @@
 /** Reading preferences never choose a write transport or create a second measurement object. */
 trait LuxtronikDataSources
 {
+    /** Apply the displayed measurement list explicitly; never changes a write setting. */
+    public function ApplyMeasurementSource(string $Source, string $Values): void
+    {
+        if(!in_array($Source,['java','websocket','modbus'],true)) throw new InvalidArgumentException('Unbekannte Lesequelle.');
+        $displayed=json_decode($Values,true,512,JSON_THROW_ON_ERROR);
+        if(!is_array($displayed) || !array_is_list($displayed) || !str_starts_with(ltrim($Values),'[')) throw new InvalidArgumentException('Ungültige Messwertliste.');
+        $rows=[];$selections=$this->SHISelections();
+        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) $rows[(int)$row['id']]=$row;
+        foreach($displayed as $row) {
+            if(!is_array($row) || !isset($row['id']) || !is_numeric($row['id']) || (int)$row['id']<=0
+                || (float)$row['id']!==(float)(int)$row['id'] || !isset($row['enabled']) || !is_bool($row['enabled'])) {
+                throw new InvalidArgumentException('Ungültiger Messwerteintrag.');
+            }
+            $id=(int)$row['id'];
+            if(($selections[$id]['bank']??'')==='holding') continue;
+            $rows[$id]=array_replace($rows[$id]??[],array_intersect_key($row,array_flip(['id','enabled','preferredSource'])));
+            $rows[$id]['id']=$id;
+        }
+        $ids=array_keys(self::DATA_POINT_CONFIG+$this->WebDefinitions()+$selections+$rows);
+        $changed=0;
+        foreach($ids as $id) {
+            if($id<10 || !in_array($Source,$this->MeasurementSources($id),true)) continue;
+            $row=$rows[$id]??['id'=>$id,'enabled'=>false];
+            if(($row['preferredSource']??'java')!==$Source) ++$changed;
+            $row['preferredSource']=$Source;$rows[$id]=$row;
+        }
+        ksort($rows,SORT_NUMERIC);
+        IPS_SetProperty($this->InstanceID,'MeasurementBulkSource',$Source);
+        IPS_SetProperty($this->InstanceID,'IDListe',json_encode(array_values($rows),JSON_THROW_ON_ERROR));
+        IPS_ApplyChanges($this->InstanceID);
+        foreach(json_decode($this->GetConfigurationForm(),true,512,JSON_THROW_ON_ERROR)['elements'] as $element) {
+            if(($element['name']??'')==='IDListe') $this->UpdateFormField('IDListe','values',json_encode($element['values'],JSON_THROW_ON_ERROR));
+        }
+        $this->UpdateFormField('MeasurementBulkResult','caption',$changed.' Messwerte auf '.['java'=>'Java','websocket'=>'WebSocket','modbus'=>'Modbus/SHI'][$Source].' umgestellt.');
+    }
+
     private function MeasurementSources(int $id): array
     {
         $sources=[];
@@ -73,15 +109,16 @@ trait LuxtronikDataSources
 
     private function UpdateMeasurementSupplements(): void
     {
+        $cycleStarted=microtime(true);
         // A preferred Modbus value must be attempted before deciding whether WebSocket is needed.
         $needed=$this->HybridMeasurementIDs()+$this->GetVisualizationExtraPointIDs();
         foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row)
             if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
         foreach($needed as $id=>$_) if(($this->MeasurementSourceOrder($id)[0]??'')==='modbus') {
-            $this->UpdateModbusSupplement(true);break;
+            $this->UpdateModbusSupplement(true,$cycleStarted);break;
         }
         $this->UpdateWebEEV();
-        $this->UpdateModbusSupplement();
+        $this->UpdateModbusSupplement(false,$cycleStarted);
         $this->PublishMeasurements();
         foreach($needed as $id=>$_) {
             $reading=$this->MeasurementReading($id);
@@ -154,7 +191,9 @@ trait LuxtronikDataSources
             $reading=$writes?$this->GetSHIVisualizationPoint($point['ident']):null;
             if($reading!==null) {
                 $this->SetValueIfChanged($point['ident'],$reading['value']);
-                $this->EnableAction($point['ident']);
+                $permission=$this->SHIControlPermission($point);
+                if($permission===true) $this->EnableAction($point['ident']);
+                else $this->DisableAction($point['ident']);
             } elseif($writes || empty($point['shared'])) $this->DisableAction($point['ident']);
         }
     }
