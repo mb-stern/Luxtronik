@@ -85,8 +85,22 @@ function IPS_GetObjectIDByIdent(string $ident, int $instanceID): int|false
     return false;
 }
 
+function IPS_GetConfiguration(int $id): string {return $GLOBALS['testInstanceConfiguration'][$id]??'{}';}
+
+function IPS_GetInstance(int $id): array
+{
+    return $GLOBALS['testInstanceInfo'][$id]??['ConnectionID'=>0,'ModuleInfo'=>['ModuleID'=>'']];
+}
+
 class IPSModuleStrict
 {
+    public mixed $testParentCallback=null;
+    protected function SendDataToParent(string $json): mixed
+    {
+        if($this->testParentCallback===null) throw new RuntimeException('No test gateway connected');
+        return ($this->testParentCallback)(json_decode($json,true,512,JSON_THROW_ON_ERROR));
+    }
+
     public int $InstanceID;
     public array $properties = [];
     public array $attributes = [];
@@ -134,7 +148,7 @@ class IPSModuleStrict
     protected function ReadPropertyBoolean(string $name): bool { return $this->properties[$name]; }
     protected function ReadAttributeFloat(string $name): float { return $this->attributes[$name]; }
     protected function WriteAttributeFloat(string $name, float $value): void { $this->attributes[$name] = $value; }
-    protected function RegisterTimer(string $name, int $interval, string $script): void {}
+    protected function RegisterTimer(string $name, int $interval, string $script): void {$this->timers[$name]=$interval;}
     protected function SetTimerInterval(string $name, int $interval): void { $this->timers[$name] = $interval; }
     protected function SetStatus(int $status): void { $this->status = $status; }
     public function EnableAction(string $ident): bool { $this->actions[$ident] = true; $GLOBALS['testVariables'][$this->GetIDForIdent($ident)]['action'] = $this->InstanceID; return true; }

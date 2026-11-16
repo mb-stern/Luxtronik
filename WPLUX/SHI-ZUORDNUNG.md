@@ -8,31 +8,12 @@ Java-Indizes. Eine verfügbare Schnittstelle ist nicht automatisch die aktuelle 
 
 ## Gemeinsame Werte
 
-44 vorhandene Java-ID-Zeilen haben direkte oder abgeleitete Modbus-Zuordnungen.
-Hinzu kommen die drei bestehenden Sollwert-Idents `Anpassung_WW`, `Anpassung_Temp`
-und `Anpassung_RBE`, die auch über Java-3003/3002 bedient werden. Für diese Werte
-werden dieselben Idents und Objekte verwendet. Bitmasken werden nur anhand der
-Herstellerbeschreibung in die bestehenden booleschen Ausgänge aufgeteilt.
+Vorhandene Java-Istwert-Zeilen haben dort Modbus-Zuordnungen, wo ihre physikalische Bedeutung bestätigt ist.
+Die bisherigen Java-Sollwerte `Anpassung_WW`, `Anpassung_Temp` und
+`Anpassung_RBE` bleiben unabhängig. SHI besitzt dafür die eigenen Vorgabe-Idents
+`SHI_Sollwert_Warmwasser`, `SHI_Offset_Heizen`, `SHI_Raumtemperatur_Soll`.
 
-Beispiele:
-
-| Java-ID / Ident | Modbus | Bedeutung |
-| --- | --- | --- |
-| 10 / `Vorlauftemperatur_Heizkreis` | IR 10105 | Vorlauf Ist |
-| 15 / `Aussentemperatur` | IR 10108 | Außentemperatur |
-| 18 / `Warmwasser_Soll_Temperatur` | IR 10121 | Gemessener aktueller WW-Sollwert |
-| 43 / `Ausgang_Solepumpe_Ventilator` | IR 10350 | Solepumpen-/Ventilator-Ausgang |
-| 44 / `Ausgang_Verdichter_1` | IR 10000, Bit 0 | Verdichter 1 ein/aus |
-| 63 / `Betriebsstunden_Waermepumpe` | IR 10404 | Betriebsstunden WP |
-| `Anpassung_WW` | HR 10006 | Externe WW-Sollvorgabe bei gewähltem SHI-Schreibweg |
-
-Der WebSocket-Ausgang „Ventil.-BOSUP“ gehört ebenfalls zu Java-ID 43. Die frühere
-Zusatz-ID 400003 (`Ventil_BOSUP`) und SHI-Auswahl 110350 (`SHI_Pumpe_BOSUP`) bleiben
-für gespeicherte Auswahlen und vorhandene Objekte erhalten. Ohne solche Auswahl
-werden diese alten Zusatzzeilen nicht erneut angeboten. Die gemeinsame Zeile 43
-zeigt Java, Modbus und WebSocket als verfügbare Quellen.
-
-## Zehn zusätzliche Messwerte in der normalen Liste
+## Beispiele zusätzlicher Messwerte in der gemeinsamen Liste
 
 | Auswahl-ID | Register | Warum zusätzlich? |
 | --- | --- | --- |
@@ -54,9 +35,8 @@ sie grundsätzlich nicht zusätzlich über Java liefern könnte.
 
 ## Erweiterte Punkte sind nicht unbekannt
 
-Weitere lesbare Grenzen, Konfigurationsmeldungen und Softwarekomponenten sind unter
-**Modbus TCP / SHI → Weitere lesbare Modbus-Datenpunkte** einblendbar; ausgewählte
-lesbare Zeilen bleiben sichtbar. Alle externen Vorgaben und Schreibfunktionen stehen
+Weitere lesbare Grenzen, Konfigurationsmeldungen und Softwarekomponenten stehen
+ebenfalls direkt in der gemeinsamen Istwertliste. Alle externen Vorgaben und Schreibfunktionen stehen
 ausschließlich in der separaten Liste **Modbus-Steuervariablen**, einschließlich
 alter Auswahlen aus der ID-Liste. [Konfiguration und Quellenwahl](DATENQUELLEN.md).
 Einige ähnlich benannte Werte sind bewusst getrennt:

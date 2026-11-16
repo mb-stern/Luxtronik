@@ -67,29 +67,44 @@ final class LuxtronikWebEEVClient
             $information = $this->item($navigation->documentElement,['informationen','information']);
             if ($information===null) throw new RuntimeException('EEV: Informationen fehlt; Webinterface-Anmeldung prüfen.');
             $info = $this->resolve($information);
-            $groups=[];
-            $errors=[];
-            $menus=[];
-            foreach ($info->childNodes as $menu) if ($menu instanceof DOMElement && $menu->localName==='item'
-                && $this->child($menu,'name')!==null && $this->child($menu,'value')===null
-                && ($requestedPages===null || in_array($this->key($this->child($menu,'name')->textContent),array_map($this->key(...),$requestedPages),true))) $menus[]=$menu;
-            usort($menus,fn($a,$b)=> (int)!in_array($this->key($this->child($a,'name')->textContent),['ausgänge','ausgaenge','outputs'],true)
-                <=> (int)!in_array($this->key($this->child($b,'name')->textContent),['ausgänge','ausgaenge','outputs'],true));
-            $outputs=null;
-            foreach ($menus as $menu) {
-                $name=trim($this->child($menu,'name')->textContent);
+            $groups=[];$errors=[];$outputs=null;$visited=[];$seenNames=[];$pageCount=0;
+            $requestedKeys=$requestedPages===null?null:array_map($this->key(...),$requestedPages);
+            $children=function(DOMElement $root):array {
+                $result=[];
+                foreach($root->childNodes as $node) if($node instanceof DOMElement && $node->localName==='item'
+                    && $this->child($node,'name')!==null && $this->child($node,'value')===null) $result[]=$node;
+                return $result;
+            };
+            $wanted=function(DOMElement $menu) use (&$wanted,$requestedKeys,$children):bool {
+                if($requestedKeys===null || in_array($this->key($this->child($menu,'name')->textContent),$requestedKeys,true)) return true;
+                foreach($children($menu) as $child) if($wanted($child)) return true;
+                return false;
+            };
+            $visit=function(DOMElement $menu,array $path=[],int $depth=0,bool $inherited=false) use (&$visit,&$groups,&$errors,&$outputs,&$visited,&$seenNames,&$pageCount,$requestedKeys,$wanted,$children):void {
+                if(!$inherited && !$wanted($menu)) return;
+                $name=trim($this->child($menu,'name')->textContent);$id=$menu->getAttribute('id');
+                $key=$id!==''?$id:implode('/',[...$path,$name]);
+                if(isset($visited[$key])) return;
+                $visited[$key]=true;
                 try {
-                    $root=$this->resolve($menu);
-                    $fields=[];
-                    foreach ($root->getElementsByTagName('item') as $field) if ($this->child($field,'value')!==null) {
+                    if($depth>8 || ++$pageCount>64) throw new RuntimeException('Informationsmenü überschreitet die Diagnoselimits.');
+                    $root=$this->resolve($menu);$seenNames[$this->key($name)]=true;
+                    $submenus=$children($root);$fields=[];
+                    foreach($root->getElementsByTagName('item') as $field) if($this->child($field,'value')!==null) {
                         $fields[]=['id'=>$field->getAttribute('id'),'name'=>trim($this->child($field,'name')?->textContent??''),
                             'raw'=>trim($this->child($field,'value')->textContent)];
                     }
-                    $groups[]=['name'=>$name,'id'=>$menu->getAttribute('id'),'count'=>count($fields),'fields'=>$fields];
-                    if (in_array($this->key($name),['ausgänge','ausgaenge','outputs'],true)) $outputs=$root;
-                } catch(RuntimeException $error) { $errors[]=['name'=>$name,'error'=>$error->getMessage()]; }
-            }
-            foreach($requestedPages??[] as $page) if(!array_filter($groups,fn($group)=>$this->key($group['name'])===$this->key($page)))
+                    if($fields!==[] || $submenus===[]) $groups[]=['name'=>$name,'id'=>$id,'path'=>[...$path,$name],'count'=>count($fields),'fields'=>$fields];
+                    if(in_array($this->key($name),['ausgänge','ausgaenge','outputs'],true)) $outputs=$root;
+                    $selected=$inherited || $requestedKeys===null || in_array($this->key($name),$requestedKeys,true);
+                    foreach($submenus as $child) $visit($child,[...$path,$name],$depth+1,$selected);
+                } catch(RuntimeException $error) {$errors[]=['name'=>$name,'error'=>$error->getMessage()];}
+            };
+            $menus=$children($info);
+            usort($menus,fn($a,$b)=>(int)!in_array($this->key($this->child($a,'name')->textContent),['ausgänge','ausgaenge','outputs'],true)
+                <=>(int)!in_array($this->key($this->child($b,'name')->textContent),['ausgänge','ausgaenge','outputs'],true));
+            foreach($menus as $menu) $visit($menu);
+            foreach($requestedPages??[] as $page) if(!isset($seenNames[$this->key($page)]))
                 $errors[]=['name'=>$page,'error'=>'Benötigte Informationsseite nicht geliefert.'];
             $this->snapshot=['navigation'=>$navigationItems,'count'=>array_sum(array_column($groups,'count')),'groups'=>$groups,'errors'=>$errors,'complete'=>$errors===[],
                 'fullScan'=>$requestedPages===null,'requestedPages'=>$requestedPages];
@@ -353,6 +368,14 @@ trait LuxtronikWebEEV
     {
         $result=self::WEB_ONLY_POINTS;
         $result[110351]=['ident'=>'SHI_Pumpe_Mischkreis_1','label'=>'Pumpe Mischkreis 1','field'=>['Ausgänge','FUP 1','bool'],'type'=>'bool','profile'=>'~Switch','sharedSHI'=>true];
+        foreach([110310=>'Gesamt',110312=>'Heizung',110314=>'Warmwasser',110316=>'Kühlung',110318=>'Schwimmbad'] as $id=>$name) {
+            $point=$this->SHISelections()[$id];
+            $result[$id]=['ident'=>$point['ident'],'label'=>$point['label'],'field'=>['Leistungsaufnahme',$name,'kWh'],
+                'type'=>'float','profile'=>'~Electricity','sharedSHI'=>true];
+        }
+        $point=$this->SHISelections()[110326];
+        $result[110326]=['ident'=>$point['ident'],'label'=>$point['label'],'field'=>['Wärmemenge','Kühlung','kWh'],
+            'type'=>'float','profile'=>'~Electricity','sharedSHI'=>true];
         foreach(self::WEB_NATIVE_FIELDS as $id=>$field) $result[$id]=['ident'=>self::DATA_POINT_CONFIG[$id]['name'],
             'label'=>self::DATA_POINT_CONFIG[$id]['name'],'field'=>$field,'native'=>$id];
         foreach(range(95,105) as $id) $result[$id]=['ident'=>self::DATA_POINT_CONFIG[$id]['name'],
@@ -491,7 +514,7 @@ trait LuxtronikWebEEV
         $needed[400001]=true;
         $needed[400002]=true;
         $needed[400020]=true;
-        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row)
+        foreach($this->MeasurementRows() as $row)
             if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
         $requested=[];
         foreach($this->WebDefinitions() as $id=>$definition)
@@ -499,7 +522,7 @@ trait LuxtronikWebEEV
         return $requested;
     }
 
-    private function UpdateWebEEV(): void
+    private function UpdateWebEEV(?float $cycleStarted=null): void
     {
         if (!$this->ReadPropertyBoolean('InstanceStatus')
             || in_array($this->ReadPropertyString('IPAddress'),['','0.0.0.0','::'],true)) return;
@@ -509,8 +532,12 @@ trait LuxtronikWebEEV
         $pages=array_values(array_unique(array_map(static fn($point)=>$point['field'][0],$requested)));
         $cache=$this->WebEEVCache();
         $inventory=$this->WebInventory();
+        foreach($inventory['discovery']['groups']??[] as $group) if(in_array($group['name'],$pages,true)) {
+            $pages=array_values(array_unique([...$pages,...($group['path']??[])]));
+        }
         $discover=time()>=($inventory['nextAttempt']??0);
-        if (!$discover && microtime(true)<($cache['nextAttempt']??0) && (!empty($cache['error']) || ($cache['requestedIdents']??null)===$idents)) {
+        $reuse=!empty($cache['error']) || ($cycleStarted===null?microtime(true)<($cache['nextAttempt']??0):($cache['queriedAt']??0)>=$cycleStarted);
+        if (!$discover && microtime(true)<($cache['nextAttempt']??0) && $reuse && (!empty($cache['error']) || ($cache['requestedIdents']??null)===$idents)) {
             $cache['values']=array_intersect_key($cache['values']??[],$requested);
             $this->SetBuffer('WebEEVCache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
             $this->PublishWebEEV();return;
@@ -545,6 +572,7 @@ trait LuxtronikWebEEV
                     $this->SetBuffer('WebInventory',json_encode($inventory,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
                 }
             }
+            $cache['queriedAt']=microtime(true);
             $cache['nextAttempt']=microtime(true)+($cache['error']!==null?120:5);
             if ($source!==$this->WebEEVSourceKey()) return;
             $this->SetBuffer('WebEEVCache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
@@ -568,9 +596,19 @@ trait LuxtronikWebEEV
             'unit'=>$row['unit']??'%','binary'=>is_bool($row['value']),'source'=>'WebSocket','webId'=>$row['webId']];
     }
 
+    private function WebSocketStatusCaption(): string
+    {
+        $cache=$this->WebEEVCache();$inventory=$this->WebInventory();
+        $known=!empty($inventory['discovery']['groups']) || !empty($cache['discovery']['groups']);
+        if($known) return !empty($cache['error'])?'WebSocket unterstützt; aktuell fehlen Daten. Details unter Diagnose.':'WebSocket verfügbar – Informationsseiten werden automatisch eingebunden.';
+        if(!empty($cache['error']) || !empty($inventory['error'])) return 'WebSocket-Erkennung fehlgeschlagen. Verbindung und Passwort prüfen; Details unter Diagnose.';
+        return 'WebSocket wird beim Aktualisieren automatisch geprüft.';
+    }
+
     private function PublishWebEEV(): void
     {
         $this->PublishMeasurements();
+        $this->UpdateFormField('WebSocketStatus','caption',$this->WebSocketStatusCaption());
     }
 
     private function EnsureWebVariable(int $id,array $point): void

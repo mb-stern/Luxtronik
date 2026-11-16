@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/ModbusTCP.php';
+require_once __DIR__ . '/ModbusGateway.php';
 require_once __DIR__ . '/SHIRegisters.php';
 
 /** Optional SHI transport. Java indices and the Java control protocol stay independent. */
@@ -51,7 +52,7 @@ trait LuxtronikModbusSHI
     private function SHIDerivedPoints(): array
     {
         return [
-            23 => ['input:10106', null], 267 => ['holding:10060', null],
+            23 => ['input:10106', null],
             43 => ['input:10350', null],
             44 => ['input:10000', 1], 45 => ['input:10000', 2],
             48 => ['input:10000', 4], 50 => ['input:10000', 16]
@@ -72,21 +73,15 @@ trait LuxtronikModbusSHI
         return $result;
     }
 
+    /** Persistent Java controls are independent of the temporary SHI request variables. */
     private function SharedNumericControlEnabled(string $ident): bool
     {
         $property=['Anpassung_WW'=>'WWsetVisible','Anpassung_Temp'=>'TempsetVisible','Anpassung_RBE'=>'RBEsetVisible'][$ident]??null;
-        if ($property===null) return false;
-        if ($this->ReadPropertyBoolean($property)) return true;
-        foreach ($this->SHISelections() as $id=>$point)
-            if($point['ident']===$ident && ($this->SHIControlSelection()[$id]??false)) return true;
-        return false;
+        return $property!==null && $this->ReadPropertyBoolean($property);
     }
 
     private function HandleSHIAction(string $ident,mixed $value): void
     {
-        if (in_array($ident,['Anpassung_WW','Anpassung_Temp','Anpassung_RBE'],true) && !$this->SharedNumericControlEnabled($ident)) {
-            throw new RuntimeException('Diese gemeinsame Steuervariable ist nicht aktiviert.');
-        }
         $this->SetSHIValue($ident,$value);
     }
 
@@ -96,8 +91,26 @@ trait LuxtronikModbusSHI
         return is_array($cache) && ($cache['source'] ?? '') === $this->VisualizationSourceKey() ? $cache : [];
     }
 
-    private function NewSHIClient(): LuxtronikModbusTCP
+    private function ModbusGatewayID(): int
     {
+        $parent=(int)(IPS_GetInstance($this->InstanceID)['ConnectionID']??0);
+        if($parent<=0) return 0;
+        if(strtoupper(IPS_GetInstance($parent)['ModuleInfo']['ModuleID']??'')!=='{A5F663AB-C400-4FE5-B207-4D67CC030564}') throw new RuntimeException('Die übergeordnete Instanz ist kein Symcon-Modbus-Gateway.');
+        return $parent;
+    }
+
+    private function ModbusGatewaySignature(): array
+    {
+        $id=$this->ModbusGatewayID();
+        if($id===0) return [];
+        $socket=(int)(IPS_GetInstance($id)['ConnectionID']??0);
+        return [$id,hash('sha256',IPS_GetConfiguration($id)),$socket,$socket>0?hash('sha256',IPS_GetConfiguration($socket)):''];
+    }
+
+    private function NewSHIClient(): LuxtronikModbusClient
+    {
+        if($this->ModbusGatewayID()>0) return new LuxtronikModbusGateway(fn(array $request)=>$this->SendDataToParent(json_encode($request,JSON_THROW_ON_ERROR)));
+        // Retain the old connection for existing unparented installations until a gateway is linked.
         return new LuxtronikModbusTCP($this->ReadPropertyString('IPAddress'), $this->ReadPropertyInteger('ModbusPort'),
             $this->ReadPropertyInteger('ModbusUnitID'), $this->ReadPropertyInteger('ModbusTimeout'));
     }
@@ -109,7 +122,7 @@ trait LuxtronikModbusSHI
         }
     }
 
-    private function ReadSHIPoint(LuxtronikModbusTCP $client, array $point): int|float|bool|null
+    private function ReadSHIPoint(LuxtronikModbusClient $client, array $point): int|float|bool|null
     {
         $words = match ($point['bank']) {
             'discrete'=>$client->readDiscreteInputs($point['address'],1),
@@ -136,12 +149,10 @@ trait LuxtronikModbusSHI
     {
         if(!$this->ReadPropertyBoolean('InstanceStatus')) return;
         $cycleStarted??=microtime(true);
-        $writes=$this->ReadPropertyString('CommunicationMode')==='modbus';
+        $writes=$this->SHIWritingEnabled();
         $needed=$this->HybridMeasurementIDs()+$this->GetVisualizationExtraPointIDs();
-        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
+        foreach($this->MeasurementRows() as $row) if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
         if($writes) foreach($this->SHICatalog() as $point) if($point['bank']==='holding' && $this->SHIControlEnabled($point)) $needed[$point['selection']]=true;
-        if($writes) foreach(['Anpassung_Temp'=>310002,'Anpassung_WW'=>310006,'Anpassung_RBE'=>310060] as $ident=>$id)
-            if($this->SharedNumericControlEnabled($ident)) $needed[$id]=true;
         $requested=[];
         $catalog=$this->SHICatalog();
         foreach($this->SHISelections() as $id=>$point) {
@@ -284,7 +295,7 @@ trait LuxtronikModbusSHI
             $id=(int)($row['id']??0);
             if ($id>0 && $id<self::MAX_RESPONSE_VALUES && !empty($row['enabled'])) $ids[$id]=true;
         }
-        if ($this->ReadPropertyInteger('kwin')>0) $ids[257]=true;
+        if ($this->ReadPropertyInteger('kwin')>0 || $this->ReadPropertyBoolean('InternalCOP')) {$ids[257]=true;$ids[268]=true;}
         if ($this->ReadPropertyInteger('kwhin')>0) {$ids[151]=true;$ids[152]=true;}
         return $ids;
     }
@@ -421,7 +432,8 @@ trait LuxtronikModbusSHI
             foreach ($point['options']??[] as $value=>$label) IPS_SetVariableProfileAssociation($profile,(float)$value,$label,'',-1);
         }
         $method=match ($type) {0=>'RegisterVariableBoolean',1=>'RegisterVariableInteger',default=>'RegisterVariableFloat'};
-        $this->$method($ident,$point['label'],$profile,$point['selection']);
+        $label=$point['bank']==='holding' && !str_starts_with($point['label'],'SHI')?'SHI: '.$point['label']:$point['label'];
+        $this->$method($ident,$label,$profile,$point['selection']);
     }
 
     private function PublishSHIValues(): void
@@ -451,10 +463,11 @@ trait LuxtronikModbusSHI
         $preferences=[];
         foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if(isset($row['preferredSource']))
             $preferences[(int)$row['id']]=$this->MeasurementSourceOrder((int)$row['id']);
-        return json_encode(['updatedAt'=>$cache['updatedAt']??null,'stale'=>$cache['stale']??true,'values'=>$values,
+        return json_encode(['transport'=>$this->ModbusGatewayID()>0?'Symcon-Modbus-Gateway':'Direktverbindung (Bestand)','gatewayID'=>$this->ModbusGatewayID(),'updatedAt'=>$cache['updatedAt']??null,'stale'=>$cache['stale']??true,'values'=>$values,
             'javaSupplementEnabled'=>true,'javaSupplement'=>$java,'measurementPriority'=>['Java','WebSocket','Modbus/SHI'],
             'measurementPreferences'=>$preferences,'javaOnlyWritesRemainAvailable'=>true,
-            'writeSource'=>$this->ReadPropertyString('CommunicationMode')==='modbus'?'Modbus/SHI':'Java'],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+            'nativeControlSource'=>'Java','shiControlsEnabled'=>$this->SHIWritingEnabled(),
+            'writeSource'=>$this->SHIWritingEnabled()?'Modbus/SHI':'SHI-Bedienung aus'],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
     }
 
     private function SHIWriteDefinition(string $ident): array
@@ -473,7 +486,7 @@ trait LuxtronikModbusSHI
         return ((int)round($raw)) & 0xffff;
     }
 
-    private function ConfirmSHIWrite(LuxtronikModbusTCP $client,int $address,int $word): void
+    private function ConfirmSHIWrite(LuxtronikModbusClient $client,int $address,int $word): void
     {
         $client->writeHoldingRegisters($address,[$word]);
         $deadline=microtime(true)+1.5;
@@ -488,7 +501,8 @@ trait LuxtronikModbusSHI
     /** Only documented holding registers, validated before connecting; never replayed by polling. */
     public function SetSHIValue(string $Ident,mixed $Value): bool
     {
-        if ($this->ReadPropertyString('CommunicationMode')!=='modbus' || !$this->ReadPropertyBoolean('InstanceStatus')) throw new RuntimeException('SHI-Schreiben benötigt eine aktive Instanz im Modbus-Modus.');
+        $Ident=['Anpassung_Temp'=>'SHI_Offset_Heizen','Anpassung_WW'=>'SHI_Sollwert_Warmwasser','Anpassung_RBE'=>'SHI_Raumtemperatur_Soll'][$Ident]??$Ident;
+        if (!$this->SHIWritingEnabled() || !$this->ReadPropertyBoolean('InstanceStatus')) throw new RuntimeException('SHI-Schreiben benötigt eine aktive Instanz und eine ausgewählte SHI-Steuervariable.');
         $point=$this->SHIWriteDefinition($Ident);
         $word=$this->EncodeSHIValue($point,$Value);
         $id=@$this->GetIDForIdent($Ident);
@@ -585,17 +599,19 @@ trait LuxtronikModbusSHI
     private function SHIControlForm(): array
     {
         $selected=$this->SHIControlSelection();$rows=[];
-        $writes=$this->ReadPropertyString('CommunicationMode')==='modbus';
+        $writes=$this->SHIWritingEnabled();
         foreach($this->SHICatalog() as $point) {
             if($point['bank']!=='holding') continue;
             $reading=$writes?$this->GetSHIVisualizationPoint($point['ident']):null;
-            $property=['Anpassung_WW'=>'WWsetVisible','Anpassung_Temp'=>'TempsetVisible','Anpassung_RBE'=>'RBEsetVisible'][$point['ident']]??null;
             $activation=[];
             $variableID=@$this->GetIDForIdent($point['ident']);
-            if(!empty($point['shared']) && $variableID!==false && IPS_VariableExists($variableID)) {
+            if($variableID!==false && IPS_VariableExists($variableID)) {
                 $activation[]='Vorhandene Variable: '.IPS_GetName($variableID).' (ID '.$variableID.')';
             }
-            if($property!==null && $this->ReadPropertyBoolean($property)) $activation[]='Auch über Timer / Zusatzfunktionen aktiviert';
+            $permission=$this->SHIControlPermission($point);
+            $activation[]=$permission===false?'Am Regler nicht freigegeben':($permission===null?'Freigabe noch nicht gelesen':'Am Regler freigegeben');
+            if(!$writes) $activation[]='SHI-Bedienung ausgeschaltet';
+            if($point['deps']!==[]) $activation[]='Benötigt '.implode(', ',array_map(static fn($address,$value)=>'HR '.$address.' = '.$value,array_keys($point['deps']),array_values($point['deps'])));
             $rows[]=['enabled'=>$selected[$point['selection']]??false,'id'=>$point['selection'],
                 'name'=>$point['label'],'register'=>$point['address'],
                 'range'=>$point['min'].' … '.$point['max'].($point['unit']!==''?' '.$point['unit']:''),
@@ -607,9 +623,9 @@ trait LuxtronikModbusSHI
             'sort'=>['column'=>'id','direction'=>'ascending'],
             'columns'=>[
                 ['name'=>'enabled','caption'=>'Variable anlegen','width'=>'130px','save'=>true,'edit'=>['type'=>'CheckBox']],
-                ['name'=>'id','caption'=>'Auswahl-ID','width'=>'110px','save'=>true],
+                ['name'=>'id','caption'=>'ID','width'=>'110px','save'=>true],
                 ['name'=>'name','caption'=>'Funktion','width'=>'auto','save'=>false,'quickFilter'=>true],
-                ['name'=>'register','caption'=>'Register','width'=>'90px','save'=>false],
+                ['name'=>'register','caption'=>'SHI-Register','width'=>'110px','save'=>false],
                 ['name'=>'range','caption'=>'Bereich / Einheit','width'=>'150px','save'=>false],
                 ['name'=>'activation','caption'=>'Variable / Aktivierung','width'=>'240px','save'=>false],
                 ['name'=>'value','caption'=>'Aktueller Modbus-Wert','width'=>'200px','save'=>false]
@@ -650,10 +666,8 @@ trait LuxtronikModbusSHI
             $element['columns'][]=['name'=>'interface','caption'=>'Verfügbar über','width'=>'230px','save'=>false];
             foreach($element['values'] as &$row) $row['interface']=isset($selections[(int)$row['id']])?'Java + Modbus':'Java';
             unset($row);
-            $measurements=[110201,110310,110312,110314,110316,110318,110326,110351,110360,110361];
             foreach($selections as $id=>$point) if($id>=100000 && $point['bank']!=='holding'
-                && (empty($point['aliasOf']) || !empty($saved[$id]['enabled']))
-                && ($this->ReadPropertyBoolean('ShowAdvancedModbusPoints') || in_array($id,$measurements,true) || !empty($saved[$id]['enabled'])))
+                && (empty($point['aliasOf']) || !empty($saved[$id]['enabled'])))
                 $element['values'][]=['enabled'=>(bool)($saved[$id]['enabled']??false),'id'=>$id,'name'=>$point['label'],'interface'=>'Modbus'];
         }
         unset($element);

@@ -52,9 +52,9 @@ trait LuxtronikDataSources
     private function MeasurementSourceOrder(int $id): array
     {
         $available=$this->MeasurementSources($id);
-        $preferred='java';
-        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row)
-            if((int)($row['id']??0)===$id) {$preferred=$row['preferredSource']??'java';break;}
+        $preferred=$this->ReadPropertyString('MeasurementBulkSource');
+        foreach($this->MeasurementRows() as $row)
+            if((int)($row['id']??0)===$id) {$preferred=$row['preferredSource']??$preferred;break;}
         if(!in_array($preferred,$available,true)) $preferred=$available[0]??'java';
         return array_values(array_unique([$preferred,...$available]));
     }
@@ -112,14 +112,15 @@ trait LuxtronikDataSources
         $cycleStarted=microtime(true);
         // A preferred Modbus value must be attempted before deciding whether WebSocket is needed.
         $needed=$this->HybridMeasurementIDs()+$this->GetVisualizationExtraPointIDs();
-        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row)
+        foreach($this->MeasurementRows() as $row)
             if(!empty($row['enabled'])) $needed[(int)$row['id']]=true;
         foreach($needed as $id=>$_) if(($this->MeasurementSourceOrder($id)[0]??'')==='modbus') {
             $this->UpdateModbusSupplement(true,$cycleStarted);break;
         }
-        $this->UpdateWebEEV();
+        $this->UpdateWebEEV($cycleStarted);
         $this->UpdateModbusSupplement(false,$cycleStarted);
         $this->PublishMeasurements();
+        $this->RefreshDerivedMeasurements();
         foreach($needed as $id=>$_) {
             $reading=$this->MeasurementReading($id);
             if($reading!==null) $this->SendDebug('Datenquelle',$reading['ident'].': '.$reading['source'].' = '.$reading['formatted'],0);
@@ -130,7 +131,7 @@ trait LuxtronikDataSources
     {
         if(!$this->ReadPropertyBoolean('InstanceStatus')) return;
         $shi=$this->SHISelections();$web=$this->WebDefinitions();
-        foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) {
+        foreach($this->MeasurementRows() as $row) {
             $id=(int)($row['id']??0);
             if(empty($row['enabled']) || ($shi[$id]['bank']??'')==='holding') continue;
             $reading=$this->MeasurementReading($id);
@@ -171,20 +172,33 @@ trait LuxtronikDataSources
         return $result;
     }
 
+    /** Earlier beta versions used native Java Idents for SHI; retain those objects instead of deleting history. */
+    private function IsRetainedLegacySHIControl(string $ident): bool
+    {
+        $selection=['Anpassung_Temp'=>310002,'Anpassung_WW'=>310006,'Anpassung_RBE'=>310060][$ident]??null;
+        return $selection!==null && !$this->SharedNumericControlEnabled($ident)
+            && ($this->SHIControlSelection()[$selection]??false) && @$this->GetIDForIdent($ident)!==false;
+    }
+
+    private function UnregisterNativeNumericControl(string $ident): void
+    {
+        if($this->IsRetainedLegacySHIControl($ident)) $this->DisableAction($ident);
+        else $this->UnregisterVariable($ident);
+    }
+
     private function SHIControlEnabled(array $point): bool
     {
-        return !empty($point['shared']) ? $this->SharedNumericControlEnabled($point['ident'])
-            : ($this->SHIControlSelection()[$point['selection']]??false);
+        return $this->SHIControlSelection()[$point['selection']]??false;
     }
 
     private function SyncSHIControlVariables(bool $removeUnselected=false): void
     {
-        $writes=$this->ReadPropertyString('CommunicationMode')==='modbus' && $this->ReadPropertyBoolean('InstanceStatus');
+        $writes=$this->SHIWritingEnabled() && $this->ReadPropertyBoolean('InstanceStatus');
         foreach($this->SHICatalog() as $point) {
             if($point['bank']!=='holding') continue;
             if(!$this->SHIControlEnabled($point)) {
-                if(empty($point['shared']) && $removeUnselected) $this->DeleteVariableIfExists($point['ident']);
-                elseif(empty($point['shared']) && @$this->GetIDForIdent($point['ident'])!==false) $this->DisableAction($point['ident']);
+                if($removeUnselected) $this->DeleteVariableIfExists($point['ident']);
+                elseif(@$this->GetIDForIdent($point['ident'])!==false) $this->DisableAction($point['ident']);
                 continue;
             }
             $this->EnsureSHIVariable($point);
@@ -194,14 +208,19 @@ trait LuxtronikDataSources
                 $permission=$this->SHIControlPermission($point);
                 if($permission===true) $this->EnableAction($point['ident']);
                 else $this->DisableAction($point['ident']);
-            } elseif($writes || empty($point['shared'])) $this->DisableAction($point['ident']);
+            } else $this->DisableAction($point['ident']);
         }
     }
 
-    /** All Java-only actions keep their original transport when Modbus is preferred. */
+    /** Selecting an independent SHI control enables that control, never a native Java write route. */
+    private function SHIWritingEnabled(): bool
+    {
+        return $this->ReadPropertyString('CommunicationMode')==='modbus' || in_array(true,$this->SHIControlSelection(),true);
+    }
+
     private function UsesModbusWrite(string $ident): bool
     {
-        if($this->ReadPropertyString('CommunicationMode')!=='modbus') return false;
+        if(!$this->SHIWritingEnabled()) return false;
         return $this->SupportsModbusWrite($ident);
     }
 

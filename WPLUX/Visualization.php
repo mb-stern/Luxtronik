@@ -1044,9 +1044,7 @@ HTML;
         return match ($function) {
             'warmWaterSetpoint' => $this->BuildNumericControlInfo('WarmWaterSetpointVariable', 30.0, 65.0, 0.5),
             'heatingTemperatureCorrection' => $this->BuildNumericControlInfo('HeatingTemperatureCorrectionVariable', -5.0, 5.0, 0.5),
-            'roomTemperatureSetpoint' => $this->BuildNumericControlInfo('RoomTemperatureSetpointVariable',
-                $this->ReadPropertyString('CommunicationMode') === 'modbus' ? 15.0 : 0.0,
-                $this->ReadPropertyString('CommunicationMode') === 'modbus' ? 30.0 : 35.0, 0.5),
+            'roomTemperatureSetpoint' => $this->BuildNumericControlInfo('RoomTemperatureSetpointVariable', 0.0, 35.0, 0.5),
             default => throw new InvalidArgumentException('Unbekannte numerische Steuerfunktion.')
         };
     }
@@ -4317,8 +4315,6 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         [$ident, $visible] = $controls[$property];
         $shared = in_array($ident, ['Anpassung_WW', 'Anpassung_Temp', 'Anpassung_RBE'], true);
         if (!($shared ? $this->SharedNumericControlEnabled($ident) : $this->ReadPropertyBoolean($visible))) return false;
-        if ($shared && $this->UsesModbusWrite($ident)
-            && ($this->GetSHIVisualizationPoint($ident) === null || $this->SHIControlPermission($this->SHIWriteDefinition($ident)) !== true)) return false;
         if (@$this->GetIDForIdent($ident) !== $id) return false;
         $variable = IPS_GetVariable($id);
         return in_array((int)$variable['VariableType'], [1, 2], true)
@@ -4655,7 +4651,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     private function VisualizationSourceKey(): string
     {
         $key=['java-first',$this->ReadPropertyString('IPAddress'),$this->ReadPropertyInteger('Port'),
-            $this->ReadPropertyInteger('ModbusPort'),$this->ReadPropertyInteger('ModbusUnitID'),$this->ReadPropertyInteger('ModbusTimeout')];
+            $this->ReadPropertyInteger('ModbusPort'),$this->ReadPropertyInteger('ModbusUnitID'),$this->ReadPropertyInteger('ModbusTimeout'),$this->ModbusGatewaySignature()];
         return json_encode($key, JSON_THROW_ON_ERROR);
     }
 

@@ -110,10 +110,10 @@ Gemeinsame Zuordnungen und bewusst getrennte Zusatzwerte erklärt der
 | --- | --- | --- | --- |
 | 10000 | `SHI_Modus_Heizen` |  | 0: Kein Einfluss, 1: Sollwert, 2: Offset, 3: Level; Funktion DI 10000 muss aktiv sein; setzt HR 10065=0 |
 | 10001 | `SHI_Sollwert_Heizen` | °C | 15 … 75; Funktion DI 10000 muss aktiv sein; setzt HR 10065=0, HR 10000=1 |
-| 10002 | `Anpassung_Temp` | K | -20 … 20; Funktion DI 10000 muss aktiv sein; setzt HR 10065=0, HR 10000=2 |
+| 10002 | `SHI_Offset_Heizen` | K | -20 … 20; Funktion DI 10000 muss aktiv sein; setzt HR 10065=0, HR 10000=2 |
 | 10003 | `SHI_Level_Heizen` |  | 0: Kein Einfluss, 1: Überhöht mit Zeitprogramm, 2: Überhöht ohne Zeitprogramm, 3: Reduziert; Funktion DI 10000 muss aktiv sein; setzt HR 10065=0, HR 10000=3 |
 | 10005 | `SHI_Modus_Warmwasser` |  | 0: Kein Einfluss, 1: Sollwert, 2: Offset, 3: Level; Funktion DI 10001 muss aktiv sein |
-| 10006 | `Anpassung_WW` | °C | 30 … 75; Funktion DI 10001 muss aktiv sein; setzt HR 10005=1 |
+| 10006 | `SHI_Sollwert_Warmwasser` | °C | 30 … 75; Funktion DI 10001 muss aktiv sein; setzt HR 10005=1 |
 | 10007 | `SHI_Offset_Warmwasser` | K | -20 … 20; Funktion DI 10001 muss aktiv sein; setzt HR 10005=2 |
 | 10008 | `SHI_Level_Warmwasser` |  | 0: Kein Einfluss, 1: Überhöht mit Zeitprogramm, 2: Überhöht ohne Zeitprogramm, 3: Reduziert; Funktion DI 10001 muss aktiv sein; setzt HR 10005=3 |
 | 10010 | `SHI_Modus_MK1_Heizen` |  | 0: Kein Einfluss, 1: Sollwert, 2: Offset, 3: Level; Funktion DI 10006 muss aktiv sein; setzt HR 10065=0 |
@@ -143,7 +143,7 @@ Gemeinsame Zuordnungen und bewusst getrennte Zusatzwerte erklärt der
 | 10051 | `SHI_Sperre_Warmwasser` |  | 0: Aus, 1: Ein; Funktion DI 10001 muss aktiv sein |
 | 10052 | `SHI_Sperre_Kuehlung` |  | 0: Aus, 1: Ein; Funktion DI 10002 muss aktiv sein |
 | 10053 | `SHI_Sperre_Schwimmbad` |  | 0: Aus, 1: Ein; Funktion DI 10003 muss aktiv sein |
-| 10060 | `Anpassung_RBE` | °C | 15 … 30; Funktion DI 10005 muss aktiv sein |
+| 10060 | `SHI_Raumtemperatur_Soll` | °C | 15 … 30; Funktion DI 10005 muss aktiv sein |
 | 10065 | `SHI_Overall_Modus` |  | 0: Individuell, 2: Globaler Offset, 3: Globales Level; Funktion DI 10000 muss aktiv sein |
 | 10066 | `SHI_Overall_Offset` | K | -5 … 5; Funktion DI 10000 muss aktiv sein; setzt HR 10065=2 |
 | 10067 | `SHI_Overall_Level` |  | 0: Kein Einfluss, 1: Überhöht mit Zeitprogramm, 2: Überhöht ohne Zeitprogramm, 3: Reduziert; Funktion DI 10000 muss aktiv sein; setzt HR 10065=3 |

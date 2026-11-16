@@ -1,12 +1,9 @@
 <?php
 
-/** A valid device exception is distinct from a malformed or incomplete frame. */
-class LuxtronikModbusException extends RuntimeException
-{
-}
+require_once __DIR__.'/ModbusClient.php';
 
 /** Modbus TCP transport: FC02/03/04 reads and FC16 holding-register writes. */
-final class LuxtronikModbusTCP
+final class LuxtronikModbusTCP implements LuxtronikModbusClient
 {
     private mixed $connection = null;
     private int $transaction = 0;

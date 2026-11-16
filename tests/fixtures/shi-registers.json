@@ -1056,8 +1056,8 @@
   {
     "bank": "holding",
     "address": 10002,
-    "ident": "Anpassung_Temp",
-    "label": "Temperaturkorrektur",
+    "ident": "SHI_Offset_Heizen",
+    "label": "SHI Offset Heizen",
     "datatype": "int16",
     "factor": 0.1,
     "unit": "K",
@@ -1070,8 +1070,7 @@
       "10065": 0,
       "10000": 2
     },
-    "selection": 310002,
-    "shared": true
+    "selection": 310002
   },
   {
     "bank": "holding",
@@ -1121,8 +1120,8 @@
   {
     "bank": "holding",
     "address": 10006,
-    "ident": "Anpassung_WW",
-    "label": "Warmwasser Soll",
+    "ident": "SHI_Sollwert_Warmwasser",
+    "label": "SHI Sollwert Warmwasser",
     "datatype": "uint16",
     "factor": 0.1,
     "unit": "°C",
@@ -1134,8 +1133,7 @@
     "deps": {
       "10005": 1
     },
-    "selection": 310006,
-    "shared": true
+    "selection": 310006
   },
   {
     "bank": "holding",
@@ -1716,8 +1714,8 @@
   {
     "bank": "holding",
     "address": 10060,
-    "ident": "Anpassung_RBE",
-    "label": "Raumtemperatur Soll",
+    "ident": "SHI_Raumtemperatur_Soll",
+    "label": "SHI Raumtemperatur Soll",
     "datatype": "uint16",
     "factor": 0.1,
     "unit": "°C",
@@ -1727,8 +1725,7 @@
     "options": {},
     "di": 10005,
     "deps": {},
-    "selection": 310060,
-    "shared": true
+    "selection": 310060
   },
   {
     "bank": "holding",

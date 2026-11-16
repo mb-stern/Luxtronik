@@ -4,6 +4,7 @@ require_once __DIR__ . '/ModbusSHI.php';
 require_once __DIR__ . '/Visualization.php';
 require_once __DIR__ . '/WebEEV.php';
 require_once __DIR__ . '/DataSources.php';
+require_once __DIR__ . '/Configuration.php';
 
 // Abort obsolete callbacks as soon as their Symcon interface disappears.
 class LuxtronikInstanceUnavailable extends Exception {}
@@ -14,6 +15,7 @@ class Luxtronik extends IPSModuleStrict
     use LuxtronikVisualization;
     use LuxtronikWebEEV;
     use LuxtronikDataSources;
+    use LuxtronikConfiguration;
 
     private const SOCKET_TIMEOUT = 5.0;
     private const MAX_RESPONSE_VALUES = 65536;
@@ -39,6 +41,8 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ModbusReadSupplement', false);
         $this->RegisterPropertyBoolean('ShowAdvancedModbusPoints', false);
         $this->RegisterPropertyString('SHIControlList', '[]');
+        $this->RegisterPropertyBoolean('AdvancedSourceSelection', false);
+        $this->RegisterPropertyBoolean('InternalCOP', true);
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
         $this->RegisterPropertyInteger('Port', 8889);
@@ -70,6 +74,12 @@ class Luxtronik extends IPSModuleStrict
         // Timer für Aktualisierung registrieren
         $this->RegisterTimer('UpdateTimer', 0, 'WPLUX_Update(' . $this->InstanceID . ');');  
         $this->CreateVisualization();
+    }
+
+    /** Same native Modbus parent interface used by the Goodwe module. Java and WebSocket remain independent. */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type'=>'connect','moduleIDs'=>['{A5F663AB-C400-4FE5-B207-4D67CC030564}']],JSON_THROW_ON_ERROR);
     }
 
     public function Migrate(string $JSONData): string
@@ -170,6 +180,8 @@ class Luxtronik extends IPSModuleStrict
 
         // Variablenprofile zentral aus dieser module.php erstellen
         $this->CreateVariableProfiles();
+        $this->SyncSHIControlVariables();
+        $this->SyncSHIReadVariables();
 
         // Timer für Aktualisierung aktualisieren
         $this->SetTimerInterval('UpdateTimer', $this->ReadPropertyInteger('UpdateInterval') * 1000);
@@ -253,7 +265,7 @@ class Luxtronik extends IPSModuleStrict
         } 
         else 
         {
-            $this->UnregisterVariable('Anpassung_Temp');
+            $this->UnregisterNativeNumericControl('Anpassung_Temp');
         }
 
         if ($wwsetVisible) 
@@ -265,7 +277,7 @@ class Luxtronik extends IPSModuleStrict
         } 
         else 
         {
-            $this->UnregisterVariable('Anpassung_WW');
+            $this->UnregisterNativeNumericControl('Anpassung_WW');
         }
 
         if ($schwimmbadVisible) 
@@ -288,10 +300,10 @@ class Luxtronik extends IPSModuleStrict
         } 
         else 
         {
-            $this->UnregisterVariable('Anpassung_RBE');
+            $this->UnregisterNativeNumericControl('Anpassung_RBE');
         }
 
-        if ($copVarId !== 0 && IPS_VariableExists($copVarId)) {
+        if (($copVarId !== 0 && IPS_VariableExists($copVarId)) || $this->ReadPropertyBoolean('InternalCOP')) {
             $created = $this->RegisterVariableFloat('copfaktor', 'COP-Faktor', 'WPLUX.Cop', 7);
             if ($created) {
                 $this->SetValueIfChanged('copfaktor', 0);
@@ -955,6 +967,7 @@ class Luxtronik extends IPSModuleStrict
             $this->HandleVisualizationAction($Ident, $Value);
             return;
         }
+        if($this->IsRetainedLegacySHIControl($Ident)) throw new RuntimeException('Diese bisherige Testvariable wird als inaktive Java-Variable erhalten. Für SHI bitte die eigene SHI-Steuervariable verwenden.');
         if ($this->UsesModbusWrite($Ident) || str_starts_with($Ident, 'SHI_')) {
             $this->HandleSHIAction($Ident, $Value);
             return;
@@ -1144,13 +1157,14 @@ class Luxtronik extends IPSModuleStrict
                             'caption' => 'JAZ & COP berechnen',
                             'bold'    => true
                         ],
+                        ['type'=>'CheckBox','name'=>'InternalCOP','caption'=>'COP mit interner Leistungsaufnahme berechnen, wenn keine externe Quelle gewählt ist'],
                         [
                             'type'  => 'RowLayout',
                             'items' => [
                                 [
                                     'type'    => 'SelectVariable',
                                     'name'    => 'kwin',
-                                    'caption' => 'Eingangsleistung zur Berechnung des COP (kW)'
+                                    'caption' => 'Externe Eingangsleistung für COP (leer = intern ID 268)'
                                 ],
                                 [
                                     'type'    => 'SelectVariable',
@@ -1238,7 +1252,7 @@ class Luxtronik extends IPSModuleStrict
             ]
         ];
 
-        return json_encode($this->AddVisualizationForm($this->AddWebEEVForm($this->AddModbusForm($form))));
+        return json_encode($this->SimplifyConfigurationForm($this->AddVisualizationForm($this->AddWebEEVForm($this->AddModbusForm($form)))));
     }
 
     public function Update(): void
@@ -1682,7 +1696,6 @@ class Luxtronik extends IPSModuleStrict
             $targets['Anpassung_RBE'] = ['index' => 1148, 'conversion' => 'tenth'];
         }
 
-        if($this->ReadPropertyString('CommunicationMode')==='modbus') foreach(['Anpassung_Temp','Anpassung_WW','Anpassung_RBE'] as $ident) unset($targets[$ident]);
         if ($targets === []) {
             return;
         }
@@ -1852,11 +1865,16 @@ class Luxtronik extends IPSModuleStrict
         $copfaktorVariableID = @$this->GetIDForIdent('copfaktor');
         $kwInVarId = $this->ReadPropertyInteger('kwin');
 
-        if ($mode !== 'cop' || $kwInVarId === 0 || !IPS_VariableExists($kwInVarId) || $copfaktorVariableID === false) {
-            return;
-        }
-
-        $kw_in = GetValue($kwInVarId);
+        if ($mode !== 'cop' || $copfaktorVariableID === false) return;
+        if($kwInVarId > 0 && IPS_VariableExists($kwInVarId)) {
+            $reading=['value'=>GetValue($kwInVarId),'unit'=>$this->GetVariableUnit($kwInVarId)];
+            $power=$this->VisualizationPowerReading($reading,'kW');
+        } elseif($this->ReadPropertyBoolean('InternalCOP')) {
+            $reading=$this->GetHybridVisualizationPoint('Leistungsaufnahme');
+            $power=$reading===null?null:$this->VisualizationPowerReading($reading,'W');
+        } else return;
+        if($power===null || !is_finite($value) || $value<0) return;
+        $kw_in=$power['watts']/1000;
         if ((float)$kw_in == 0.0) {
             $this->SetValueIfChanged('copfaktor', 0);
             $this->SendDebug('COP-Faktor', 'Eingangsleistung (kw_in) ist 0. COP-Faktor wurde auf 0 gesetzt.', 0);

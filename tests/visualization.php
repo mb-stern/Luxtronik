@@ -225,8 +225,9 @@ $tests['graphic rejects forged, foreign, disabled and SHI write actions'] = stat
             try { $module->RequestAction('SetNumericControl', $payload); } catch (InvalidArgumentException $expected) { continue; }
             throw new RuntimeException('Invalid graphic request accepted');
         }
-        foreach (['modbus', 'disabled'] as $mode) {
-            $module->properties['CommunicationMode'] = $mode === 'modbus' ? 'modbus' : 'java';
+        foreach (['unselected', 'disabled'] as $mode) {
+            $module->properties['CommunicationMode'] = 'modbus';
+            $module->properties['WWsetVisible'] = $mode !== 'unselected';
             $module->properties['InstanceStatus'] = $mode !== 'disabled';
             check(!invoke($module, 'BuildControlData')['warmWaterSetpoint']['configured'], 'Read-only action offered');
             check((invoke($module, 'GetLuxtronikWebInterfaceURL')==='')===($mode==='disabled'),'LUX availability incorrectly depends on write transport');
@@ -354,6 +355,7 @@ $tests['saving existing meter selections immediately publishes newly created COP
     $module->MessageSink(1, $cop, VM_UPDATE, []);
     check(end($module->updates)['data']['computedCOP']['value'] == 4.0, 'Native COP calculation not displayed');
     $module->properties['kwin'] = 0;
+    $module->properties['InternalCOP'] = false;
     $module->ApplyChanges();
     check(end($module->updates)['config']['computedCOP'] === '' && end($module->updates)['config']['computedJAZ'] !== '', 'Removed COP selection retained or JAZ removed');
 };
@@ -709,7 +711,7 @@ $tests['configuration panels precede the native list without footer settings'] =
         $form=json_decode($module->GetConfigurationForm(),true);
         $positions=[];
         foreach ($form['elements'] as $index=>$element) $positions[$element['name']??$element['caption']??'']=$index;
-        check($positions['Modbus TCP / SHI']<$positions['HTML-SDK / Visualisierung'] && $positions['HTML-SDK / Visualisierung']<$positions['IDListe'],'Panels remain below the ID selection');
+        check($positions['Verbindung und Lesen']<$positions['IDListe'] && $positions['IDListe']<$positions['Steuerung, Zeitprogramme und COP/JAZ'],'Connection measurements and controls are not clearly ordered');
         $all=fields($form);
         check(!isset($all['VisualizationExternalFooter']),'Footer settings retained');
         $captions=json_encode($form,JSON_UNESCAPED_UNICODE);
@@ -820,7 +822,7 @@ $tests['cycle durations use converted internal controller values without measure
     }
 };
 
-$tests['SHI graphic uses its current internal snapshot and shared numeric controls without Java mode aliases'] = static function (): void {
+$tests['SHI measurements and native Java graphic controls retain independent semantics'] = static function (): void {
     $module=new Luxtronik();
     $module->properties['CommunicationMode']='modbus';
     $module->properties['IPAddress']='127.0.0.1';
@@ -845,8 +847,8 @@ $tests['SHI graphic uses its current internal snapshot and shared numeric contro
     $p=visualizationPayload($module);
     check($p['controls']['warmWaterSetpoint']['configured'] && $p['controls']['heatingTemperatureCorrection']['configured'],'Shared SHI numeric controls unavailable');
     check(!$p['controls']['heating']['configured'] && !$p['controls']['hotwater']['configured'],'SHI modes misrepresented as Java enums');
-    check($p['controls']['roomTemperatureSetpoint']['configured'] && $p['controls']['roomTemperatureSetpoint']['min']===15.0
-        && $p['controls']['roomTemperatureSetpoint']['max']===30.0, 'SHI room setpoint missing or uses Java limits');
+    check($p['controls']['roomTemperatureSetpoint']['configured'] && $p['controls']['roomTemperatureSetpoint']['min']===0.0
+        && $p['controls']['roomTemperatureSetpoint']['max']===35.0, 'SHI room setpoint missing or uses Java limits');
     check($p['data']['mixerActual1']['value']===31.5 && $p['data']['compressorRunning']['value']===true,'SHI internal values lost');
     check($module->GetIDForIdent('Mischkreis_1_Vorlauftemperatur')===false && $module->GetIDForIdent('Ausgang_Verdichter_1')===false,'SHI graphic creates measurements');
     $GLOBALS['testSHIVisualizationHtml']=$module->GetVisualizationTile();

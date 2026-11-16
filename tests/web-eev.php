@@ -376,7 +376,7 @@ $tests['Java stays default and successful Java values request only the EEV page'
         check(array_keys($cache['values'])===['EEV_Heizen','EEV_Kuehlen'],'Unneeded page fields retained as fallback values');
         check(invoke($module,'GetVisualizationPointData','SupplyTemperature')['value']===0.0,'Java zero was replaced');
         $form=fields(json_decode($module->GetConfigurationForm(),true));
-        check(!isset($form['ModbusWrites']) && $form['CommunicationMode']['type']==='Select' && $form['CommunicationMode']['value']==='java','Write selection is not simplified');
+        check(!isset($form['ModbusWrites']) && $form['CommunicationMode']['type']==='Select' && !isset($form['CommunicationMode']['value']),'Write selection is not simplified');
         $rows=array_column($form['IDListe']['values'],null,'id');
         check($rows[10]['source']==='Java' && $rows[400019]['source']==='Keine aktuellen Daten','Coverage labels imply unrequested reads');
     },['expectPages'=>['Ausgänge'],'extra'=>[['name'=>'Temperaturen','id'=>'unused-temperatures','xml'=>'<Content><item><name>Vorlauf</name><value>99.0°C</value></item></Content>']]]);
@@ -542,6 +542,41 @@ $tests['preferred WebSocket readings override Java and fall back without replaci
         check($m->GetIDForIdent('Aussentemperatur')===$id && IPS_GetName($id)==='Mein Außenfühler','Reading preference changed object identity');
     },['extra'=>[['name'=>'Temperaturen','id'=>'temperatures','xml'=>'<Content><item id="outside"><name>Außentemperatur</name><value>-3.5 °C</value></item></Content>']],
         'expectPages'=>['Ausgänge','Temperaturen']]);
+};
+
+$tests['recursive information discovery reads energy submenus and merges WebSocket and Modbus counters into one variable'] = static function():void {
+    $navigation='<Navigation><item id="info"><name>Informationen</name><item id="out"><name>Ausgänge</name></item><item id="energy"><name>Energiemonitor</name><item id="thermal"><name>Wärmemenge</name></item><item id="electric"><name>Leistungsaufnahme</name></item></item></item></Navigation>';
+    $thermal='<Content id="thermal"><item id="th-h"><name>Heizung</name><value>46331.3 kWh</value></item><item id="th-w"><name>Warmwasser</name><value>8431.8 kWh</value></item><item id="th-c"><name>Kühlung</name><value>0.0 kWh</value></item><item id="th-t"><name>Gesamt</name><value>54763.1 kWh</value></item></Content>';
+    $electric='<Content id="electric"><item id="el-h"><name>Heizung</name><value>3.4 kWh</value></item><item id="el-w"><name>Warmwasser</name><value>0.0 kWh</value></item><item id="el-c"><name>Kühlung</name><value>0.0 kWh</value></item><item id="el-t"><name>Gesamt</name><value>3.4 kWh</value></item></Content>';
+    withEEVPeer(static function(int $port):void {
+        $client=new LuxtronikWebEEVClient('127.0.0.1',$port,1000);$client->read('999999');$snapshot=$client->snapshot();
+        check($snapshot['complete'] && count($snapshot['groups'])===3,'Nested energy pages missing from inventory');
+        $groups=array_column($snapshot['groups'],null,'name');
+        check($groups['Leistungsaufnahme']['path']===['Energiemonitor','Leistungsaufnahme'],'Nested page path not retained');
+        $m=new WebEEVTestModule();$mapped=invoke($m,'MapWebSnapshot',$snapshot);
+        check($mapped['SHI_Elektrische_Energie_Heizung']['value']===3.4 && $mapped['SHI_Elektrische_Energie_Warmwasser']['value']===0.0,'Electrical counters or valid zero lost');
+        check($mapped['Waermemengenzaehler_Heizung']['value']===46331.3 && $mapped['SHI_Thermische_Energie_Kuehlung']['value']===0.0,'Thermal energy subpage unmapped');
+        $m->properties['IDListe']='[{"id":110312,"enabled":true,"preferredSource":"websocket"}]';
+        $m->RegisterVariableFloat('SHI_Elektrische_Energie_Heizung','Mein Stromzähler','~Electricity');$id=$m->GetIDForIdent('SHI_Elektrische_Energie_Heizung');
+        invoke($m,'SetBuffer','WebEEVCache',json_encode(['source'=>invoke($m,'WebEEVSourceKey'),'updatedAt'=>time(),'values'=>$mapped]));
+        invoke($m,'SetBuffer','SHICache',json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'updatedAt'=>time(),'stale'=>false,'points'=>['input:10312'=>['value'=>4.2]] ]));
+        invoke($m,'PublishMeasurements');
+        check(GetValue($id)===3.4 && invoke($m,'MeasurementReading',110312)['source']==='WebSocket','Web counter did not use the existing Modbus variable');
+        invoke($m,'SetBuffer','WebEEVCache','');invoke($m,'PublishMeasurements');
+        check(GetValue($id)===4.2 && $m->GetIDForIdent('SHI_Elektrische_Energie_Heizung')===$id && IPS_GetName($id)==='Mein Stromzähler','Fallback changed identity or retained stale WebSocket data');
+    },['navigation'=>$navigation,'outputID'=>'out','extra'=>[
+        ['name'=>'Wärmemenge','id'=>'thermal','xml'=>$thermal],['name'=>'Leistungsaufnahme','id'=>'electric','xml'=>$electric]],
+        'expectPages'=>['Ausgänge','Wärmemenge','Leistungsaufnahme']]);
+};
+
+$tests['a new shared update cycle reads WebSocket again without an additional five second cooldown'] = static function():void {
+    $m=new WebEEVTestModule();$m->properties['IPAddress']='127.0.0.1';
+    withEEVPeer(static function(int $port) use($m):void {$m->webTestPort=$port;invoke($m,'UpdateWebEEV',microtime(true));});
+    check(json_decode($m->GetWebSocketData(),true)['nextAttempt']>microtime(true),'Test needs a still-cached prior response');
+    withEEVPeer(static function(int $port) use($m):void {
+        $m->webTestPort=$port;invoke($m,'UpdateWebEEV',microtime(true));
+        check(invoke($m,'GetWebEEVPoint','EEV_Heizen')['value']===56.7,'New update cycle skipped the WebSocket query');
+    },['heat'=>'56.7 %','expectPages'=>['Ausgänge']]);
 };
 
 $failed=0;
