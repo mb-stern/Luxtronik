@@ -2621,11 +2621,62 @@ window.SymconHeatPump = {
             luxtronikDisplayID = '';
             luxtronikSocket.send('GET;' + menu.id);
         };
+        // New firmware sends the same menu tree as JSON and the LCD as Content.remote.
+        // Build DOM nodes directly so JSON text never becomes markup.
+        const parseLuxtronikDocument = (text) => {
+            if (!text.trimStart().startsWith('{')) {
+                const xml = new DOMParser().parseFromString(text, 'application/xml');
+                if (xml.querySelector('parsererror')) throw new Error('Invalid XML');
+                return xml;
+            }
+            const message = JSON.parse(text);
+            if (!message || typeof message.type !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(message.type)) {
+                throw new Error('Invalid JSON response');
+            }
+            const xml = document.implementation.createDocument(null, message.type);
+            let remaining = 4096;
+            const append = (parent, node, depth = 0) => {
+                if (!node || typeof node !== 'object' || Array.isArray(node) || depth > 32 || --remaining < 0) {
+                    throw new Error('Invalid JSON item');
+                }
+                if (node.id !== undefined) {
+                    if (typeof node.id !== 'string') throw new Error('Invalid JSON ID');
+                    parent.setAttribute('id', node.id);
+                }
+                for (const name of ['name', 'value', 'readOnly']) {
+                    const value = node[name];
+                    if (value === undefined || value === null) continue;
+                    if (!['string', 'number', 'boolean'].includes(typeof value) || (typeof value === 'number' && !Number.isFinite(value))
+                        || (name === 'readOnly' && typeof value !== 'boolean')) throw new Error('Invalid JSON field');
+                    const field = xml.createElement(name);
+                    // JSON false means unlocked, not the nonempty XML string "false".
+                    field.textContent = name === 'readOnly' ? (value ? '1' : '') : String(value);
+                    parent.append(field);
+                }
+                if (node.items !== undefined) {
+                    if (!Array.isArray(node.items)) throw new Error('Invalid JSON items');
+                    for (const child of node.items) {
+                        const item = xml.createElement('item');
+                        parent.append(item);
+                        append(item, child, depth + 1);
+                    }
+                }
+            };
+            append(xml.documentElement, message);
+            if (message.type.toLowerCase() === 'content' && message.remote !== undefined) {
+                if (typeof message.remote !== 'string' || !validLuxtronikID(message.id)) throw new Error('Invalid JSON display');
+                const item = xml.createElement('item');
+                item.setAttribute('id', message.id);
+                const image = xml.createElement('img');
+                image.textContent = message.remote;
+                item.append(image);
+                xml.documentElement.append(item);
+            }
+            return xml;
+        };
         const readLuxtronikResponse = (text) => {
             if (typeof text !== 'string' || text.length > 262144) throw new Error('Invalid response');
-            const xml = new DOMParser().parseFromString(text, 'application/xml');
-            if (xml.querySelector('parsererror')) throw new Error('Invalid XML');
-            const root = xml.documentElement;
+            const root = parseLuxtronikDocument(text).documentElement;
             const type = root.localName.toLowerCase();
             if (type === 'navigation') {
                 const menus = luxtronikElements(root, 'item').filter(item =>

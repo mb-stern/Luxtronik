@@ -62,6 +62,7 @@ class LuxtronikFixture:
         self.nested_display = False
         self.alternate_remote = False
         self.remote_locked = False
+        self.json_display = False
         self.eev_values = ('34.8 %','100.0 %')
         self.output_xml = None
         self.information_xml = None
@@ -74,6 +75,8 @@ class LuxtronikFixture:
         index = len(self.connections) + 1
         connection = {'route': route, 'closed': False, 'navigation': False,
                       'display': False, 'menu': f'remote-{index}', 'lcd': f'lcd-{index}', 'commands':[]}
+        if self.json_display:
+            connection['menu']='0xc5b080';connection['lcd']='0xc540b8'
         self.connections.append(connection)
 
         def display_reply(xml):
@@ -90,6 +93,11 @@ class LuxtronikFixture:
                     return
                 if not connection['navigation']:
                     connection['navigation'] = True
+                    if self.json_display:
+                        navigation=json.loads((repository/'tests/fixtures/websocket-json-navigation.json').read_text())
+                        navigation['items'][-1]['readOnly']=self.remote_locked
+                        route.send(json.dumps(navigation))
+                        return
                     information = '<item id="info"><name>Informationen</name></item>'
                     if self.inline_outputs:
                         information = '<item id="info"><name>Informationen</name><item><name>Ausgänge</name><item id="inline-eev"><name>EEV Heizen</name><value>0.0 %</value></item></item></item>'
@@ -99,6 +107,10 @@ class LuxtronikFixture:
                                f'<item id="{connection["menu"]}"><name>{self.remote_name}</name>{lock}</item>'
                                '</item></Navigation>')
                 elif connection['display']:
+                    if self.json_display:
+                        route.send(json.dumps({'type':'values','items':[] if self.empty_updates else
+                            [{'id':connection['lcd'],'value':self.image}]}))
+                        return
                     bitmap = f'<img>{self.image}</img>' if self.nested_display else self.image
                     display_reply('<Values/>' if self.empty_updates else
                                f'<Values><item id="{connection["lcd"]}"><value>{bitmap}</value></item></Values>')
@@ -123,6 +135,11 @@ class LuxtronikFixture:
                     return
                 assert message == 'GET;' + connection['menu'], message
                 connection['display'] = True
+                if self.json_display:
+                    content=json.loads((repository/'tests/fixtures/websocket-json-content.json').read_text())
+                    content['remote']=self.image
+                    route.send(json.dumps(content))
+                    return
                 bitmap = f'<img>{self.image}</img>'
                 if self.nested_display:
                     bitmap = f'<value><container>{bitmap}</container></value>'
@@ -1217,6 +1234,31 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert not any(c.startswith('MOVE;') for c in peer.commands)
                 remote_page.close()
             print(json.dumps({'luxtronik':'PASS','menu_and_xml_variants':'PASS','advertised_fallback':'PASS','locked_fallback':'PASS'}))
+            # Captured JSON navigation and Content.remote envelope, with deterministic LCD pixels.
+            for locked in [False,True]:
+                remote_page=browser.new_page()
+                peer=LuxtronikFixture();peer.json_display=True;peer.remote_locked=locked
+                remote_page.route_web_socket(re.compile(r'^ws://127\.0\.0\.1:8214/$'),peer.connect)
+                remote_page.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
+                remote_page.evaluate('(url)=>window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:url}})',web_url)
+                remote_page.locator('#gSettings').dispatch_event('click')
+                if locked:
+                    remote_page.wait_for_function('document.querySelector("#wp-luxtronik-help").textContent.includes("nicht zur Bedienung freigegeben")')
+                    assert not any(c.startswith('GET;') for c in peer.commands)
+                else:
+                    remote_page.wait_for_function('!document.querySelector("#wp-luxtronik-controls").disabled')
+                    assert [c for c in peer.commands if c.startswith('GET;')]==['GET;0xc5b080']
+                    assert remote_page.locator('#wp-luxtronik-display').evaluate('e=>Array.from(e.getContext("2d").getImageData(0,0,1,1).data)')==[255,255,255,255]
+                    peer.image=base64.b64encode(bytes(1280)).decode()
+                    remote_page.wait_for_function('document.querySelector("#wp-luxtronik-display").getContext("2d").getImageData(0,0,1,1).data[0]===0')
+                    # A subsequent JSON lock must also disable an already running display.
+                    peer.connections[-1]['route'].send(json.dumps({'type':'Navigation','items':[
+                        {'id':'0xc5b080','name':'Fernsteuerung','readOnly':True}]}))
+                    remote_page.wait_for_function('document.querySelector("#wp-luxtronik-controls").disabled')
+                    assert 'nicht zur Bedienung freigegeben' in remote_page.locator('#wp-luxtronik-help').text_content()
+                assert not any(c.startswith('MOVE;') for c in peer.commands)
+                remote_page.close()
+            print(json.dumps({'luxtronik_json':'PASS','captured_navigation':'PASS','remote_bitmap':'PASS','values':'PASS','boolean_lock':'PASS'}))
             # HTTPS Symcon must offer a separate tab instead of a blocked ws connection.
             secure=browser.new_page()
             secure.route('https://symcon.test/**', lambda route: route.fulfill(

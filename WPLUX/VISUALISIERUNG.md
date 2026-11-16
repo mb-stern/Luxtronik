@@ -255,6 +255,13 @@ ursprüngliche WebSocket-Protokoll mit dem Regler. Aus einer HTTPS-Visualisierun
 bietet es das separat geöffnete Originalinterface an. Im SHI-Lesebetrieb und bei
 deaktivierter Instanz wird das Bedienfeld nicht angeboten.
 
+XML-Nachrichten älterer Firmware und JSON-Nachrichten neuerer Firmware werden
+automatisch unterschieden. Bei JSON wird die LCD-Bitmap aus `Content.remote`
+gelesen; nachfolgende `Values.items` aktualisieren sie über ihre Displaykennung.
+Die JSON-Navigationsflags `readOnly: false` und `readOnly: true` werden als
+Freigabe beziehungsweise Sperre behandelt. Die serverseitige WebSocket-Abfrage
+und deren Diagnose unterstützen ebenfalls beide Nachrichtenformen.
+
 Die Menüs „Fernsteuerung“, „Fernbedienung“, „Remote Control“ und „Remote Display“
 werden anhand ihrer vom Regler gelieferten Kennungen erkannt. Zusätzliche
 XML-Container um die LCD-Bitmap sind zulässig; das 160×64-Displayformat bleibt

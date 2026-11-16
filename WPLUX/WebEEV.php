@@ -150,11 +150,56 @@ final class LuxtronikWebEEVClient
         return $root;
     }
 
+    /** Normalize the firmware's JSON menu tree into the existing read-only XML mapping. */
+    private function jsonDocument(string $text): DOMDocument
+    {
+        try {$message=json_decode($text,false,80,JSON_THROW_ON_ERROR);}
+        catch(JsonException $error) {throw new RuntimeException('Ungültige WebSocket-JSON-Antwort.',0,$error);}
+        if(!$message instanceof stdClass || !is_string($message->type??null)
+            || !preg_match('/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/D',$message->type)) {
+            throw new RuntimeException('Ungültiger WebSocket-JSON-Nachrichtentyp.');
+        }
+        $document=new DOMDocument();
+        $root=$document->createElement($message->type);$document->appendChild($root);
+        $remaining=4096;
+        $append=function(DOMElement $parent,mixed $node,int $depth=0) use (&$append,&$remaining,$document):void {
+            if(!$node instanceof stdClass || $depth>32 || --$remaining<0) throw new RuntimeException('Ungültige WebSocket-JSON-Menüstruktur.');
+            if(property_exists($node,'id')) {
+                if(!is_string($node->id)) throw new RuntimeException('Ungültige WebSocket-JSON-Kennung.');
+                $parent->setAttribute('id',$node->id);
+            }
+            foreach(['name','value','readOnly'] as $name) {
+                $value=$node->$name??null;
+                if($value===null) continue;
+                if(!is_scalar($value) || (is_float($value) && !is_finite($value)) || ($name==='readOnly' && !is_bool($value))) {
+                    throw new RuntimeException('Ungültiges WebSocket-JSON-Feld.');
+                }
+                $field=$document->createElement($name);
+                $field->appendChild($document->createTextNode($name==='readOnly'?($value?'1':''):(is_bool($value)?($value?'true':'false'):(string)$value)));
+                $parent->appendChild($field);
+            }
+            if(property_exists($node,'items')) {
+                if(!is_array($node->items)) throw new RuntimeException('Ungültige WebSocket-JSON-Menüliste.');
+                foreach($node->items as $child) {
+                    $item=$document->createElement('item');$parent->appendChild($item);
+                    $append($item,$child,$depth+1);
+                }
+            }
+        };
+        $append($root,$message);
+        return $document;
+    }
+
     private function document(string $expected): DOMDocument
     {
         for ($i=0;$i<32;++$i) {
             $text = $this->message();
             if(trim($text)==='') continue;
+            if(str_starts_with(ltrim($text),'{')) {
+                $document=$this->jsonDocument($text);
+                if(strcasecmp($document->documentElement->localName,$expected)===0) return $document;
+                continue;
+            }
             if (stripos($text,'<!DOCTYPE')!==false || stripos($text,'<!ENTITY')!==false) throw new RuntimeException('Unzulässiger XML-Dokumenttyp.');
             $previous = libxml_use_internal_errors(true);
             try {

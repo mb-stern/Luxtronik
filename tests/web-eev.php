@@ -64,7 +64,7 @@ function withEEVPeer(callable $test,array $options=[]): void
             foreach($options['extra']??[] as $menu) $extra.='<item id="'.$menu['id'].'"><name>'.$menu['name'].'</name></item>';
             $info='<item id="0x53b038"><name>Informationen</name><item id="'.$id.'"><name>Ausgänge</name></item>'.$extra.'</item>';
             if(!empty($options['separateInfo'])) $info='<item id="0x53b038"><name>Informationen</name></item>';
-            $send('<Navigation id="0x53c698">'.(!empty($options['noInfo'])?'':$info).($options['remoteNavigation']??'').'</Navigation>');
+            $send($options['navigation']??('<Navigation id="0x53c698">'.(!empty($options['noInfo'])?'':$info).($options['remoteNavigation']??'').'</Navigation>'));
             if(!empty($options['separateInfo'])) {
                 check($receive()===[1,'GET;0x53b038'],'Incorrect information ID');
                 $send('<Navigation/>'); // A queued navigation refresh is not a content reply.
@@ -117,6 +117,35 @@ $tests['reported firmware XML maps named EEV values without a Java index'] = sta
         check($values['EEV_Heizen']===['value'=>42.9,'webId'=>'0x53fcd4'],'Wrong heating field');
         check($values['EEV_Kuehlen']['value']===100.0,'Wrong cooling field');
     });
+};
+$tests['captured JSON navigation reads informational JSON without mistaking false for a lock'] = static function():void {
+    withEEVPeer(static function(int $port):void {
+        $client=new LuxtronikWebEEVClient('127.0.0.1',$port,1000);
+        $values=$client->read('999999',['Ausgänge']);
+        check($values['EEV_Heizen']===['value'=>42.9,'webId'=>'json-heat'],'JSON output was not mapped');
+        check($values['EEV_Kuehlen']['value']===0.0,'JSON zero was discarded');
+        $navigation=$client->snapshot()['navigation'];
+        check(in_array(['id'=>'0xc5b080','name'=>'Fernsteuerung','readOnly'=>''],$navigation,true),'JSON false became a lock');
+        check(in_array(['id'=>'0xc568e8','name'=>'Zeitschaltprogramm','readOnly'=>'1'],$navigation,true),'JSON true lock was lost');
+    },['navigation'=>file_get_contents(__DIR__.'/fixtures/websocket-json-navigation.json'),
+        'outputID'=>'0xc62f60','xml'=>json_encode(['type'=>'Content','id'=>'0xc62f60','name'=>'Ausgänge','items'=>[
+            ['id'=>'json-heat','name'=>'EEV Heizen','value'=>'42,9 %'],
+            ['id'=>'json-cool','name'=>'EEV Kühlen','value'=>0],
+            ['id'=>'text','name'=>'A&B <HUP>','value'=>'<not-markup>']
+        ]],JSON_THROW_ON_ERROR),'expectPages'=>['Ausgänge']]);
+};
+$tests['malformed or excessive JSON menu structures are rejected before further GETs'] = static function():void {
+    $deep=['items'=>[]];
+    for($level=0;$level<35;++$level) $deep=['items'=>[$deep]];
+    foreach(['{"type":"Content","items":{}}','{"type":"Content","items":[false]}','{"type":"Content","items":[{"readOnly":"false"}]}',
+        json_encode(['type'=>'Content','items'=>[$deep]],JSON_THROW_ON_ERROR),
+        '{"type":"Content","items":['.implode(',',array_fill(0,4097,'{}')).']}'] as $json) {
+        withEEVPeer(static function(int $port):void {
+            try {(new LuxtronikWebEEVClient('127.0.0.1',$port,1000))->read('999999');}
+            catch(RuntimeException $expected) {return;}
+            throw new RuntimeException('Invalid JSON accepted');
+        },['xml'=>$json,'expectPages'=>['Ausgänge']]);
+    }
 };
 $tests['zero comma decimals and newly discovered field IDs stay valid'] = static function(): void {
     withEEVPeer(static function(int $port):void {

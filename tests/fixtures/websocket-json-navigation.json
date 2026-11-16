@@ -1,0 +1,186 @@
+{
+  "type": "Navigation",
+  "items": [
+    {
+      "items": [
+        {
+          "items": [],
+          "id": "0xc54010",
+          "name": "Temperaturen",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc64a70",
+          "name": "Eingänge",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc62f60",
+          "name": "Ausgänge",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc595f8",
+          "name": "Ablaufzeiten",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xbe5528",
+          "name": "Betriebsstunden",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc50338",
+          "name": "Fehlerspeicher",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc574b8",
+          "name": "Abschaltungen",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc4dd80",
+          "name": "Anlagenstatus",
+          "readOnly": false
+        },
+        {
+          "items": [
+            {
+              "items": [],
+              "id": "0xc56988",
+              "name": "Wärmemenge",
+              "readOnly": false
+            },
+            {
+              "items": [],
+              "id": "0xc53d70",
+              "name": "Leistungsaufnahme",
+              "readOnly": false
+            }
+          ],
+          "id": "0xc5ac48",
+          "name": "Energiemonitor",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc6d948",
+          "name": "GLT",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc56298",
+          "name": "Smart Home Interface",
+          "readOnly": false
+        }
+      ],
+      "id": "0xc6ea68",
+      "name": "Informationen",
+      "readOnly": false
+    },
+    {
+      "items": [
+        {
+          "items": [],
+          "id": "0xc54e60",
+          "name": "Betriebsart",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc65040",
+          "name": "Temperaturen",
+          "readOnly": false
+        },
+        {
+          "items": [],
+          "id": "0xc6d2b0",
+          "name": "System Einstellung",
+          "readOnly": false
+        }
+      ],
+      "id": "0xc6ab20",
+      "name": "Einstellungen",
+      "readOnly": false
+    },
+    {
+      "items": [
+        {
+          "items": [
+            {
+              "items": [],
+              "id": "0xc6dfb8",
+              "name": "Woche",
+              "readOnly": false
+            },
+            {
+              "items": [],
+              "id": "0xc6a4c0",
+              "name": "5+2",
+              "readOnly": false
+            },
+            {
+              "items": [],
+              "id": "0xc6aab0",
+              "name": "Tage (Mo, Di...)",
+              "readOnly": false
+            }
+          ],
+          "id": "0xc653a8",
+          "name": "Heizung",
+          "readOnly": true
+        },
+        {
+          "items": [
+            {
+              "items": [],
+              "id": "0xc69fb0",
+              "name": "Woche",
+              "readOnly": false
+            },
+            {
+              "items": [],
+              "id": "0xc66800",
+              "name": "5+2",
+              "readOnly": false
+            },
+            {
+              "items": [],
+              "id": "0xc5a808",
+              "name": "Tage (Mo, Di...)",
+              "readOnly": false
+            }
+          ],
+          "id": "0xbf6550",
+          "name": "Warmwasser",
+          "readOnly": true
+        }
+      ],
+      "id": "0xc568e8",
+      "name": "Zeitschaltprogramm",
+      "readOnly": true
+    },
+    {
+      "items": [],
+      "id": "0xc5adc8",
+      "name": "Zugang: Installateur",
+      "readOnly": false
+    },
+    {
+      "items": [],
+      "id": "0xc5b080",
+      "name": "Fernsteuerung",
+      "readOnly": false
+    }
+  ],
+  "id": "0xc647d8"
+}
