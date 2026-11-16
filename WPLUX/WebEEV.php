@@ -51,6 +51,19 @@ final class LuxtronikWebEEVClient
             $this->frame(1,'LOGIN;'.($password!==''?$password:'0'));
             $this->frame(1,'REFRESH');
             $navigation = $this->document('Navigation');
+            // Only menu descriptors, never raw XML, login data or display contents.
+            $navigationItems=[];
+            foreach ($navigation->getElementsByTagName('*') as $node) {
+                if (strtolower($node->localName)!=='item') continue;
+                $entry=['id'=>substr($node->getAttribute('id'),0,128),'name'=>'','readOnly'=>''];
+                foreach ($node->childNodes as $child) if ($child instanceof DOMElement) {
+                    $key=match(strtolower($child->localName)) {'name'=>'name','readonly'=>'readOnly',default=>null};
+                    if($key!==null) $entry[$key]=implode('',array_slice(preg_split('//u',trim($child->textContent),-1,PREG_SPLIT_NO_EMPTY),0,256));
+                }
+                if($entry['name']!=='') $navigationItems[]=$entry;
+                if(count($navigationItems)>=256) break;
+            }
+            $this->snapshot['navigation']=$navigationItems;
             $information = $this->item($navigation->documentElement,['informationen','information']);
             if ($information===null) throw new RuntimeException('EEV: Informationen fehlt; Webinterface-Anmeldung prüfen.');
             $info = $this->resolve($information);
@@ -78,7 +91,7 @@ final class LuxtronikWebEEVClient
             }
             foreach($requestedPages??[] as $page) if(!array_filter($groups,fn($group)=>$this->key($group['name'])===$this->key($page)))
                 $errors[]=['name'=>$page,'error'=>'Benötigte Informationsseite nicht geliefert.'];
-            $this->snapshot=['count'=>array_sum(array_column($groups,'count')),'groups'=>$groups,'errors'=>$errors,'complete'=>$errors===[],
+            $this->snapshot=['navigation'=>$navigationItems,'count'=>array_sum(array_column($groups,'count')),'groups'=>$groups,'errors'=>$errors,'complete'=>$errors===[],
                 'fullScan'=>$requestedPages===null,'requestedPages'=>$requestedPages];
             if ($outputs===null) {
                 if ($groups!==[]) return [];
@@ -574,7 +587,7 @@ trait LuxtronikWebEEV
             $eev=$client->read($this->ReadPropertyString('WebSocketPassword'));
             $snapshot=$client->snapshot();
             $values=$eev+$this->MapWebSnapshot($snapshot);
-            $report+=['count'=>$snapshot['count'],'groups'=>$snapshot['groups'],'errors'=>$snapshot['errors'],
+            $report+=['navigation'=>$snapshot['navigation']??[],'count'=>$snapshot['count'],'groups'=>$snapshot['groups'],'errors'=>$snapshot['errors'],
                 'mappedCount'=>count($values),'eev'=>$eev,'deviceTimezone'=>$this->ReadPropertyString('WebSocketTimezone')?:date_default_timezone_get()];
             $report['ok']=!empty($snapshot['complete']);
             if($source===$this->WebEEVSourceKey()) $this->SetBuffer('WebInventory',json_encode([
@@ -583,6 +596,7 @@ trait LuxtronikWebEEV
         } catch(Throwable $error) {
             if($error instanceof LuxtronikInstanceUnavailable) throw $error;
             $report['error']=$error->getMessage();
+            if(isset($client)) $report['navigation']=$client->snapshot()['navigation']??[];
         } finally {
             if($entered) IPS_SemaphoreLeave($lock);
         }

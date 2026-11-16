@@ -64,7 +64,7 @@ function withEEVPeer(callable $test,array $options=[]): void
             foreach($options['extra']??[] as $menu) $extra.='<item id="'.$menu['id'].'"><name>'.$menu['name'].'</name></item>';
             $info='<item id="0x53b038"><name>Informationen</name><item id="'.$id.'"><name>Ausgänge</name></item>'.$extra.'</item>';
             if(!empty($options['separateInfo'])) $info='<item id="0x53b038"><name>Informationen</name></item>';
-            $send('<Navigation id="0x53c698">'.$info.'</Navigation>');
+            $send('<Navigation id="0x53c698">'.(!empty($options['noInfo'])?'':$info).($options['remoteNavigation']??'').'</Navigation>');
             if(!empty($options['separateInfo'])) {
                 check($receive()===[1,'GET;0x53b038'],'Incorrect information ID');
                 $send('<Navigation/>'); // A queued navigation refresh is not a content reply.
@@ -445,13 +445,24 @@ $tests['configuration diagnostic downloads the full read-only report without pro
         $json=$module->RunWebSocketDiagnostic();$report=json_decode($json,true);
         check($report['ok'] && $report['count']===3 && count($report['groups'])===2,'Manual configuration diagnostic missed pages');
         check(!str_contains($json,'test-secret'),'Diagnostic exposed authentication');
+        check(in_array(['id'=>'new-remote','name'=>'Fernbedienung','readOnly'=>'1'],$report['navigation'],true),'Remote navigation descriptor missing');
+        check(!str_contains($json,'PRIVATE-DISPLAY-DATA'),'Diagnostic exposed remote page contents');
         check($module->GetIDForIdent('EEV_Heizen')===false && ($module->buffers['WebEEVCache']??'')==='','Manual diagnostic changed selected live values or created objects');
         $form=fields(json_decode($module->GetConfigurationForm(),true));
         check(isset($form['WebInventoryStatus']) && !isset($form['WebSocketSupplement']),'Diagnostic still requires a visualization switch');
         check(array_filter($module->formUpdates,static fn($u)=>$u[0]==='WebInventoryStatus')!==[],'Configuration status was not updated');
         check(!str_contains($module->GetVisualizationTile(),'wp-eev-test') && !str_contains($module->GetVisualizationTile(),'wp-web-test'),'Diagnostics retained in visualization');
-    },['password'=>'test-secret','extra'=>[['name'=>'Temperaturen','id'=>'temp','xml'=>'<Content><item><name>Vorlauf</name><value>24.4°C</value></item></Content>']],
+    },['password'=>'test-secret','remoteNavigation'=>'<item id="new-remote"><name>Fernbedienung</name><readOnly>1</readOnly><img>PRIVATE-DISPLAY-DATA</img></item>','extra'=>[['name'=>'Temperaturen','id'=>'temp','xml'=>'<Content><item><name>Vorlauf</name><value>24.4°C</value></item></Content>']],
         'expectPages'=>['Ausgänge','Temperaturen']]);
+};
+
+$tests['diagnostic retains remote menu descriptors when information discovery fails'] = static function():void {
+    withEEVPeer(static function(int $port):void {
+        $module=new WebEEVTestModule();$module->webTestPort=$port;
+        $json=$module->RunWebSocketDiagnostic();$report=json_decode($json,true);
+        check(!$report['ok'] && isset($report['error']),'Missing informational menu was not reported');
+        check($report['navigation']===[['id'=>'remote-v2','name'=>'Fernbedienung','readOnly'=>'']],'Navigation was lost after failed discovery');
+    },['noInfo'=>true,'remoteNavigation'=>'<item id="remote-v2"><name>Fernbedienung</name></item>','expectPages'=>[]]);
 };
 
 $tests['WebSocket fault history reuses existing code and timestamp Idents with local dates and clears an empty log'] = static function():void {

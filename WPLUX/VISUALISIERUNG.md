@@ -255,6 +255,19 @@ ursprüngliche WebSocket-Protokoll mit dem Regler. Aus einer HTTPS-Visualisierun
 bietet es das separat geöffnete Originalinterface an. Im SHI-Lesebetrieb und bei
 deaktivierter Instanz wird das Bedienfeld nicht angeboten.
 
+Die Menüs „Fernsteuerung“, „Fernbedienung“, „Remote Control“ und „Remote Display“
+werden anhand ihrer vom Regler gelieferten Kennungen erkannt. Zusätzliche
+XML-Container um die LCD-Bitmap sind zulässig; das 160×64-Displayformat bleibt
+unverändert. Bietet der Regler mehrere solche Menüs an, wird bei fehlenden
+Displaydaten das nächste angebotene Menü geprüft. Eine vom Regler gemeldete
+Bedienungssperre beendet die Verbindung.
+
+Bleibt die Anzeige nach einem Firmwareupdate leer, unter **WebSocket → Diagnose**
+„Alle WebSocket-Werte prüfen und Bericht herunterladen“ ausführen. Der Bericht
+enthält auch Menükennungen, Namen und Sperrkennzeichen; Passwörter und Bilddaten
+werden nicht aufgenommen. Eine unveränderte IP-Adresse allein bestätigt nicht,
+dass die interne WebSocket-Kommunikation unverändert geblieben ist.
+
 Protokoll, Anzeige und Wiederverbindung sind mit einem lokalen Browser-Simulator
 geprüft. Die reale Geräteintegration und das Verhalten in einer echten
 Symcon-Instanz sind weiterhin separat zu prüfen.

@@ -58,6 +58,10 @@ class LuxtronikFixture:
         self.commands = []
         self.empty_updates = False
         self.silent = False
+        self.remote_name = 'Fernsteuerung'
+        self.nested_display = False
+        self.alternate_remote = False
+        self.remote_locked = False
         self.eev_values = ('34.8 %','100.0 %')
         self.output_xml = None
         self.information_xml = None
@@ -72,6 +76,12 @@ class LuxtronikFixture:
                       'display': False, 'menu': f'remote-{index}', 'lcd': f'lcd-{index}', 'commands':[]}
         self.connections.append(connection)
 
+        def display_reply(xml):
+            if self.nested_display:
+                xml = re.sub(r'<(/?)(Navigation|Content|Values|item|name|value|img)(?=[ > /])',
+                             lambda match: '<' + match[1] + match[2].upper(), xml)
+            route.send(xml)
+
         def receive(message):
             self.commands.append(message)
             connection['commands'].append(message)
@@ -83,12 +93,15 @@ class LuxtronikFixture:
                     information = '<item id="info"><name>Informationen</name></item>'
                     if self.inline_outputs:
                         information = '<item id="info"><name>Informationen</name><item><name>Ausgänge</name><item id="inline-eev"><name>EEV Heizen</name><value>0.0 %</value></item></item></item>'
-                    route.send('<Navigation><item>' + information +
-                               f'<item id="{connection["menu"]}"><name>Fernsteuerung</name></item>'
+                    legacy = '<item id="legacy"><name>Fernsteuerung</name></item>' if self.alternate_remote else ''
+                    lock = '<readOnly>1</readOnly>' if self.remote_locked else ''
+                    display_reply('<Navigation><item>' + information + legacy +
+                               f'<item id="{connection["menu"]}"><name>{self.remote_name}</name>{lock}</item>'
                                '</item></Navigation>')
                 elif connection['display']:
-                    route.send('<Values/>' if self.empty_updates else
-                               f'<Values><item id="{connection["lcd"]}"><value>{self.image}</value></item></Values>')
+                    bitmap = f'<img>{self.image}</img>' if self.nested_display else self.image
+                    display_reply('<Values/>' if self.empty_updates else
+                               f'<Values><item id="{connection["lcd"]}"><value>{bitmap}</value></item></Values>')
             elif message.startswith('GET;'):
                 if message=='GET;info':
                     extra=''.join(f'<item id="{item["id"]}"><name>{item["name"]}</name></item>' for item in self.additional_information)
@@ -105,10 +118,16 @@ class LuxtronikFixture:
                     if message=='GET;'+item['id']:
                         route.send(item['xml'])
                         return
+                if self.alternate_remote and message == 'GET;legacy':
+                    display_reply('<Content><name>Fernsteuerung</name></Content>')
+                    return
                 assert message == 'GET;' + connection['menu'], message
                 connection['display'] = True
-                route.send('<Content><name>Fernsteuerung</name><item><name>Gerät</name>'
-                           f'<item id="{connection["lcd"]}"><name>LCD</name><img>{self.image}</img>'
+                bitmap = f'<img>{self.image}</img>'
+                if self.nested_display:
+                    bitmap = f'<value><container>{bitmap}</container></value>'
+                display_reply('<Content><name>Fernsteuerung</name><item><name>Gerät</name>'
+                           f'<item id="{connection["lcd"]}"><name>LCD</name>{bitmap}'
                            '</item></item></Content>')
 
         route.on_message(receive)
@@ -1168,6 +1187,36 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
             liveness.locator('#wp-luxtronik-close').click()
             liveness.close()
             print(json.dumps({'luxtronik':'PASS','idle_heartbeat':'PASS','reconnect_limit':'PASS'}))
+            # Compatibility variants are synthetic: no claim about a particular firmware's payload.
+            for name, nested, alternate, locked in [
+                ('Fernbedienung', True, False, False),
+                (' Remote   Control ', False, False, False),
+                ('Fernbedienung', True, True, False),
+                ('Fernbedienung', True, True, True),
+            ]:
+                remote_page=browser.new_page()
+                peer=LuxtronikFixture()
+                peer.remote_name=name;peer.nested_display=nested
+                peer.alternate_remote=alternate;peer.remote_locked=locked
+                remote_page.route_web_socket(re.compile(r'^ws://127\.0\.0\.1:8214/$'),peer.connect)
+                remote_page.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
+                remote_page.evaluate('(url)=>window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:url}})',web_url)
+                remote_page.locator('#gSettings').dispatch_event('click')
+                if locked:
+                    remote_page.wait_for_function('document.querySelector("#wp-luxtronik-help").textContent.includes("nicht zur Bedienung freigegeben")')
+                    assert remote_page.locator('#wp-luxtronik-controls').evaluate('e=>e.disabled')
+                    assert 'GET;remote-1' not in peer.commands
+                else:
+                    remote_page.wait_for_function('!document.querySelector("#wp-luxtronik-controls").disabled')
+                    assert remote_page.locator('#wp-luxtronik-display').evaluate('e=>Array.from(e.getContext("2d").getImageData(0,0,1,1).data)')==[255,255,255,255]
+                    # Verify the update path too, using the opposite pixel value.
+                    peer.image=base64.b64encode(bytes(1280)).decode()
+                    remote_page.wait_for_function('document.querySelector("#wp-luxtronik-display").getContext("2d").getImageData(0,0,1,1).data[0]===0')
+                    if alternate:
+                        assert [c for c in peer.commands if c.startswith('GET;')]==['GET;legacy','GET;remote-1']
+                assert not any(c.startswith('MOVE;') for c in peer.commands)
+                remote_page.close()
+            print(json.dumps({'luxtronik':'PASS','menu_and_xml_variants':'PASS','advertised_fallback':'PASS','locked_fallback':'PASS'}))
             # HTTPS Symcon must offer a separate tab instead of a blocked ws connection.
             secure=browser.new_page()
             secure.route('https://symcon.test/**', lambda route: route.fulfill(

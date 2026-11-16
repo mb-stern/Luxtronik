@@ -2515,6 +2515,8 @@ window.SymconHeatPump = {
         let luxtronikConnectedAt = 0;
         let luxtronikReconnectOnVisible = false;
         let luxtronikMenuID = '';
+        let luxtronikMenus = [];
+        let luxtronikMenuIndex = -1;
         let luxtronikDisplayID = '';
         let luxtronikReady = false;
         let luxtronikPressed = false;
@@ -2546,6 +2548,8 @@ window.SymconHeatPump = {
             luxtronikSocket = null;
             if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, 'Bedienverbindung beendet');
             luxtronikMenuID = luxtronikDisplayID = '';
+            luxtronikMenus = [];
+            luxtronikMenuIndex = -1;
             luxtronikReady = false;
             luxtronikControls.disabled = true;
             luxtronikCanvas.getContext('2d').clearRect(0, 0, 160, 64);
@@ -2596,43 +2600,73 @@ window.SymconHeatPump = {
             if (firstFrame && document.activeElement?.tagName !== 'INPUT') luxtronikCanvas.focus({preventScroll: true});
             luxtronikHelp.textContent = '';
         };
+        const luxtronikElements = (node, name) => Array.from(node.getElementsByTagName('*'))
+            .filter(element => element.localName.toLowerCase() === name);
+        const luxtronikChildText = (node, name) => Array.from(node.children)
+            .find(child => child.localName.toLowerCase() === name)?.textContent.trim() || '';
+        const validLuxtronikID = (id) => typeof id === 'string' && id.length > 0 && id.length <= 128 && !/[\x00-\x20;]/.test(id);
+        const requestLuxtronikMenu = (index) => {
+            const menu = luxtronikMenus[index];
+            if (!menu) throw new Error('Missing LCD image');
+            // Honor the navigation lock used by the original buildNavLine().
+            if (menu.readOnly) {
+                failLuxtronik('Die Fernsteuerung ist vom Regler nicht zur Bedienung freigegeben. Bitte das Originalinterface öffnen.');
+                return;
+            }
+            releaseLuxtronikButton();
+            luxtronikReady = false;
+            luxtronikControls.disabled = true;
+            luxtronikMenuIndex = index;
+            luxtronikMenuID = menu.id;
+            luxtronikDisplayID = '';
+            luxtronikSocket.send('GET;' + menu.id);
+        };
         const readLuxtronikResponse = (text) => {
             if (typeof text !== 'string' || text.length > 262144) throw new Error('Invalid response');
             const xml = new DOMParser().parseFromString(text, 'application/xml');
             if (xml.querySelector('parsererror')) throw new Error('Invalid XML');
             const root = xml.documentElement;
-            const childText = (node, name) => Array.from(node.children).find(child => child.localName === name)?.textContent.trim() || '';
-            if (root.localName === 'Navigation') {
-                const remote = Array.from(root.querySelectorAll('item')).find(item =>
-                    ['fernsteuerung', 'remote control'].includes(childText(item, 'name').toLowerCase()));
-                const id = remote?.getAttribute('id');
-                if (!id || /[;\r\n]/.test(id)) {
+            const type = root.localName.toLowerCase();
+            if (type === 'navigation') {
+                const menus = luxtronikElements(root, 'item').filter(item =>
+                    ['fernsteuerung', 'fernbedienung', 'remotecontrol', 'remotedisplay'].includes(
+                        luxtronikChildText(item, 'name').toLowerCase().replace(/[\s_-]+/g, '')))
+                    .map(item => ({id: item.getAttribute('id'), readOnly: luxtronikChildText(item, 'readonly')}))
+                    .filter(menu => validLuxtronikID(menu.id))
+                    .filter((menu, index, all) => all.findIndex(other => other.id === menu.id) === index)
+                    .slice(0, 8);
+                if (!menus.length) {
                     failLuxtronik('Die Fernsteuerung wird vom Regler nicht angeboten. Bitte das Originalinterface separat öffnen.');
                     return;
                 }
-                // Honor the navigation lock used by the original buildNavLine().
-                if (childText(remote, 'readOnly')) {
-                    failLuxtronik('Die Fernsteuerung ist vom Regler nicht zur Bedienung freigegeben. Bitte das Originalinterface öffnen.');
-                    return;
+                const current = menus.findIndex(menu => menu.id === luxtronikMenuID);
+                luxtronikMenus = menus;
+                // A repeated navigation must still honor a newly advertised lock.
+                if (current < 0 || menus[current].readOnly) requestLuxtronikMenu(current < 0 ? 0 : current);
+                else luxtronikMenuIndex = current;
+            } else if (type === 'content' && luxtronikMenuID) {
+                // Some interfaces wrap the bitmap in <value> or another container.
+                for (const image of luxtronikElements(root, 'img')) {
+                    let item = image.parentElement;
+                    while (item && item !== root && !(item.localName.toLowerCase() === 'item' && validLuxtronikID(item.getAttribute('id')))) {
+                        item = item.parentElement;
+                    }
+                    if (!item || item === root) continue;
+                    try {
+                        drawLuxtronikDisplay(image.textContent);
+                        luxtronikDisplayID = item.getAttribute('id');
+                        return true;
+                    } catch (_) { /* Try the next advertised bitmap/menu, never a guessed endpoint. */ }
                 }
-                if (id !== luxtronikMenuID) {
-                    releaseLuxtronikButton();
-                    luxtronikReady = false;
-                    luxtronikControls.disabled = true;
-                    luxtronikMenuID = id;
-                    luxtronikDisplayID = '';
-                    luxtronikSocket.send('GET;' + id);
+                requestLuxtronikMenu(luxtronikMenuIndex + 1);
+            } else if (type === 'values' && luxtronikDisplayID) {
+                const item = luxtronikElements(root, 'item').find(node => node.getAttribute('id') === luxtronikDisplayID);
+                if (item) {
+                    const image = luxtronikElements(item, 'img')[0];
+                    drawLuxtronikDisplay(image ? image.textContent : luxtronikChildText(item, 'value'));
                 }
-            } else if (root.localName === 'Content') {
-                const image = root.querySelector('item > img');
-                if (!image || !image.parentElement.getAttribute('id')) throw new Error('Missing LCD image');
-                luxtronikDisplayID = image.parentElement.getAttribute('id');
-                drawLuxtronikDisplay(image.textContent);
-            } else if (root.localName.toUpperCase() === 'VALUES' && luxtronikDisplayID) {
-                const item = Array.from(root.querySelectorAll('item')).find(node => node.getAttribute('id') === luxtronikDisplayID);
-                if (item) drawLuxtronikDisplay(childText(item, 'value'));
             }
-            return ['NAVIGATION', 'CONTENT', 'VALUES'].includes(root.localName.toUpperCase());
+            return ['navigation', 'content', 'values'].includes(type);
         };
         const connectLuxtronik = (retry = false) => {
             stopLuxtronik();
