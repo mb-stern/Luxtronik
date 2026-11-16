@@ -8,8 +8,9 @@ Regler-/Symcon-Kombination benötigt weiterhin einen Gerätetest.
 
 1. Geräte-IP, gemeinsames Aktualisierungsintervall und Webinterface-Passwort unter
    **Verbindung und Lesen** eintragen. WebSocket wird automatisch erkannt.
-2. Für Modbus wie beim Goodwe-Modul ein natives **Symcon-Modbus-Gateway** als
-   übergeordnete Instanz verbinden. Client Socket zur Wärmepumpe: Port 502;
+2. Für Modbus wie beim Goodwe-Modul ein natives **Symcon-Modbus-Gateway**
+   als **eigene neue übergeordnete Instanz** anlegen. Ein bereits vom Wechselrichter
+   verwendetes Gateway gehört nicht zur Wärmepumpe. Eigener Client Socket: Port 502;
    Gateway: Modbus TCP und Geräteadresse normalerweise 1, Adressoffset 0.
 3. Gewünschte Messvariablen in der gemeinsamen **Istwertliste** wählen.
    „Aktuelle Quelle“ zeigt Java, WebSocket oder Modbus an. Alle zusätzlichen

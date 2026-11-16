@@ -76,10 +76,10 @@ class Luxtronik extends IPSModuleStrict
         $this->CreateVisualization();
     }
 
-    /** Same native Modbus parent interface used by the Goodwe module. Java and WebSocket remain independent. */
+    /** A dedicated native gateway belongs to this heat pump; gateways serving another device must not be reused. */
     public function GetCompatibleParents(): string
     {
-        return json_encode(['type'=>'connect','moduleIDs'=>['{A5F663AB-C400-4FE5-B207-4D67CC030564}']],JSON_THROW_ON_ERROR);
+        return json_encode(['type'=>'require','moduleIDs'=>['{A5F663AB-C400-4FE5-B207-4D67CC030564}']],JSON_THROW_ON_ERROR);
     }
 
     public function Migrate(string $JSONData): string
