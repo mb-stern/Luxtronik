@@ -144,7 +144,7 @@ $tests['interface column identifies Java Modbus and shared values without renami
         $m->properties['CommunicationMode']=$mode;$m->properties['ShowAdvancedModbusPoints']=true;$form=fields(json_decode($m->GetConfigurationForm(),true));$rows=array_column($form['IDListe']['values'],null,'id');
         check($rows[15]['interface']==='Java + Modbus + WebSocket' && $rows[14]['interface']==='Java + WebSocket' && !isset($rows[310041],$rows[310006]) && count($form['SHIControlList']['values'])===41
             && $rows[400001]['interface']==='WebSocket','Protocol overview missing');
-        check($rows[15]['name']==='Aussentemperatur' && array_column($form['SHIControlList']['values'],null,'id')[310006]['name']==='SHI Sollwert Warmwasser','Name changed or MB suffix survives');
+        check($rows[15]['name']==='Aussentemperatur' && array_column($form['SHIControlList']['values'],null,'id')[310006]['name']==='Sollwert Warmwasser','Name changed or MB suffix survives');
     }
 };
 $tests['full fragmented scan reads all 129 points without writes or measurement objects'] = static function ():void {
@@ -821,6 +821,113 @@ $tests['upgrading a previously shared beta control retains its object history an
     check($m->GetIDForIdent('Anpassung_Temp')===$old && GetValue($old)===-1.5 && IPS_GetName($old)==='Meine bisherige Korrektur','Beta control object or history replaced');
     check(!$m->actions['Anpassung_Temp'] && $m->GetIDForIdent('SHI_Offset_Heizen')!==false,'Legacy and independent SHI controls are not distinguished');
     shiThrows(fn()=>$m->RequestAction('Anpassung_Temp',1.0),'Old SHI action was silently redirected to a persistent Java write');
+};
+
+
+$tests['firmware from Java ASCII gates protocol options without changing stable configuration'] = static function():void {
+    $m=new Luxtronik();$original=$m->properties;
+    foreach(['V3.79'=>[false,false],'V3.81'=>[true,false],'V3.90.0'=>[true,false],
+        'V3.90'=>[true,null],'V3.90.1'=>[true,true],'V3.92.3'=>[true,true]] as $version=>$expected) {
+        $m=new Luxtronik();$original=$m->properties;
+        $raw=array_fill(0,100,0);
+        foreach(str_split($version) as $i=>$char) $raw[81+$i]=ord($char);
+        invoke($m,'RememberJavaFirmware',$raw);
+        check([invoke($m,'InterfaceSupport','websocket'),invoke($m,'InterfaceSupport','modbus')]===$expected,'Incorrect capabilities for '.$version);
+        $form=json_decode($m->GetConfigurationForm(),true,512,JSON_THROW_ON_ERROR);$all=fields($form);
+        $panels=array_column(array_filter($form['elements'],fn($e)=>isset($e['caption'])),null,'caption');
+        check($all['WebSocketPassword']['visible']===($expected[0]!==false)
+            && $panels['Modbus / SHI – externe Regelung']['visible']===($expected[1]!==false),'Unsupported protocol form remains visible');
+        check(str_contains($all['FirmwareStatus']['caption'],$version),'Recognized firmware missing from status');
+        $rows=array_column($all['IDListe']['values'],null,'id');
+        check(isset($rows[15]) && (isset($rows[400009])===($expected[0]!==false))
+            && (isset($rows[110103])===($expected[1]!==false)),'Native values or unsupported extra values incorrectly filtered');
+        check(json_decode($m->GetCompatibleParents(),true)['moduleIDs']===($expected[1]===true?['{A5F663AB-C400-4FE5-B207-4D67CC030564}']:[]),'Gateway offered before firmware support');
+    }
+    check($m->properties===$original && $m->writes===0,'Firmware detection changed configuration or sent a command');
+    $reloads=$m->formReloads;invoke($m,'RememberJavaFirmware',$raw);
+    check($m->formReloads===$reloads,'Unchanged version repeatedly reloads the form');
+};
+
+$tests['short Java firmware text does not invalidate complete WebSocket discovery each cycle'] = static function():void {
+    $m=new Luxtronik();invoke($m,'RememberFirmwareString','V3.92.3 (r12345)');
+    $m->buffers['WebInventory']='{"keep":true}';$reloads=$m->formReloads;
+    foreach(['V3.92.3','V3.92'] as $short) invoke($m,'RememberFirmwareString',$short);
+    check($m->buffers['WebInventory']==='{"keep":true}' && $m->formReloads===$reloads,'Short version text repeatedly invalidates discovery');
+    check(str_contains(invoke($m,'FirmwareStatusCaption'),'V3.92.3 (r12345)'),'Complete software version discarded');
+};
+
+$tests['unknown firmware stays unknown and WebSocket revision text is recognized'] = static function():void {
+    $m=new Luxtronik();
+    foreach(['','0','V3.','3.90.garbage','junk V3.92.1','3.92.1 extra'] as $invalid) {
+        invoke($m,'RememberFirmwareString',$invalid);
+        check(invoke($m,'InterfaceSupport','modbus')===null,'Invalid version is reported as supported or unsupported');
+    }
+    check(json_decode($m->GetCompatibleParents(),true)['moduleIDs']===[],'Unknown firmware creates a parent requirement');
+    invoke($m,'RememberWebFirmware',['groups'=>[['name'=>'Anlagenstatus','fields'=>[['name'=>'Softwarestand','raw'=>'V3.86.1 (r7762)']]]]]);
+    check(invoke($m,'InterfaceSupport','websocket')===true && invoke($m,'InterfaceSupport','modbus')===false,'Full web software text not parsed');
+    $m->properties['IPAddress']='192.0.2.42';
+    check(invoke($m,'InterfaceSupport','websocket')===null && invoke($m,'InterfaceSupport','modbus')===null,'Firmware evidence leaked to another controller');
+};
+
+$tests['firmware change preserves selected variables names values and source preferences'] = static function():void {
+    $m=new Luxtronik();$m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"modbus"},{"id":110350,"enabled":true},{"id":400009,"enabled":true}]';
+    $m->properties['SHIControlList']='[{"id":310002,"enabled":true}]';
+    $old=shiVariable($m,'SHI_Offset_Heizen',-1.5,'Meine externe Korrektur');
+    invoke($m,'RememberFirmwareString','V3.92.3');
+    foreach(['WebInventory','WebEEVCache','SHICache'] as $key) $m->buffers[$key]='{"old":true}';
+    $m->buffers['unrelated']='keep';$properties=$m->properties;
+    invoke($m,'RememberFirmwareString','V3.79');
+    foreach(['WebInventory','WebEEVCache','SHICache'] as $key) check($m->buffers[$key]==='','Previous firmware cache survived: '.$key);
+    $form=fields(json_decode($m->GetConfigurationForm(),true));$rows=array_column($form['IDListe']['values'],null,'id');
+    check($rows[15]['preferredSource']==='modbus' && $rows[15]['interface']==='Java' && $rows[110350]['enabled'] && $rows[400009]['enabled'],'Saved protocol selection lost on older firmware');
+    invoke($m,'SyncSHIControlVariables');
+    check($m->properties===$properties && $m->buffers['unrelated']==='keep'
+        && $m->GetIDForIdent('SHI_Offset_Heizen')===$old && GetValue($old)===-1.5 && IPS_GetName($old)==='Meine externe Korrektur','Firmware detection replaced user state');
+    check(!$m->actions['SHI_Offset_Heizen'],'Known unsupported controller has an enabled action');
+    shiThrows(fn()=>$m->SetSHIValue('SHI_Offset_Heizen',1.0),'Known unsupported firmware can write');
+};
+
+$tests['other firmware families use a bounded read-only capability probe with retry backoff'] = static function():void {
+    $m=new class extends Luxtronik {
+        public array $probeRequests=[];
+        public bool $failProbe=true;
+        protected function NewFirmwareProbeClient(): LuxtronikModbusClient {
+            return new LuxtronikModbusGateway(function($request) {
+                $this->probeRequests[]=$request;
+                if($this->failProbe) throw new RuntimeException('Test device unreachable');
+                return pack('CCn',4,2,4);
+            });
+        }
+    };
+    $m->properties['IPAddress']='127.0.0.1';invoke($m,'RememberFirmwareString','V4.92.3');
+    invoke($m,'ProbeUncertainSHIFirmware');invoke($m,'ProbeUncertainSHIFirmware');
+    check(count($m->probeRequests)===1 && invoke($m,'InterfaceSupport','modbus')===null,'Failed probe marks unsupported or ignores retry backoff');
+    $m->failProbe=false;$info=json_decode($m->buffers['FirmwareInfo'],true);$info['probeAfter']=0;
+    $m->buffers['FirmwareInfo']=json_encode($info);
+    invoke($m,'ProbeUncertainSHIFirmware');
+    check(invoke($m,'InterfaceSupport','modbus')===true && invoke($m,'InterfaceSupport','websocket')===null,'Protocol result incorrectly gates a different interface');
+    foreach($m->probeRequests as $request) check($request['Function']===4 && $request['Address']===10701 && $request['Quantity']===1,'Capability probe writes or reads undocumented data');
+    $before=count($m->probeRequests);$m->GetCompatibleParents();$m->GetConfigurationForm();invoke($m,'ProbeUncertainSHIFirmware');
+    check(count($m->probeRequests)===$before && $m->writes===0,'Form/getter polls hardware or repeats a confirmed probe');
+};
+
+$tests['successful protocol evidence and Java failure do not become unsupported firmware'] = static function():void {
+    $m=new Luxtronik();invoke($m,'RememberFirmwareString','V3.79');
+    $m->buffers['JavaAvailability']=json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'failed'=>true]);
+    check(invoke($m,'InterfaceSupport','websocket')===null && invoke($m,'InterfaceSupport','modbus')===null,'An unreachable controller was reported as unsupported');
+    unset($m->buffers['JavaAvailability']);invoke($m,'MarkInterfaceSupported','websocket');
+    invoke($m,'MarkInterfaceSupported','modbus');
+    check(invoke($m,'InterfaceSupport','websocket')===true && invoke($m,'InterfaceSupport','modbus')===true,'Working backported interfaces ignored');
+    $m->buffers['SHICache']=json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'stale'=>true]);
+    check(invoke($m,'InterfaceSupport','modbus')===true,'A later connection failure revoked positive firmware evidence');
+};
+
+$tests['SHI table uses web names and a single short example instead of prerequisite instructions'] = static function():void {
+    $m=new Luxtronik();$form=fields(json_decode($m->GetConfigurationForm(),true));
+    $table=$form['SHIControlList'];$columns=array_column($table['columns'],null,'name');
+    foreach($table['values'] as $row) check(!str_starts_with($row['name'],'SHI') && $row['status']==='','Table still has inconsistent prefixes or unselected activation hints');
+    check(!$columns['activation']['visible'] && $columns['value']['caption']==='Aktueller Wert','Verbose activation details still displayed');
+    check(str_contains($m->GetConfigurationForm(),'Beispiel:') && str_contains($m->GetConfigurationForm(),'+1,0 K'),'Short control example missing');
 };
 
 $failed=0;foreach ($tests as $name=>$test) {try {$test();echo 'PASS '.$name."\n";}catch(Throwable $e){++$failed;fwrite(STDERR,'FAIL '.$name.': '.$e->getMessage()."\n");}}

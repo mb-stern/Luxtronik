@@ -106,6 +106,8 @@ class IPSModuleStrict
     public array $attributes = [];
     public array $errors = [];
     public int $writes = 0;
+    public int $formReloads = 0;
+    protected function ReloadForm(): void {++$this->formReloads;}
     public int $status = 0;
     public array $timers = [];
     public array $actions = [];

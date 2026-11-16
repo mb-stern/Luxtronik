@@ -43,9 +43,9 @@ trait LuxtronikDataSources
     {
         $sources=[];
         if($id>=0 && $id<self::MAX_RESPONSE_VALUES) $sources[]='java';
-        if(isset($this->WebDefinitions()[$id])) $sources[]='websocket';
+        if(isset($this->WebDefinitions()[$id]) && $this->InterfaceSupport('websocket')!==false) $sources[]='websocket';
         $shi=$this->SHISelections()[$id]??null;
-        if($shi!==null && $shi['bank']!=='holding') $sources[]='modbus';
+        if($shi!==null && $shi['bank']!=='holding' && $this->InterfaceSupport('modbus')!==false) $sources[]='modbus';
         return $sources;
     }
 
@@ -118,6 +118,7 @@ trait LuxtronikDataSources
             $this->UpdateModbusSupplement(true,$cycleStarted);break;
         }
         $this->UpdateWebEEV($cycleStarted);
+        $this->ProbeUncertainSHIFirmware();
         $this->UpdateModbusSupplement(false,$cycleStarted);
         $this->PublishMeasurements();
         $this->RefreshDerivedMeasurements();
@@ -193,7 +194,7 @@ trait LuxtronikDataSources
 
     private function SyncSHIControlVariables(bool $removeUnselected=false): void
     {
-        $writes=$this->SHIWritingEnabled() && $this->ReadPropertyBoolean('InstanceStatus');
+        $writes=$this->SHIWritingEnabled() && $this->ReadPropertyBoolean('InstanceStatus') && $this->InterfaceSupport('modbus')!==false;
         foreach($this->SHICatalog() as $point) {
             if($point['bank']!=='holding') continue;
             if(!$this->SHIControlEnabled($point)) {

@@ -9,6 +9,22 @@ Quelle. Bei fehlenden Daten ergänzen WebSocket und Modbus die zugeordneten Wert
 XML und JSON werden automatisch unterschieden. Bei fehlender Erreichbarkeit lässt
 sich daraus allein keine fehlende Firmwareunterstützung ableiten.
 
+Die Firmware wird aus der normalen Java-Abfrage gelesen, zusätzlich aus dem
+Webinterface, wenn verfügbar. Die Statuszeile zeigt Firmware und Schnittstellen.
+Für die Versionsreihe V3 gilt: WebSocket ab **3.81**, Modbus/SHI laut Hersteller ab
+**3.90.1**. Bei eindeutig älterer Firmware werden die betreffenden Bereiche und
+unbenutzten zusätzlichen Istwerte ausgeblendet; ein neues Modbus-Gateway wird erst
+bei bestätigter Unterstützung angeboten. Bestehende Gateways, Variablen und
+Quellenauswahlen bleiben erhalten.
+
+Andere Versionsreihen und unvollständige Versionsangaben werden nicht anhand der
+V3-Grenzen abgewiesen. Eine erfolgreiche Schnittstellenabfrage bestätigt deren
+Unterstützung. Für Modbus dient dazu bei Bedarf eine einzelne lesende Abfrage der
+Software-Hauptversion (Input-Register 10701), bei Fehler höchstens alle fünf Minuten.
+Die Formularanzeige und Gateway-Auswahl selbst führen keine Netzwerkabfrage aus.
+Ein Verbindungsfehler bleibt „noch nicht bestätigt“ und beweist keine fehlende
+Unterstützung. Beim erkannten Firmwarewechsel werden nur Erkennungscaches erneuert.
+
 **Quellen je Istwert einstellen** blendet die optionale bevorzugte Quelle und
 Einzelzuordnungen ein. Die Wahl wird mit dem normalen **Übernehmen** gespeichert.
 Vorhandene Einzelzuordnungen bleiben erhalten, bis eine andere Quelle gewählt wird.
@@ -55,6 +71,11 @@ Die Auswahl eines SHI-Reglers ändert deren Protokoll und Inhalt nicht.
 Ausgewählte Einträge erzeugen nach **Übernehmen** eigene Steuervariablen, auch wenn
 noch keine Verbindung besteht. Bedienbar sind sie erst mit gültiger Rückmeldung und
 passender Freigabe. Auswählen, Speichern und zyklisches Lesen schreiben keine Werte.
+
+**Beispiel:** „Offset Heizen“ anhaken und übernehmen. Deine Regelung kann über
+diese Variable beispielsweise **+1,0 K** vorgeben und damit die Rücklauf-Solltemperatur
+um 1 K anheben. Das Modul stellt den passenden SHI-Modus automatisch ein. Die Tabelle
+verwendet die Funktionsnamen ohne zusätzliches „SHI“ wie im Webinterface.
 
 | SHI-Variable | Register | Bedeutung |
 | --- | --- | --- |

@@ -8,7 +8,8 @@ Regler-/Symcon-Kombination benötigt weiterhin einen Gerätetest.
 
 1. Geräte-IP, gemeinsames Aktualisierungsintervall und Webinterface-Passwort unter
    **Verbindung und Lesen** eintragen. WebSocket wird automatisch erkannt.
-2. Für Modbus wie beim Goodwe-Modul ein natives **Symcon-Modbus-Gateway**
+2. Bei bestätigter Firmware-Unterstützung für Modbus wie beim Goodwe-Modul ein
+   natives **Symcon-Modbus-Gateway**
    als **eigene neue übergeordnete Instanz** anlegen. Ein bereits vom Wechselrichter
    verwendetes Gateway gehört nicht zur Wärmepumpe. Eigener Client Socket: Port 502;
    Gateway: Modbus TCP und Geräteadresse normalerweise 1, Adressoffset 0.
@@ -91,6 +92,19 @@ Unter **Diagnose und erweiterte Einstellungen** stehen WebSocket-Bestandsbericht
 und Modbus-Status. Der WebSocket-Bericht erfasst rekursiv die Informationsseiten
 und enthält auch nicht zugeordnete Felder; Zugangsdaten und LCD-Bilddaten fehlen.
 `GetSHIData()` nennt zusätzlich den verwendeten Transport und die Gateway-ID.
+
+## Firmware-Erkennung prüfen
+
+- V3.79: WebSocket-/SHI-Bereiche verborgen, kein neues Gateway angeboten.
+- V3.81 und V3.90.0: WebSocket vorhanden, SHI verborgen.
+- V3.90.1 und neuer: beide Bereiche und neues dediziertes Gateway verfügbar.
+- Unbekannte/andere Versionsreihe: Unterstützung bleibt unbestätigt, bis die
+  Schnittstelle erfolgreich antwortet; keine automatische Gateway-Erstellung.
+- Firmwarewechsel und Geräte-IP-Wechsel: Erkennungsdaten erneuern, bestehende
+  Variablen, eigene Namen, Quellenauswahlen und Gateway-Verbindungen erhalten.
+- „Offset Heizen“ auswählen, übernehmen und −1,0 K senden: Wert und automatisch
+  gewählter Modus 2 werden zurückgelesen. Auswahl und Übernehmen allein schreiben
+  keine Vorgaben. Die Freigabe am Regler bleibt Voraussetzung.
 
 ## Verwendete Referenzen
 

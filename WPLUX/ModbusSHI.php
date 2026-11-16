@@ -129,6 +129,7 @@ trait LuxtronikModbusSHI
             'holding'=>$client->readHoldingRegisters($point['address'],1),
             default=>$client->readInputRegisters($point['address'],str_ends_with($point['datatype'],'32')?2:1)
         };
+        $this->MarkInterfaceSupported('modbus');
         return $this->DecodeModbusValue($words,$point['datatype'],(float)$point['factor']);
     }
 
@@ -147,7 +148,7 @@ trait LuxtronikModbusSHI
     /** Java and WebSocket remain preferred; Modbus supplies additional needed values. */
     private function UpdateModbusSupplement(bool $preferredOnly=false, ?float $cycleStarted=null): void
     {
-        if(!$this->ReadPropertyBoolean('InstanceStatus')) return;
+        if(!$this->ReadPropertyBoolean('InstanceStatus') || $this->InterfaceSupport('modbus')===false) return;
         $cycleStarted??=microtime(true);
         $writes=$this->SHIWritingEnabled();
         $needed=$this->HybridMeasurementIDs()+$this->GetVisualizationExtraPointIDs();
@@ -503,6 +504,7 @@ trait LuxtronikModbusSHI
     {
         $Ident=['Anpassung_Temp'=>'SHI_Offset_Heizen','Anpassung_WW'=>'SHI_Sollwert_Warmwasser','Anpassung_RBE'=>'SHI_Raumtemperatur_Soll'][$Ident]??$Ident;
         if (!$this->SHIWritingEnabled() || !$this->ReadPropertyBoolean('InstanceStatus')) throw new RuntimeException('SHI-Schreiben benötigt eine aktive Instanz und eine ausgewählte SHI-Steuervariable.');
+        if($this->InterfaceSupport('modbus')===false) throw new RuntimeException('Die erkannte Firmware unterstützt Modbus/SHI laut Versionsvoraussetzung nicht.');
         $point=$this->SHIWriteDefinition($Ident);
         $word=$this->EncodeSHIValue($point,$Value);
         $id=@$this->GetIDForIdent($Ident);
@@ -612,10 +614,14 @@ trait LuxtronikModbusSHI
             $activation[]=$permission===false?'Am Regler nicht freigegeben':($permission===null?'Freigabe noch nicht gelesen':'Am Regler freigegeben');
             if(!$writes) $activation[]='SHI-Bedienung ausgeschaltet';
             if($point['deps']!==[]) $activation[]='Benötigt '.implode(', ',array_map(static fn($address,$value)=>'HR '.$address.' = '.$value,array_keys($point['deps']),array_values($point['deps'])));
+            $status='';
+            if(!empty($selected[$point['selection']])) {
+                $status=!$this->ReadPropertyBoolean('InstanceStatus')?'Modul ausgeschaltet':($reading===null?'Keine aktuellen Daten':($permission===false?'Am Regler nicht freigegeben':($permission===null?'Freigabe noch ungeprüft':'Bereit')));
+            }
             $rows[]=['enabled'=>$selected[$point['selection']]??false,'id'=>$point['selection'],
-                'name'=>$point['label'],'register'=>$point['address'],
+                'name'=>preg_replace('/^SHI[- :]+/u','',$point['label']),'register'=>$point['address'],
                 'range'=>$point['min'].' … '.$point['max'].($point['unit']!==''?' '.$point['unit']:''),
-                'activation'=>implode('; ',$activation),
+                'activation'=>implode('; ',$activation),'status'=>$status,
                 'value'=>$reading['formatted']??'Keine aktuellen Modbus-Daten'];
         }
         return ['type'=>'List','name'=>'SHIControlList','caption'=>'Modbus-Steuervariablen','rowCount'=>10,
@@ -627,8 +633,9 @@ trait LuxtronikModbusSHI
                 ['name'=>'name','caption'=>'Funktion','width'=>'auto','save'=>false,'quickFilter'=>true],
                 ['name'=>'register','caption'=>'SHI-Register','width'=>'110px','save'=>false],
                 ['name'=>'range','caption'=>'Bereich / Einheit','width'=>'150px','save'=>false],
-                ['name'=>'activation','caption'=>'Variable / Aktivierung','width'=>'240px','save'=>false],
-                ['name'=>'value','caption'=>'Aktueller Modbus-Wert','width'=>'200px','save'=>false]
+                ['name'=>'activation','caption'=>'Details','width'=>'240px','save'=>false,'visible'=>false],
+                ['name'=>'value','caption'=>'Aktueller Wert','width'=>'150px','save'=>false],
+                ['name'=>'status','caption'=>'Status','width'=>'190px','save'=>false]
             ],'values'=>$rows];
     }
 

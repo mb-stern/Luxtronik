@@ -63,15 +63,24 @@ trait LuxtronikConfiguration
             }
             return null;
         };
+        $webSupport=$this->InterfaceSupport('websocket');$modbusSupport=$this->InterfaceSupport('modbus');
+        $password=$find($web['items'],'WebSocketPassword');$password['visible']=$webSupport!==false;
         $connection['IPAddress']['caption']='IP-Adresse der Wärmepumpe';
         $connection['UpdateInterval']['caption']='Aktualisierung (Sekunden)';
+        $saved=array_column($this->MeasurementRows(),null,'id');
+        $retainedSources=array_column($saved,'preferredSource');
+        $retainedSources[]=$this->ReadPropertyString('MeasurementBulkSource');
+        $sourceAllowed=static fn($option)=>($option['value']!=='websocket' || $webSupport!==false || in_array('websocket',$retainedSources,true))
+            && ($option['value']!=='modbus' || $modbusSupport!==false || in_array('modbus',$retainedSources,true));
         $source=$bulk['items'][0];$source['caption']='Messwerte bevorzugt lesen über';
+        $source['options']=array_values(array_filter($source['options'],$sourceAllowed));
         $source['onChange']='WPLUX_PreviewMeasurementSource($id, $MeasurementBulkSource, is_string($IDListe) ? $IDListe : json_encode($IDListe));';
         $advanced=['type'=>'ExpansionPanel','caption'=>'Verbindungsdetails','items'=>[
-            $connection['Port'],$find($web['items'],'WebSocketTimezone'),$find($modbus['items'],'ModbusTimeout')]];
+            $connection['Port'],array_replace($find($web['items'],'WebSocketTimezone'),['visible'=>$webSupport!==false]),array_replace($find($modbus['items'],'ModbusTimeout'),['visible'=>$modbusSupport!==false])]];
         $connectionPanel=['type'=>'ExpansionPanel','caption'=>'Verbindung und Lesen','expanded'=>true,'items'=>[
-            $connection['IPAddress'],$connection['UpdateInterval'],$find($web['items'],'WebSocketPassword'),
-            ['type'=>'Label','name'=>'WebSocketStatus','caption'=>$this->WebSocketStatusCaption()],
+            $connection['IPAddress'],$connection['UpdateInterval'],
+            ['type'=>'Label','name'=>'FirmwareStatus','caption'=>$this->FirmwareStatusCaption()],$password,
+            ['type'=>'Label','name'=>'WebSocketStatus','caption'=>$this->WebSocketStatusCaption(),'visible'=>$webSupport!==false],
             ['type'=>'Label','caption'=>'Gewünschte Istwerte anhaken und „Übernehmen“ klicken. Das Modul ergänzt fehlende Messwerte automatisch aus verfügbaren Quellen.'],
             ['type'=>'Label','name'=>'MeasurementBulkResult','caption'=>''],
             ['type'=>'CheckBox','name'=>'AdvancedSourceSelection','caption'=>'Quellen je Istwert einstellen',
@@ -79,24 +88,38 @@ trait LuxtronikConfiguration
             ['type'=>'RowLayout','name'=>'MeasurementSourceChoice','visible'=>$this->ReadPropertyBoolean('AdvancedSourceSelection'),'items'=>[$source]],$advanced]];
         $advancedSources=$this->ReadPropertyBoolean('AdvancedSourceSelection');
         $measurements['caption']='Istwerte – gewünschte Variablen auswählen';
+        $measurements['values']=array_values(array_filter($measurements['values'],function($row) use($saved,$webSupport,$modbusSupport):bool {
+            $id=(int)$row['id'];
+            if(!empty($saved[$id]['enabled']) || $id<100000) return true;
+            if(isset($this->SHISelections()[$id])) return $modbusSupport!==false || ($webSupport!==false && isset($this->WebDefinitions()[$id]));
+            return $webSupport!==false;
+        }));
+        foreach($measurements['values'] as &$row) {
+            $sources=array_values(array_intersect(['java','modbus','websocket'],$this->MeasurementSources((int)$row['id'])));
+            $row['preferredSource']=$saved[(int)$row['id']]['preferredSource']??$row['preferredSource'];
+            $row['interface']=implode(' + ',array_map(static fn($source)=>['java'=>'Java','websocket'=>'WebSocket','modbus'=>'Modbus'][$source],$sources));
+        }
+        unset($row);
+
         foreach($measurements['columns'] as &$column) {
             $name=$column['name'];
             if($name==='id') {$column['caption']='ID';unset($column['edit']);}
             if(in_array($name,['preferredSource','interface'],true)) $column['visible']=$advancedSources;
+            if($name==='preferredSource') $column['edit']['options']=array_values(array_filter($column['edit']['options'],$sourceAllowed));
             if($name==='source') $column['caption']='Aktuelle Quelle';
             if($name==='name') $column['quickFilter']=true;
         }
         unset($column);
         $write=$find($modbus['items'],'CommunicationMode');unset($write['value']);
-        $write['caption']='Zusätzlicher SHI-Zugriff für Skripte';
+        $write['caption']='Zusätzlicher SHI-Zugriff für Skripte';$write['visible']=$modbusSupport!==false;
         $write['options']=[['caption'=>'Ausgewählte Steuervariablen verwenden','value'=>'java'],['caption'=>'Auch direkte SHI-API ohne Auswahl zulassen','value'=>'modbus']];
         $control['caption']='Steuerung, Zeitprogramme und COP/JAZ';
         array_unshift($control['items'],['type'=>'Label','caption'=>'Diese bisherigen Regler-Einstellungen und Zeitprogramme werden über Java bedient. Die zusätzlichen SHI-Vorgaben stehen im eigenen Bereich.']);
         $gatewayID=$this->ModbusGatewayID();
-        $shi=['type'=>'ExpansionPanel','caption'=>'Modbus / SHI – externe Regelung','items'=>[
+        $shi=['type'=>'ExpansionPanel','caption'=>'Modbus / SHI – externe Regelung','visible'=>$modbusSupport!==false,'items'=>[
             $find($modbus['items'],'ModbusPort'),$find($modbus['items'],'ModbusUnitID'),
-            ['type'=>'Label','caption'=>'Gleiche IP-Adresse und gleiches Aktualisierungsintervall wie oben. Gewünschte Steuervariablen anhaken und „Übernehmen“ klicken. Erst eine Bedienaktion schreibt eine Vorgabe.'],
-            $find($modbus['items'],'SHIWarmWaterStatus'),$this->SHIControlForm(),
+            ['type'=>'Label','caption'=>'Beispiel: „Offset Heizen“ anhaken und übernehmen. Schreibst du danach +1,0 K in die Variable, erhöht der Regler die Rücklauf-Solltemperatur um 1 K. Den benötigten Modus stellt das Modul automatisch ein.'],
+            $this->SHIControlForm(),
             ['type'=>'ExpansionPanel','caption'=>'Hinweise zu SHI','items'=>[
                 ['type'=>'Label','caption'=>'SHI-Vorgaben sind externe Eingriffe zusätzlich zur normalen Java-Reglerkonfiguration. Ohne Modbus-Anfragen setzt der Regler sie laut Anleitung nach 15 Minuten zurück. Eine aktive Vorgabe wird über den zugehörigen SHI-Modus beendet, nicht durch Löschen ihrer Symcon-Variable.']]]]];
         if($gatewayID>0) {
@@ -108,12 +131,16 @@ trait LuxtronikConfiguration
         }
         $download=null;
         foreach($web['items'] as $item) foreach($item['items']??[] as $field) if(isset($field['download'])) $download=$field;
+        if($download!==null) $download['visible']=$webSupport!==false;
+        $inventoryStatus=$find($web['items'],'WebInventoryStatus');$inventoryStatus['visible']=$webSupport!==false;
+        $warmStatus=$find($modbus['items'],'SHIWarmWaterStatus');$warmStatus['visible']=$modbusSupport!==false;
         $webError=$this->WebEEVCache()['error']??$this->WebInventory()['error']??'';
         $diagnostics=['type'=>'ExpansionPanel','caption'=>'Diagnose und erweiterte Einstellungen','items'=>[
-            $find($web['items'],'WebInventoryStatus'),$download,
-            ['type'=>'Label','caption'=>'WebSocket ab Firmware 3.81 (Port 8214). Der Bericht enthält alle erreichbaren Informationsseiten einschließlich Untermenüs; Java und WebSocket müssen nicht dieselben Werte anbieten.'],
-            ['type'=>'Label','caption'=>$webError!==''?'Letzter WebSocket-Fehler: '.$webError:'Keine gemeldeten WebSocket-Verbindungsfehler.'],
-            ['type'=>'Button','caption'=>'Modbus-Statusbericht herunterladen','download'=>'luxtronik-modbus-diagnose.json',
+            $inventoryStatus,$download,$warmStatus,
+            ['type'=>'Label','caption'=>'Versionsreihe V3: WebSocket ab 3.81, Modbus/SHI laut Handbuch ab 3.90.1. Andere Versionsreihen werden über die Schnittstellen geprüft. Fehlende Erreichbarkeit bedeutet nicht fehlende Firmware-Unterstützung.'],
+            ['type'=>'Label','visible'=>$webSupport!==false,'caption'=>'WebSocket (Port 8214). Der Bericht enthält alle erreichbaren Informationsseiten einschließlich Untermenüs; Java und WebSocket müssen nicht dieselben Werte anbieten.'],
+            ['type'=>'Label','visible'=>$webSupport!==false,'caption'=>$webError!==''?'Letzter WebSocket-Fehler: '.$webError:'Keine gemeldeten WebSocket-Verbindungsfehler.'],
+            ['type'=>'Button','visible'=>$modbusSupport!==false,'caption'=>'Modbus-Statusbericht herunterladen','download'=>'luxtronik-modbus-diagnose.json',
                 'onClick'=>'echo "data:application/json;base64," . base64_encode(WPLUX_GetSHIData($id));'],
             $write,$bulk['items'][1]]];
         // Existing stable controls and the visualization form are kept intact, merely grouped.

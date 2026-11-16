@@ -5,6 +5,7 @@ require_once __DIR__ . '/Visualization.php';
 require_once __DIR__ . '/WebEEV.php';
 require_once __DIR__ . '/DataSources.php';
 require_once __DIR__ . '/Configuration.php';
+require_once __DIR__ . '/Firmware.php';
 
 // Abort obsolete callbacks as soon as their Symcon interface disappears.
 class LuxtronikInstanceUnavailable extends Exception {}
@@ -16,6 +17,7 @@ class Luxtronik extends IPSModuleStrict
     use LuxtronikWebEEV;
     use LuxtronikDataSources;
     use LuxtronikConfiguration;
+    use LuxtronikFirmware;
 
     private const SOCKET_TIMEOUT = 5.0;
     private const MAX_RESPONSE_VALUES = 65536;
@@ -79,7 +81,7 @@ class Luxtronik extends IPSModuleStrict
     /** A dedicated native gateway belongs to this heat pump; gateways serving another device must not be reused. */
     public function GetCompatibleParents(): string
     {
-        return json_encode(['type'=>'require','moduleIDs'=>['{A5F663AB-C400-4FE5-B207-4D67CC030564}']],JSON_THROW_ON_ERROR);
+        return json_encode(['type'=>'require','moduleIDs'=>$this->InterfaceSupport('modbus')===true?['{A5F663AB-C400-4FE5-B207-4D67CC030564}']:[]],JSON_THROW_ON_ERROR);
     }
 
     public function Migrate(string $JSONData): string
@@ -1317,6 +1319,7 @@ class Luxtronik extends IPSModuleStrict
             return;
         }
         $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>count($daten_raw)],JSON_THROW_ON_ERROR));
+        $this->RememberJavaFirmware($daten_raw);
         $JavaWerte = count($daten_raw);
         $graphicPoints = $this->HybridMeasurementIDs();
         $graphicValues = [];

@@ -524,7 +524,7 @@ trait LuxtronikWebEEV
 
     private function UpdateWebEEV(?float $cycleStarted=null): void
     {
-        if (!$this->ReadPropertyBoolean('InstanceStatus')
+        if (!$this->ReadPropertyBoolean('InstanceStatus') || $this->InterfaceSupport('websocket')===false
             || in_array($this->ReadPropertyString('IPAddress'),['','0.0.0.0','::'],true)) return;
         $source=$this->WebEEVSourceKey();
         $requested=$this->WebRequestedDefinitions();
@@ -552,6 +552,8 @@ trait LuxtronikWebEEV
                     $client=$this->NewWebEEVClient();
                     $values=$client->read($this->ReadPropertyString('WebSocketPassword'),$discover?null:$pages);
                     $cache['discovery']=$client->snapshot();
+                    $this->RememberWebFirmware($cache['discovery']);
+                    $this->MarkInterfaceSupported('websocket');
                     $values+=$this->MapWebSnapshot($cache['discovery']);
                     if($discover && $source===$this->WebEEVSourceKey()) {
                         $inventory=['source'=>$source,'updatedAt'=>time(),'discovery'=>$cache['discovery'],
@@ -669,6 +671,8 @@ trait LuxtronikWebEEV
             $client=$this->NewWebEEVClient(5000);
             $eev=$client->read($this->ReadPropertyString('WebSocketPassword'));
             $snapshot=$client->snapshot();
+            $this->RememberWebFirmware($snapshot);
+            $this->MarkInterfaceSupported('websocket');
             $values=$eev+$this->MapWebSnapshot($snapshot);
             $report+=['navigation'=>$snapshot['navigation']??[],'count'=>$snapshot['count'],'groups'=>$snapshot['groups'],'errors'=>$snapshot['errors'],
                 'mappedCount'=>count($values),'eev'=>$eev,'deviceTimezone'=>$this->ReadPropertyString('WebSocketTimezone')?:date_default_timezone_get()];
