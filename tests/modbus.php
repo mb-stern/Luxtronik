@@ -793,7 +793,7 @@ $tests['native Symcon gateway handles the SHI transport without replacing measur
     check(array_keys($m->timers)===['UpdateTimer'],'Gateway added another polling timer');
     $parents=json_decode($m->GetCompatibleParents(),true);
     check($parents['moduleIDs']===['{A5F663AB-C400-4FE5-B207-4D67CC030564}'],'Native parent cannot be selected');
-    check($parents['type']==='require','A gateway already serving another device can be recommended');
+    check($parents['type']==='connect','Gateway selection differs from the working Goodwe setup');
     $metadata=json_decode(file_get_contents(__DIR__.'/../WPLUX/module.json'),true);
     check(in_array('{E310B701-4AE7-458E-B618-EC13A1A6F6A8}',$metadata['parentRequirements'],true)
         && in_array('{77B31ABB-18FA-4B91-BB63-E5B2AB5588F4}',$metadata['implemented'],true),

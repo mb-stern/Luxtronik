@@ -10,8 +10,8 @@ Regler-/Symcon-Kombination benötigt weiterhin einen Gerätetest.
    **Verbindung und Lesen** eintragen. WebSocket wird automatisch erkannt.
 2. Bei bestätigter Firmware-Unterstützung für Modbus wie beim Goodwe-Modul ein
    natives **Symcon-Modbus-Gateway**
-   als **eigene neue übergeordnete Instanz** anlegen. Ein bereits vom Wechselrichter
-   verwendetes Gateway gehört nicht zur Wärmepumpe. Eigener Client Socket: Port 502;
+   neu anlegen oder ein vorhandenes Gateway zur Wärmepumpe auswählen. Wie bei
+   Goodwe sind beide Wege im Assistenten erlaubt. Client Socket: Port 502;
    Gateway: Modbus TCP und Geräteadresse normalerweise 1, Adressoffset 0.
 3. Gewünschte Messvariablen in der gemeinsamen **Istwertliste** wählen.
    „Aktuelle Quelle“ zeigt Java, WebSocket oder Modbus an. Alle zusätzlichen
@@ -97,7 +97,8 @@ und enthält auch nicht zugeordnete Felder; Zugangsdaten und LCD-Bilddaten fehle
 
 - V3.79: WebSocket-/SHI-Bereiche verborgen, kein neues Gateway angeboten.
 - V3.81 und V3.90.0: WebSocket vorhanden, SHI verborgen.
-- V3.90.1 und neuer: beide Bereiche und neues dediziertes Gateway verfügbar.
+- V3.90.1 und neuer: beide Bereiche sichtbar; neue und vorhandene kompatible
+  Gateways werden angeboten.
 - Unbekannte/andere Versionsreihe: Unterstützung bleibt unbestätigt, bis die
   Schnittstelle erfolgreich antwortet; keine automatische Gateway-Erstellung.
 - Firmwarewechsel und Geräte-IP-Wechsel: Erkennungsdaten erneuern, bestehende

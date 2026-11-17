@@ -100,10 +100,10 @@ beendet; das Löschen der Symcon-Variable beendet sie nicht automatisch.
 ## Native Symcon-Modbus-Anbindung
 
 Wie beim Goodwe-Modul kann Luxtronik mit einem nativen **Modbus-Gateway** verbunden
-werden. Für die Wärmepumpe ein **eigenes neues Gateway** anlegen. Der Assistent
-bietet entsprechend nur neue oder bislang unbenutzte Gateways an (`require`).
-Das Gateway verwendet einen eigenen Client Socket zur Wärmepumpe. IP/Port werden im
-Socket, TCP-Betrieb und Geräteadresse im Gateway konfiguriert (SHI: Port 502,
+werden. Der Assistent bietet wie bei Goodwe neue und vorhandene kompatible
+Gateways an (`connect`). Das gewählte Gateway und sein Client Socket müssen zur
+Wärmepumpe gehören. IP/Port werden im Socket, TCP-Betrieb und Geräteadresse im
+Gateway konfiguriert (SHI: Port 502,
 Geräteadresse normalerweise 1). Es sind keine zusätzlichen Modbus-Adressinstanzen
 und keine zusätzlichen Aktualisierungstimer nötig.
 
