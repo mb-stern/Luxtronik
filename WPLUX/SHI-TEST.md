@@ -92,6 +92,14 @@ Unter **Diagnose und erweiterte Einstellungen** stehen WebSocket-Bestandsbericht
 und Modbus-Status. Der WebSocket-Bericht erfasst rekursiv die Informationsseiten
 und enthält auch nicht zugeordnete Felder; Zugangsdaten und LCD-Bilddaten fehlen.
 `GetSHIData()` nennt zusätzlich den verwendeten Transport und die Gateway-ID.
+Der Abschnitt `connectionSetup` im vorhandenen **Modbus-Statusbericht** erfasst
+Version/Revision des laufenden Symcon-Kernels, dessen Moduldefinitionen und die
+getrennten Kompatibilitätsantworten für neue Module und vorhandene Instanzen.
+Damit lassen sich insbesondere abweichende Prüfungen im 9.1-RUST-Assistenten
+untersuchen. Die Abfrage erstellt keine Instanzen, ändert keine Verbindungen und
+sendet keine Registeranfragen. Aus Gateway-Konfigurationen werden nur Modus und
+Geräteadresse aufgenommen. Fehlende native Diagnosefunktionen bleiben im Bericht
+als nicht verfügbar sichtbar.
 
 ## Firmware-Erkennung prüfen
 

@@ -76,7 +76,7 @@ trait LuxtronikConfiguration
         $source['options']=array_values(array_filter($source['options'],$sourceAllowed));
         $source['onChange']='WPLUX_PreviewMeasurementSource($id, $MeasurementBulkSource, is_string($IDListe) ? $IDListe : json_encode($IDListe));';
         $advanced=['type'=>'ExpansionPanel','caption'=>'Verbindungsdetails','items'=>[
-            $connection['Port'],array_replace($find($web['items'],'WebSocketTimezone'),['visible'=>$webSupport!==false]),array_replace($find($modbus['items'],'ModbusTimeout'),['visible'=>$modbusSupport!==false])]];
+            $connection['Port'],array_replace($find($web['items'],'WebSocketTimezone'),['visible'=>$webSupport!==false])]];
         $connectionPanel=['type'=>'ExpansionPanel','caption'=>'Verbindung und Lesen','expanded'=>true,'items'=>[
             $connection['IPAddress'],$connection['UpdateInterval'],
             ['type'=>'Label','name'=>'FirmwareStatus','caption'=>$this->FirmwareStatusCaption()],$password,
@@ -117,18 +117,13 @@ trait LuxtronikConfiguration
         array_unshift($control['items'],['type'=>'Label','caption'=>'Diese bisherigen Regler-Einstellungen und Zeitprogramme werden über Java bedient. Die zusätzlichen SHI-Vorgaben stehen im eigenen Bereich.']);
         $gatewayID=$this->ModbusGatewayID();
         $shi=['type'=>'ExpansionPanel','caption'=>'Modbus / SHI – externe Regelung','visible'=>$modbusSupport!==false,'items'=>[
-            $find($modbus['items'],'ModbusPort'),$find($modbus['items'],'ModbusUnitID'),
+            ['type'=>'Label','name'=>'ModbusConnectionStatus','caption'=>$gatewayID>0
+                ?'Symcon-Modbus-Gateway '.$gatewayID.' verbunden. IP-Adresse und Port im Client Socket, Geräteadresse im Gateway einstellen.'
+                :'Kein Symcon-Modbus-Gateway verbunden. Über „Gateway ändern“ verbinden; IP-Adresse und Port im Client Socket, Geräteadresse im Gateway einstellen.'],
             ['type'=>'Label','caption'=>'Beispiel: „Offset Heizen“ anhaken und übernehmen. Schreibst du danach +1,0 K in die Variable, erhöht der Regler die Rücklauf-Solltemperatur um 1 K. Den benötigten Modus stellt das Modul automatisch ein.'],
             $this->SHIControlForm(),
             ['type'=>'ExpansionPanel','caption'=>'Hinweise zu SHI','items'=>[
                 ['type'=>'Label','caption'=>'SHI-Vorgaben sind externe Eingriffe zusätzlich zur normalen Java-Reglerkonfiguration. Ohne Modbus-Anfragen setzt der Regler sie laut Anleitung nach 15 Minuten zurück. Eine aktive Vorgabe wird über den zugehörigen SHI-Modus beendet, nicht durch Löschen ihrer Symcon-Variable.']]]]];
-        if($gatewayID>0) {
-            // Native parent settings belong to the gateway/socket, as in the Goodwe module.
-            array_splice($shi['items'],0,2,[['type'=>'Label','caption'=>'Symcon-Modbus-Gateway '.$gatewayID.' verbunden. IP-Adresse und Port im Client Socket, Geräteadresse im Gateway einstellen.']]);
-            $advancedIndex=count($connectionPanel['items'])-1;
-            foreach($connectionPanel['items'][$advancedIndex]['items'] as &$field) if(($field['name']??'')==='ModbusTimeout') $field['visible']=false;
-            unset($field);
-        }
         $download=null;
         foreach($web['items'] as $item) foreach($item['items']??[] as $field) if(isset($field['download'])) $download=$field;
         if($download!==null) $download['visible']=$webSupport!==false;
@@ -142,7 +137,10 @@ trait LuxtronikConfiguration
             ['type'=>'Label','visible'=>$webSupport!==false,'caption'=>$webError!==''?'Letzter WebSocket-Fehler: '.$webError:'Keine gemeldeten WebSocket-Verbindungsfehler.'],
             ['type'=>'Button','visible'=>$modbusSupport!==false,'caption'=>'Modbus-Statusbericht herunterladen','download'=>'luxtronik-modbus-diagnose.json',
                 'onClick'=>'echo "data:application/json;base64," . base64_encode(WPLUX_GetSHIData($id));'],
-            $write,$bulk['items'][1]]];
+            $write,$bulk['items'][1],
+            ['type'=>'ExpansionPanel','caption'=>'Bisherige Direktverbindung','visible'=>$gatewayID===0 && $modbusSupport!==false,'items'=>[
+                ['type'=>'Label','caption'=>'Nur für bestehende Installationen ohne Symcon-Modbus-Gateway. Diese Einstellungen gelten nicht für ein verbundenes Gateway.'],
+                $find($modbus['items'],'ModbusPort'),$find($modbus['items'],'ModbusUnitID'),$find($modbus['items'],'ModbusTimeout')]]]];
         // Existing stable controls and the visualization form are kept intact, merely grouped.
         $active=array_shift($rest);
         $form['elements']=[$active,$connectionPanel,$measurements,$control,$shi,...$rest,$diagnostics];

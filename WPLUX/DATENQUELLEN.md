@@ -113,9 +113,11 @@ Skalierung und bestätigten Schreibabläufe bleiben im Modul. Ein Gatewayfehler 
 nicht zu einem zweiten Schreibversuch über die Direktverbindung.
 
 Bestehende unverbundene Installationen behalten als Übergang die bisherige direkte
-TCP-Anbindung. Deren Port, Geräteadresse und Antwort-Timeout bleiben erhalten. Der
+TCP-Anbindung. Deren Port, Geräteadresse und Antwort-Timeout stehen ausschließlich
+unter **Diagnose und erweiterte Einstellungen → Bisherige Direktverbindung**. Der
 Timeout ist eine Antwortwartezeit, kein weiterer Abfragetimer. Sobald ein Gateway
-verbunden ist, hat dessen Konfiguration Vorrang.
+verbunden ist, hat dessen Konfiguration Vorrang. Der normale SHI-Bereich zeigt
+statt doppelter Anschlussfelder den Verbindungsstatus des Symcon-Gateways.
 
 ## COP und Diagnose
 
