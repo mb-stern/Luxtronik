@@ -1,6 +1,6 @@
 <?php
 
-/** Capability evidence belongs to the controller, independently of variable selections and gateway creation. */
+/** Capability evidence belongs to the controller, independently of variable selections. */
 trait LuxtronikFirmware
 {
     private function FirmwareSourceKey(): string
@@ -113,7 +113,6 @@ trait LuxtronikFirmware
     /** One bounded read, no instance creation or writes, for version families without a documented cutoff. */
     protected function NewFirmwareProbeClient(): LuxtronikModbusClient
     {
-        if($this->ModbusGatewayID()>0) return $this->NewSHIClient();
         return new LuxtronikModbusTCP($this->ReadPropertyString('IPAddress'),$this->ReadPropertyInteger('ModbusPort'),
             $this->ReadPropertyInteger('ModbusUnitID'),min(500,$this->ReadPropertyInteger('ModbusTimeout')));
     }

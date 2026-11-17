@@ -1,18 +1,16 @@
 # Modbus TCP / SHI in Version 5.0
 
-Die Version wird auf `development` geprüft. Native Gateway-Kommunikation,
-Direktverbindung und SHI-Abläufe sind mit lokalen Simulatoren getestet; die konkrete
+Die Version wird auf `development` geprüft. Die direkte Modbus-TCP-Verbindung
+und SHI-Abläufe sind mit lokalen Simulatoren getestet; die konkrete
 Regler-/Symcon-Kombination benötigt weiterhin einen Gerätetest.
 
 ## Einrichten
 
 1. Geräte-IP, gemeinsames Aktualisierungsintervall und Webinterface-Passwort unter
    **Verbindung und Lesen** eintragen. WebSocket wird automatisch erkannt.
-2. Bei bestätigter Firmware-Unterstützung für Modbus wie beim Goodwe-Modul ein
-   natives **Symcon-Modbus-Gateway**
-   neu anlegen oder ein vorhandenes Gateway zur Wärmepumpe auswählen. Wie bei
-   Goodwe sind beide Wege im Assistenten erlaubt. Client Socket: Port 502;
-   Gateway: Modbus TCP und Geräteadresse normalerweise 1, Adressoffset 0.
+2. Unter **Modbus / SHI – externe Regelung** Modbus-Port **502** und Geräteadresse
+   **1** einstellen (sofern der Regler andere Werte benötigt, diese verwenden).
+   Die Verbindung erfolgt direkt aus dem Modul zur Geräte-IP.
 3. Gewünschte Messvariablen in der gemeinsamen **Istwertliste** wählen.
    „Aktuelle Quelle“ zeigt Java, WebSocket oder Modbus an. Alle zusätzlichen
    lesbaren SHI-Punkte stehen in derselben Liste.
@@ -20,12 +18,11 @@ Regler-/Symcon-Kombination benötigt weiterhin einen Gerätetest.
    Regelung** anhaken und übernehmen. Die Variablen werden auch offline angelegt;
    Aktionen bleiben ohne aktuelle Rückmeldung/Freigabe gesperrt.
 
-Bestehende unverbundene Installationen behalten die direkte TCP-Anbindung als
-Übergang. Mit verbundenem Gateway verwendet das Modul dessen Kommunikation;
-IP/Port und Geräteadresse sind dann im Socket/Gateway einzustellen. Es gibt keine
-separaten Modbus-Adressinstanzen und keinen weiteren Aktualisierungstimer.
-Die frühere Timeout-Einstellung betrifft nur die Antwortwartezeit der direkten
-Verbindung, nicht deren Abfrageintervall.
+Symcon-Modbus-Gateway und Client Socket werden nicht benötigt. Bereits angelegte
+Instanzen werden weder verwendet noch gelöscht. Auch ein noch angehängtes Gateway
+leitet keine Modbus-Anfragen mehr weiter. Der vorhandene Aktualisierungstimer
+bleibt der einzige Timer; der Timeout unter Verbindungsdetails ist die
+Antwortwartezeit der direkten Verbindung.
 
 ## Messwerte und Steuerungen
 
@@ -91,26 +88,18 @@ früheren Argumentnamen `Anpassung_Temp`, `Anpassung_WW`, `Anpassung_RBE`. Ein n
 Unter **Diagnose und erweiterte Einstellungen** stehen WebSocket-Bestandsbericht
 und Modbus-Status. Der WebSocket-Bericht erfasst rekursiv die Informationsseiten
 und enthält auch nicht zugeordnete Felder; Zugangsdaten und LCD-Bilddaten fehlen.
-`GetSHIData()` nennt zusätzlich den verwendeten Transport und die Gateway-ID.
-Der Abschnitt `connectionSetup` im vorhandenen **Modbus-Statusbericht** erfasst
-Version/Revision des laufenden Symcon-Kernels, dessen Moduldefinitionen und die
-getrennten Kompatibilitätsantworten für neue Module und vorhandene Instanzen.
-Damit lassen sich insbesondere abweichende Prüfungen im 9.1-RUST-Assistenten
-untersuchen. Die Abfrage erstellt keine Instanzen, ändert keine Verbindungen und
-sendet keine Registeranfragen. Aus Gateway-Konfigurationen werden nur Modus und
-Geräteadresse aufgenommen. Fehlende native Diagnosefunktionen bleiben im Bericht
-als nicht verfügbar sichtbar.
+`GetSHIData()` nennt als Transport **Modbus TCP (Direktverbindung)**. Der zuvor
+zur Gateway-Fehlersuche ergänzte Abschnitt `connectionSetup` entfällt.
 
 ## Firmware-Erkennung prüfen
 
-- V3.79: WebSocket-/SHI-Bereiche verborgen, kein neues Gateway angeboten.
+- V3.79: WebSocket-/SHI-Bereiche verborgen.
 - V3.81 und V3.90.0: WebSocket vorhanden, SHI verborgen.
-- V3.90.1 und neuer: beide Bereiche sichtbar; neue und vorhandene kompatible
-  Gateways werden angeboten.
+- V3.90.1 und neuer: beide Bereiche einschließlich direkter Modbus-Einstellungen sichtbar.
 - Unbekannte/andere Versionsreihe: Unterstützung bleibt unbestätigt, bis die
-  Schnittstelle erfolgreich antwortet; keine automatische Gateway-Erstellung.
+  Schnittstelle erfolgreich antwortet.
 - Firmwarewechsel und Geräte-IP-Wechsel: Erkennungsdaten erneuern, bestehende
-  Variablen, eigene Namen, Quellenauswahlen und Gateway-Verbindungen erhalten.
+  Variablen, eigene Namen und Quellenauswahlen erhalten.
 - „Offset Heizen“ auswählen, übernehmen und −1,0 K senden: Wert und automatisch
   gewählter Modus 2 werden zurückgelesen. Auswahl und Übernehmen allein schreiben
   keine Vorgaben. Die Freigabe am Regler bleibt Voraussetzung.
@@ -119,8 +108,5 @@ als nicht verfügbar sichtbar.
 
 - Hersteller: **83026900aDE SHI**, insbesondere Einstellungen, Registertabellen und
   Rückfallverhalten; ergänzend **83055400pDE Luxtronik 2.1 Teil 2**.
-- [Native Symcon-Modbus-Anbindung](https://www.symcon.de/de/llms/modules/modbus-rtu-tcp.md).
-- [Goodwe-Modul](https://github.com/mb-stern/Goodwe): natives Gateway und
-  `SendDataToParent()` mit Interface E310B701-4AE7-458E-B618-EC13A1A6F6A8.
 - [Home Assistant Luxtronik SHI](https://github.com/Bankaifan/ha-luxtronik-shi):
   getrennte SHI-Steuerungen, Bereichsprüfung und Rücklesen.

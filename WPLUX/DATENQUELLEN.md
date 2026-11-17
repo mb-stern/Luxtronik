@@ -13,15 +13,14 @@ Die Firmware wird aus der normalen Java-Abfrage gelesen, zusätzlich aus dem
 Webinterface, wenn verfügbar. Die Statuszeile zeigt Firmware und Schnittstellen.
 Für die Versionsreihe V3 gilt: WebSocket ab **3.81**, Modbus/SHI laut Hersteller ab
 **3.90.1**. Bei eindeutig älterer Firmware werden die betreffenden Bereiche und
-unbenutzten zusätzlichen Istwerte ausgeblendet; ein neues Modbus-Gateway wird erst
-bei bestätigter Unterstützung angeboten. Bestehende Gateways, Variablen und
+unbenutzten zusätzlichen Istwerte ausgeblendet. Bestehende Variablen und
 Quellenauswahlen bleiben erhalten.
 
 Andere Versionsreihen und unvollständige Versionsangaben werden nicht anhand der
 V3-Grenzen abgewiesen. Eine erfolgreiche Schnittstellenabfrage bestätigt deren
 Unterstützung. Für Modbus dient dazu bei Bedarf eine einzelne lesende Abfrage der
 Software-Hauptversion (Input-Register 10701), bei Fehler höchstens alle fünf Minuten.
-Die Formularanzeige und Gateway-Auswahl selbst führen keine Netzwerkabfrage aus.
+Die Formularanzeige selbst führt keine Netzwerkabfrage aus.
 Ein Verbindungsfehler bleibt „noch nicht bestätigt“ und beweist keine fehlende
 Unterstützung. Beim erkannten Firmwarewechsel werden nur Erkennungscaches erneuert.
 
@@ -97,27 +96,19 @@ Modbus-Anfrage**. Normales Abfragen hält die Kommunikation aufrecht, sendet jed
 keine alten Schreibwerte erneut. Eine aktive Vorgabe wird über ihren SHI-Modus
 beendet; das Löschen der Symcon-Variable beendet sie nicht automatisch.
 
-## Native Symcon-Modbus-Anbindung
+## Direkte Modbus-TCP-Anbindung
 
-Wie beim Goodwe-Modul kann Luxtronik mit einem nativen **Modbus-Gateway** verbunden
-werden. Der Assistent bietet wie bei Goodwe neue und vorhandene kompatible
-Gateways an (`connect`). Das gewählte Gateway und sein Client Socket müssen zur
-Wärmepumpe gehören. IP/Port werden im Socket, TCP-Betrieb und Geräteadresse im
-Gateway konfiguriert (SHI: Port 502,
-Geräteadresse normalerweise 1). Es sind keine zusätzlichen Modbus-Adressinstanzen
-und keine zusätzlichen Aktualisierungstimer nötig.
+Das Modul verbindet sich selbst mit der oben eingetragenen IP-Adresse der
+Wärmepumpe. Unter **Modbus / SHI – externe Regelung** stehen Modbus-Port
+(normalerweise **502**) und Geräteadresse / Unit-ID (normalerweise **1**).
+Die Antwortwartezeit bleibt unter **Verbindungsdetails** einstellbar.
+Der gemeinsame Aktualisierungszyklus liest alle benötigten Werte.
 
-Mit verbundenem Gateway sendet das Modul Registeranfragen über `SendDataToParent()`;
-Symcon übernimmt TCP-Verbindung, MBAP-Rahmen und Transaktionen. Die SHI-Bedeutung,
-Skalierung und bestätigten Schreibabläufe bleiben im Modul. Ein Gatewayfehler führt
-nicht zu einem zweiten Schreibversuch über die Direktverbindung.
-
-Bestehende unverbundene Installationen behalten als Übergang die bisherige direkte
-TCP-Anbindung. Deren Port, Geräteadresse und Antwort-Timeout stehen ausschließlich
-unter **Diagnose und erweiterte Einstellungen → Bisherige Direktverbindung**. Der
-Timeout ist eine Antwortwartezeit, kein weiterer Abfragetimer. Sobald ein Gateway
-verbunden ist, hat dessen Konfiguration Vorrang. Der normale SHI-Bereich zeigt
-statt doppelter Anschlussfelder den Verbindungsstatus des Symcon-Gateways.
+Es werden kein Symcon-Modbus-Gateway, kein Client Socket und keine zusätzlichen
+Timer oder Adressinstanzen benötigt. Bereits angelegte Gateways und Client Sockets
+werden nicht mehr verwendet und vom Modul nicht gelöscht. Ein noch verbundener
+alter Parent beeinflusst die direkte Kommunikation nicht. Bestehende Messwerte,
+Steuervariablen, eigene Namen und Auswahl-IDs bleiben erhalten.
 
 ## COP und Diagnose
 

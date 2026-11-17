@@ -758,60 +758,32 @@ $tests['selected SHI controls create independent variables even while offline an
     check($m->writes===0,'Configuration applied default control values');
 };
 
-$tests['native Symcon gateway handles the SHI transport without replacing measurement variables or creating timers'] = static function():void {
-    $m=new Luxtronik();$gateway=900001;
-    $GLOBALS['testInstanceInfo'][$m->InstanceID]=['ConnectionID'=>$gateway];
-    $GLOBALS['testInstanceInfo'][$gateway]=['ConnectionID'=>0,'ModuleInfo'=>['ModuleID'=>'{A5F663AB-C400-4FE5-B207-4D67CC030564}']];
-    $m->properties['SHIControlList']='[{"id":310002,"enabled":true}]';
-    $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"modbus"}]';
-    $old=shiVariable($m,'Aussentemperatur',9.0,'Mein Außenfühler');
-    $requests=[];$holding=[10002=>0,10000=>0,10065=>0];
-    $m->testParentCallback=static function(array $request) use (&$requests,&$holding):string {
-        $requests[]=$request;$f=$request['Function'];$address=$request['Address'];$n=$request['Quantity'];
-        check($request['DataID']==='{E310B701-4AE7-458E-B618-EC13A1A6F6A8}','Wrong native gateway interface');
-        if($f===2) return pack('CCC',2,1,$address===10000?1:0);
-        if($f===16) {
-            $words=array_values(unpack('n*',hex2bin($request['Data'])));
-            check(count($words)===$n,'Wrong native gateway write quantity');
-            foreach($words as $offset=>$word) $holding[$address+$offset]=$word;
-            return pack('Cnn',16,$address,$n);
-        }
-        check(in_array($f,[3,4],true) && $request['Data']==='','Wrong native gateway read');
-        $words=[];
-        for($i=0;$i<$n;++$i) $words[]=$f===3?($holding[$address+$i]??0):($address+$i===10108?65511:0);
-        return pack('CCn*',$f,2*$n,...$words);
-    };
-    invoke($m,'SyncSHIControlVariables');invoke($m,'UpdateModbusSupplement');
-    check(GetValue($old)===-2.5 && $m->GetIDForIdent('Aussentemperatur')===$old && IPS_GetName($old)==='Mein Außenfühler','Gateway reading replaced the existing variable');
-    $m->RequestAction('SHI_Offset_Heizen',-1.5);
-    check($holding[10002]===65521 && $holding[10000]===2 && GetValue($m->GetIDForIdent('SHI_Offset_Heizen'))===-1.5,'Native gateway write or readback failed');
-    check(json_decode($m->GetSHIData(),true)['transport']==='Symcon-Modbus-Gateway','Gateway transport not reported');
-    $report=json_decode($m->GetSHIData(),true);
-    check($report['nativeControlSource']==='Java' && $report['shiControlsEnabled'] && $report['writeSource']==='Modbus/SHI','Diagnostics conflate native Java settings and selected SHI controls');
-    $prior=invoke($m,'VisualizationSourceKey');$GLOBALS['testInstanceConfiguration'][$gateway]='{"DeviceID":2}';
-    check(invoke($m,'VisualizationSourceKey')!==$prior,'Gateway reconfiguration retains old current values');
-    check(array_keys($m->timers)===['UpdateTimer'],'Gateway added another polling timer');
-    $parents=json_decode($m->GetCompatibleParents(),true);
-    check($parents['moduleIDs']===['{A5F663AB-C400-4FE5-B207-4D67CC030564}'],'Native parent cannot be selected');
-    check($parents['type']==='connect','Gateway selection differs from the working Goodwe setup');
-    $metadata=json_decode(file_get_contents(__DIR__.'/../WPLUX/module.json'),true);
-    check(in_array('{E310B701-4AE7-458E-B618-EC13A1A6F6A8}',$metadata['parentRequirements'],true)
-        && in_array('{77B31ABB-18FA-4B91-BB63-E5B2AB5588F4}',$metadata['implemented'],true),
-        'Native gateway data flow is incomplete: a newly created parent will be incompatible');
-    unset($GLOBALS['testInstanceInfo'][$m->InstanceID],$GLOBALS['testInstanceInfo'][$gateway],$GLOBALS['testInstanceConfiguration'][$gateway]);
-};
-
-$tests['native gateway validates PDU length exceptions range and write acknowledgement'] = static function():void {
-    $bits=new LuxtronikModbusGateway(fn($request)=>pack('CCC',2,1,5));
-    check($bits->readDiscreteInputs(10000,3)===[1,0,1],'Discrete inputs unpacked in wrong bit order');
-    foreach([false,'',pack('CCn',3,2,1),pack('CC',4,2),pack('CC',132,2)] as $reply) {
-        $client=new LuxtronikModbusGateway(fn($request)=>$reply);
-        shiThrows(fn()=>$client->readInputRegisters(10100,1),'Malformed gateway reply accepted');
-    }
-    $calls=0;$client=new LuxtronikModbusGateway(function($request) use (&$calls) {++$calls;return pack('Cnn',16,10003,1);});
-    shiThrows(fn()=>$client->readInputRegisters(65535,2));shiThrows(fn()=>$client->writeHoldingRegisters(10002,[-1]));
-    check($calls===0,'Invalid gateway request reached the parent');
-    shiThrows(fn()=>$client->writeHoldingRegisters(10002,[1]),'Mismatched gateway write acknowledgement accepted');
+$tests['direct TCP reads and writes ignore an old attached gateway and preserve measurement objects'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m):void {
+        $gateway=900001;
+        $GLOBALS['testInstanceInfo'][$m->InstanceID]=['ConnectionID'=>$gateway];
+        $GLOBALS['testInstanceInfo'][$gateway]=['ConnectionID'=>0,'ModuleInfo'=>['ModuleID'=>'{A5F663AB-C400-4FE5-B207-4D67CC030564}']];
+        $m->testParentCallback=static function():never {throw new LogicException('Direct connection used the old gateway');};
+        try {
+            $m->properties['SHIControlList']='[{"id":310002,"enabled":true}]';
+            $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"modbus"}]';
+            $old=shiVariable($m,'Aussentemperatur',9.0,'Mein Außenfühler');
+            invoke($m,'SyncSHIControlVariables');invoke($m,'UpdateModbusSupplement');
+            check(GetValue($old)===-2.5 && $m->GetIDForIdent('Aussentemperatur')===$old && IPS_GetName($old)==='Mein Außenfühler','Direct reading replaced the existing variable');
+            $m->RequestAction('SHI_Offset_Heizen',-1.5);
+            check(GetValue($m->GetIDForIdent('SHI_Offset_Heizen'))===-1.5,'Direct signed write or readback failed');
+            $report=json_decode($m->GetSHIData(),true);
+            check($report['transport']==='Modbus TCP (Direktverbindung)' && $report['gatewayID']===0,'Direct transport not reported');
+            check($report['nativeControlSource']==='Java' && $report['shiControlsEnabled'] && $report['writeSource']==='Modbus/SHI','Native Java settings and SHI controls conflated');
+            $prior=invoke($m,'VisualizationSourceKey');$GLOBALS['testInstanceConfiguration'][$gateway]='{"DeviceID":2}';
+            check(invoke($m,'VisualizationSourceKey')===$prior,'Unused gateway configuration changes current direct readings');
+            check(array_keys($m->timers)===['UpdateTimer'],'Direct connection added another polling timer');
+            $metadata=json_decode(file_get_contents(__DIR__.'/../WPLUX/module.json'),true);
+            check($metadata['parentRequirements']===[] && $metadata['implemented']===[],'Setup still requests a native gateway');
+        } finally {unset($GLOBALS['testInstanceInfo'][$m->InstanceID],$GLOBALS['testInstanceInfo'][$gateway],$GLOBALS['testInstanceConfiguration'][$gateway]);}
+    },['input'=>[10108=>65511],'discrete'=>[10000=>1],'holding'=>[10002=>0,10000=>0,10065=>0]]);
+    check(array_filter($requests,fn($r)=>$r['function']===16 && $r['address']===10002 && $r['words']===[65521])!==[], 'Signed offset not sent over the real TCP connection');
+    check(array_filter($requests,fn($r)=>$r['function']===16 && $r['address']===10000 && $r['words']===[2])!==[], 'Required mode not sent over the real TCP connection');
 };
 
 $tests['upgrading a previously shared beta control retains its object history and never redirects it to Java'] = static function():void {
@@ -841,7 +813,6 @@ $tests['firmware from Java ASCII gates protocol options without changing stable 
         $rows=array_column($all['IDListe']['values'],null,'id');
         check(isset($rows[15]) && (isset($rows[400009])===($expected[0]!==false))
             && (isset($rows[110103])===($expected[1]!==false)),'Native values or unsupported extra values incorrectly filtered');
-        check(json_decode($m->GetCompatibleParents(),true)['moduleIDs']===($expected[1]===true?['{A5F663AB-C400-4FE5-B207-4D67CC030564}']:[]),'Gateway offered before firmware support');
     }
     check($m->properties===$original && $m->writes===0,'Firmware detection changed configuration or sent a command');
     $reloads=$m->formReloads;invoke($m,'RememberJavaFirmware',$raw);
@@ -862,7 +833,6 @@ $tests['unknown firmware stays unknown and WebSocket revision text is recognized
         invoke($m,'RememberFirmwareString',$invalid);
         check(invoke($m,'InterfaceSupport','modbus')===null,'Invalid version is reported as supported or unsupported');
     }
-    check(json_decode($m->GetCompatibleParents(),true)['moduleIDs']===[],'Unknown firmware creates a parent requirement');
     invoke($m,'RememberWebFirmware',['groups'=>[['name'=>'Anlagenstatus','fields'=>[['name'=>'Softwarestand','raw'=>'V3.86.1 (r7762)']]]]]);
     check(invoke($m,'InterfaceSupport','websocket')===true && invoke($m,'InterfaceSupport','modbus')===false,'Full web software text not parsed');
     $m->properties['IPAddress']='192.0.2.42';
@@ -892,11 +862,18 @@ $tests['other firmware families use a bounded read-only capability probe with re
         public array $probeRequests=[];
         public bool $failProbe=true;
         protected function NewFirmwareProbeClient(): LuxtronikModbusClient {
-            return new LuxtronikModbusGateway(function($request) {
-                $this->probeRequests[]=$request;
-                if($this->failProbe) throw new RuntimeException('Test device unreachable');
-                return pack('CCn',4,2,4);
-            });
+            return new class($this) implements LuxtronikModbusClient {
+                public function __construct(private Luxtronik $owner) {}
+                public function readInputRegisters(int $address,int $count):array {
+                    $this->owner->probeRequests[]=['Function'=>4,'Address'=>$address,'Quantity'=>$count];
+                    if($this->owner->failProbe) throw new RuntimeException('Test device unreachable');
+                    return [4];
+                }
+                public function readHoldingRegisters(int $address,int $count):array {throw new LogicException('Unexpected holding probe');}
+                public function readDiscreteInputs(int $address,int $count):array {throw new LogicException('Unexpected permission probe');}
+                public function writeHoldingRegisters(int $address,array $words):void {throw new LogicException('Probe attempted a write');}
+                public function close():void {}
+            };
         }
     };
     $m->properties['IPAddress']='127.0.0.1';invoke($m,'RememberFirmwareString','V4.92.3');
@@ -907,7 +884,7 @@ $tests['other firmware families use a bounded read-only capability probe with re
     invoke($m,'ProbeUncertainSHIFirmware');
     check(invoke($m,'InterfaceSupport','modbus')===true && invoke($m,'InterfaceSupport','websocket')===null,'Protocol result incorrectly gates a different interface');
     foreach($m->probeRequests as $request) check($request['Function']===4 && $request['Address']===10701 && $request['Quantity']===1,'Capability probe writes or reads undocumented data');
-    $before=count($m->probeRequests);$m->GetCompatibleParents();$m->GetConfigurationForm();invoke($m,'ProbeUncertainSHIFirmware');
+    $before=count($m->probeRequests);$m->GetConfigurationForm();invoke($m,'ProbeUncertainSHIFirmware');
     check(count($m->probeRequests)===$before && $m->writes===0,'Form/getter polls hardware or repeats a confirmed probe');
 };
 

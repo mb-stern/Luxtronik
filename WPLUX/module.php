@@ -78,12 +78,6 @@ class Luxtronik extends IPSModuleStrict
         $this->CreateVisualization();
     }
 
-    /** Use the same native gateway selection as Goodwe, once SHI support is confirmed. */
-    public function GetCompatibleParents(): string
-    {
-        return json_encode(['type'=>'connect','moduleIDs'=>$this->InterfaceSupport('modbus')===true?['{A5F663AB-C400-4FE5-B207-4D67CC030564}']:[]],JSON_THROW_ON_ERROR);
-    }
-
     public function Migrate(string $JSONData): string
     {
         // Niemals entfernen!

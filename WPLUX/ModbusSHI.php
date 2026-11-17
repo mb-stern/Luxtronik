@@ -1,7 +1,6 @@
 <?php
 
 require_once __DIR__ . '/ModbusTCP.php';
-require_once __DIR__ . '/ModbusGateway.php';
 require_once __DIR__ . '/SHIRegisters.php';
 
 /** Optional SHI transport. Java indices and the Java control protocol stay independent. */
@@ -91,26 +90,8 @@ trait LuxtronikModbusSHI
         return is_array($cache) && ($cache['source'] ?? '') === $this->VisualizationSourceKey() ? $cache : [];
     }
 
-    private function ModbusGatewayID(): int
-    {
-        $parent=(int)(IPS_GetInstance($this->InstanceID)['ConnectionID']??0);
-        if($parent<=0) return 0;
-        if(strtoupper(IPS_GetInstance($parent)['ModuleInfo']['ModuleID']??'')!=='{A5F663AB-C400-4FE5-B207-4D67CC030564}') throw new RuntimeException('Die übergeordnete Instanz ist kein Symcon-Modbus-Gateway.');
-        return $parent;
-    }
-
-    private function ModbusGatewaySignature(): array
-    {
-        $id=$this->ModbusGatewayID();
-        if($id===0) return [];
-        $socket=(int)(IPS_GetInstance($id)['ConnectionID']??0);
-        return [$id,hash('sha256',IPS_GetConfiguration($id)),$socket,$socket>0?hash('sha256',IPS_GetConfiguration($socket)):''];
-    }
-
     private function NewSHIClient(): LuxtronikModbusClient
     {
-        if($this->ModbusGatewayID()>0) return new LuxtronikModbusGateway(fn(array $request)=>$this->SendDataToParent(json_encode($request,JSON_THROW_ON_ERROR)));
-        // Retain the old connection for existing unparented installations until a gateway is linked.
         return new LuxtronikModbusTCP($this->ReadPropertyString('IPAddress'), $this->ReadPropertyInteger('ModbusPort'),
             $this->ReadPropertyInteger('ModbusUnitID'), $this->ReadPropertyInteger('ModbusTimeout'));
     }
@@ -445,54 +426,6 @@ trait LuxtronikModbusSHI
         $this->RefreshDerivedMeasurements();
     }
 
-    /** Read the running kernel's setup decisions, rather than inferring them from local mocks. */
-    private function GatewaySetupDiagnostic(): array
-    {
-        $read=static function(string $function,mixed ...$arguments):mixed {
-            if(!function_exists($function)) return ['unavailable'=>$function];
-            try {return @$function(...$arguments);}
-            catch(Throwable $error) {
-                if($error instanceof LuxtronikInstanceUnavailable) throw $error;
-                return ['error'=>$error->getMessage()];
-            }
-        };
-        $decode=static function(mixed $value):mixed {
-            if(!is_string($value)) return $value;
-            return json_decode($value,true)??$value;
-        };
-        $ids=['luxtronik'=>'{3884C1C3-F4FF-9A56-B982-B986E934A5E7}',
-            'goodwe'=>'{D1086D5A-8D52-4E19-AAAD-EFADC81633BD}',
-            'gateway'=>'{A5F663AB-C400-4FE5-B207-4D67CC030564}',
-            'clientSocket'=>'{3CFF0FD9-E306-41DB-9B5A-9D06D38576C3}'];
-        $modules=[];
-        foreach($ids as $name=>$id) $modules[$name]=[
-            'moduleID'=>$id,'metadata'=>$read('IPS_GetModule',$id),
-            'compatibleParentModules'=>$read('IPS_GetCompatibleModules',$id)];
-        $pairs=[];
-        foreach(['luxtronikToGateway'=>['luxtronik','gateway'],'goodweToGateway'=>['goodwe','gateway'],
-            'gatewayToClientSocket'=>['gateway','clientSocket']] as $name=>[$child,$parent])
-            $pairs[$name]=$read('IPS_IsModuleCompatible',$ids[$child],$ids[$parent]);
-        $gatewayIDs=$read('IPS_GetInstanceListByModuleID',$ids['gateway']);
-        $gateways=[];
-        if(is_array($gatewayIDs) && array_is_list($gatewayIDs)) foreach($gatewayIDs as $id) {
-            $instance=$read('IPS_GetInstance',(int)$id);
-            $config=$decode($read('IPS_GetConfiguration',(int)$id));
-            $gateways[]=['instanceID'=>$id,'parentInstanceID'=>$instance['ConnectionID']??null,
-                'configuration'=>is_array($config)?array_intersect_key($config,array_flip(['GatewayMode','DeviceID'])):[],
-                'parentSelection'=>$decode($read('IPS_GetCompatibleParents',(int)$id)),
-                'compatibleParentInstances'=>$read('IPS_GetCompatibleInstances',(int)$id),
-                'compatibleWithLuxtronik'=>$read('IPS_IsInstanceCompatible',$this->InstanceID,(int)$id)];
-        }
-        return ['symconVersion'=>$read('IPS_GetKernelVersion'),'symconRevision'=>$read('IPS_GetKernelRevision'),
-            'instanceID'=>$this->InstanceID,'firmwareStatus'=>$this->FirmwareStatusCaption(),
-            'moduleDefinition'=>json_decode(file_get_contents(__DIR__.'/module.json'),true),
-            'moduleParentSelection'=>$decode($this->GetCompatibleParents()),
-            'kernelParentSelection'=>$decode($read('IPS_GetCompatibleParents',$this->InstanceID)),
-            'compatibleParentInstances'=>$read('IPS_GetCompatibleInstances',$this->InstanceID),
-            'modules'=>$modules,'moduleCompatibility'=>$pairs,'gateways'=>$gateways,
-            'gatewayLookup'=>is_array($gatewayIDs) && array_is_list($gatewayIDs)?'ok':$gatewayIDs];
-    }
-
     /** Snapshot only: no network activity or object creation. */
     public function GetSHIData(): string
     {
@@ -512,7 +445,7 @@ trait LuxtronikModbusSHI
         $preferences=[];
         foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if(isset($row['preferredSource']))
             $preferences[(int)$row['id']]=$this->MeasurementSourceOrder((int)$row['id']);
-        return json_encode(['connectionSetup'=>$this->GatewaySetupDiagnostic(),'transport'=>$this->ModbusGatewayID()>0?'Symcon-Modbus-Gateway':'Direktverbindung (Bestand)','gatewayID'=>$this->ModbusGatewayID(),'updatedAt'=>$cache['updatedAt']??null,'stale'=>$cache['stale']??true,'values'=>$values,
+        return json_encode(['transport'=>'Modbus TCP (Direktverbindung)','gatewayID'=>0,'updatedAt'=>$cache['updatedAt']??null,'stale'=>$cache['stale']??true,'values'=>$values,
             'javaSupplementEnabled'=>true,'javaSupplement'=>$java,'measurementPriority'=>['Java','WebSocket','Modbus/SHI'],
             'measurementPreferences'=>$preferences,'javaOnlyWritesRemainAvailable'=>true,
             'nativeControlSource'=>'Java','shiControlsEnabled'=>$this->SHIWritingEnabled(),

@@ -4651,7 +4651,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     private function VisualizationSourceKey(): string
     {
         $key=['java-first',$this->ReadPropertyString('IPAddress'),$this->ReadPropertyInteger('Port'),
-            $this->ReadPropertyInteger('ModbusPort'),$this->ReadPropertyInteger('ModbusUnitID'),$this->ReadPropertyInteger('ModbusTimeout'),$this->ModbusGatewaySignature()];
+            $this->ReadPropertyInteger('ModbusPort'),$this->ReadPropertyInteger('ModbusUnitID'),$this->ReadPropertyInteger('ModbusTimeout')];
         return json_encode($key, JSON_THROW_ON_ERROR);
     }
 

@@ -2,7 +2,7 @@
 
 class LuxtronikModbusException extends RuntimeException {}
 
-/** Word-level operations shared by the native gateway and the existing direct connection. */
+/** Word-level operations for the direct Modbus TCP connection. */
 interface LuxtronikModbusClient
 {
     public function readInputRegisters(int $address,int $count): array;
