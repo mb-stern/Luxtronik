@@ -37,6 +37,7 @@ function IPS_InstanceExists(int $id): bool { return isset($GLOBALS['testInstance
 function IPS_LogMessage(string $sender, string $message): bool { $GLOBALS['testGlobalLogs'][] = [$sender,$message]; return true; }
 function IPS_GetKernelRunlevel(): int { return KR_READY; }
 function IPS_GetName(int $id): string { return $GLOBALS['testVariables'][$id]['name'] ?? ''; }
+function IPS_SetName(int $id,string $name): bool { $GLOBALS['testVariables'][$id]['name']=$name;return true; }
 function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '', 'ObjectPosition' => $GLOBALS['testVariables'][$id]['position'] ?? 0]; }
 function IPS_SetPosition(int $id, int $position): bool { $GLOBALS['testVariables'][$id]['position']=$position; return true; }
 function IPS_GetParent(int $id): int { return $GLOBALS['testVariables'][$id]['instance'] ?? 0; }

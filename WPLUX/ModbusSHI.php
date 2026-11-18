@@ -402,11 +402,20 @@ trait LuxtronikModbusSHI
         return null;
     }
 
+    private function SHIVariableLabel(array $point): string
+    {
+        return $point['bank']==='holding'?'SHI: '.preg_replace('/^SHI[- :]+/u','',$point['label']):$point['label'];
+    }
+
     private function EnsureSHIVariable(array $point): void
     {
         $ident=$point['ident'];
+        $label=$this->SHIVariableLabel($point);
         $existing=@$this->GetIDForIdent($ident);
         if ($existing!==false) {
+            $name=IPS_GetName($existing);
+            if($point['bank']==='holding' && $name!==$label && preg_match('/^SHI[- :]+/u',$name)
+                && preg_replace('/^SHI[- :]+/u','',$name)===substr($label,5)) IPS_SetName($existing,$label);
             if($point['legacy']===null && $point['factor']<1 && IPS_GetVariable($existing)['VariableType']===VARIABLETYPE_FLOAT)
                 $this->EnsureSHIFloatPresentation($point,$existing);
             return;
@@ -424,10 +433,9 @@ trait LuxtronikModbusSHI
             IPS_SetVariableProfileDigits($profile,$type===2?1:0);
             IPS_SetVariableProfileText($profile,'',$point['unit']!==''?' '.$point['unit']:'');
             IPS_SetVariableProfileValues($profile,(float)($point['min']??0),(float)($point['max']??0),$type===2?0.1:1);
-            foreach ($point['options']??[] as $value=>$label) IPS_SetVariableProfileAssociation($profile,(float)$value,$label,'',-1);
+            foreach ($point['options']??[] as $value=>$optionLabel) IPS_SetVariableProfileAssociation($profile,(float)$value,$optionLabel,'',-1);
         }
         $method=match ($type) {0=>'RegisterVariableBoolean',1=>'RegisterVariableInteger',default=>'RegisterVariableFloat'};
-        $label=$point['bank']==='holding' && !str_starts_with($point['label'],'SHI')?'SHI: '.$point['label']:$point['label'];
         $this->$method($ident,$label,$profile,$point['selection']);
         if($type===VARIABLETYPE_FLOAT) $this->EnsureSHIFloatPresentation($point,$this->GetIDForIdent($ident));
     }
@@ -457,7 +465,7 @@ trait LuxtronikModbusSHI
             $presentation=['PRESENTATION'=>$slider,'MIN'=>(float)$point['min'],'MAX'=>(float)$point['max'],
                 'STEP_SIZE'=>$step,'DIGITS'=>$digits,'SUFFIX'=>' '.$point['unit'],'PERCENTAGE'=>false];
             if(array_intersect_key($default,$presentation)!=$presentation)
-                $this->RegisterVariableFloat($point['ident'],$point['label'],$presentation,$point['selection']);
+                $this->RegisterVariableFloat($point['ident'],$this->SHIVariableLabel($point),$presentation,$point['selection']);
         }
         // A converted slider can override its default with the old whole-number step.
         $custom=$variable['VariableCustomPresentation']??[];
