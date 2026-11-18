@@ -130,6 +130,19 @@ keine vorhandene Java-Steuervariable. Auswählen, Speichern und Lesen senden
 keine Vorgaben. Das Modul schreibt erst beim Schalten und bestätigt die Werte
 durch Rücklesen. Alte Vorgaben werden nach einem Neustart nicht erneut gesendet.
 
+Die geschaltete SHI-Variable zeigt den Wunschwert nach der Prüfung von Freigabe
+und Wertebereich sofort. Die tatsächliche Übernahme wird getrennt durch
+Rücklesen bestätigt. Gerade die Warmwasserregister 10005–10008 können verzögert
+reagieren; das Modul wartet dafür pro Register bis zu **15 Sekunden** und
+wiederholt den Schreibbefehl nicht. Scheitert die Bestätigung, wird die Anzeige
+auf den vor dem Senden gelesenen Wert zurückgesetzt. Die Fehlermeldung nennt
+gesendeten und zurückgelesenen Wert.
+
+Die SHI-Register enthalten externe Vorgaben, etwa **Holding-Register 10006** für
+Warmwasser. Den aktuell wirksamen Warmwasser-Sollwert liefert dagegen
+**Input-Register 10121**, entsprechend Java-Istwert 18. Ein gespeicherter
+SHI-Sollwert allein bedeutet daher noch keine aktive Beeinflussung.
+
 Die SHI-Anleitung nennt einen Rückfall nach 15 Minuten ohne Modbus-Anfragen.
 Dieser Rückfall wird vom Regler gesteuert; lesende Modbus-Anfragen können die
 Kommunikation aufrechterhalten. Zum gezielten Beenden **Modus Heizen auf 0**
@@ -160,6 +173,33 @@ Unbekannte Java-Indizes können je nach Firmware vorkommen. Die
 ist eine Community-Referenz; eine vollständige Zuordnung für jede Firmware ist
 daraus nicht ableitbar. Parameter aus Kommando 3003 und Istwerte aus 3004 haben
 getrennte Indexräume.
+
+#### Rückmeldungen der Steuerung
+
+Die oberen Kacheln **Warmwasser**, **Heizung** und **Kühlen** zeigen die
+eingestellten Betriebsarten, beispielsweise Automatik oder Aus. Sie zeigen
+keine momentan aktive Heiz- oder Warmwasseranforderung.
+
+| Anzeige | Rückmeldung im Modul | Java-Schreibparameter |
+| --- | --- | --- |
+| Warmwasser: Betriebsart | Befehl 3003, Parameter 4 | 4 |
+| Heizung: Betriebsart | Befehl 3003, Parameter 3 | 3 |
+| Kühlen: Betriebsart | Befehl 3003, Parameter 108 | 108 |
+| WW Soll | Befehl 3004, ID 18: aktuell wirksamer Sollwert | 105 |
+| Heizkorrektur / Temperaturkorrektur | Befehl 3003, Parameter 1 | 1 |
+
+Diese Rückmeldungen werden im gemeinsamen Aktualisierungszyklus intern gelesen,
+auch ohne angelegte Steuer- oder Istwertvariablen. Angelegte Steuervariablen und
+die Grafik verwenden diese Rückmeldungen. Externe Änderungen werden beim nächsten
+erfolgreichen Lesen übernommen. Die Quellenwahl für Istwerte stellt die bisherigen
+Java-Schreibbefehle nicht um. Für WW Soll gilt auch eine bestätigte, zugeordnete
+Ersatzquelle, etwa Modbus-Input-Register 10121.
+
+Beim Warmwasser bleiben Schreiben und Anzeige bewusst getrennt: Der normale
+Schreibbefehl setzt Java-Parameter 105; die Anzeige folgt dem wirksamen Sollwert
+aus ID 18. Dieser kann durch eine externe Vorgabe abweichen. **Heizkorrektur aus
+Java-Parameter 1** und **SHI-Offset Heizen aus Holding-Register 10002** sind
+eigenständige Vorgaben.
 
 #### Profile
 
@@ -250,7 +290,7 @@ Version 5.0 (in Vorbereitung; Änderungen seit der bisherigen Version)
 - **Aktualisierung und Darstellung:** Sammelauswahl der Lesequelle, keine zusätzliche Modbus-Cachepause zwischen Aktualisierungen, verständliche SHI-Freigaben, volle Kachelfläche ohne reservierten Titelbereich, verständlicher Displayzugang und einheitliche Temperaturdarstellung. Die registerbedingte 100-W-Auflösung bleibt bestehen.
 - **Robustere Einrichtung:** neue Instanz ohne konfigurierte IP mit deaktivierter Abfrage und ohne Verbindungsfehler im Systemlog; lokale Prüfungen für Anlage, Protokolle, Steuerung und Darstellung. Gerätetests und die Prüfung im jeweiligen Symcon-System bleiben zusätzlich erforderlich.
 - **Schutz vor Warnungskaskaden:** Bei nicht verfügbarer Instanzschnittstelle werden Aktualisierung, Variablenmeldungen, Formular, Grafik und Konfiguration beim ersten Fehler abgebrochen. Beide Symcon-Meldungen „InstanceInterface is not available“ und „InstanceInterface is not a PHP module“ werden erkannt.
-- **Aktuelle Steuerrückmeldungen:** Warmwasser Soll zeigt den wirksamen Sollwert aus Java-ID 18, Heizkorrektur die Einstellung aus Java-Parameter 1. Beide werden unabhängig von angelegten Variablen intern gelesen; der Java-Warmwasser-Schreibbefehl bleibt Parameter 105. SHI-Steuervariablen zeigen beim Schalten sofort den Wunschwert, während die Bestätigung getrennt erfolgt; bei Fehlern wird die Anzeige zurückgesetzt.
+- **Aktuelle Steuerrückmeldungen:** Betriebsarten über Java 3003 (Warmwasser 4, Heizung 3, Kühlen 108), Warmwasser Soll über 3004/ID 18 und Heizkorrektur über 3003/Parameter 1. Die Werte werden unabhängig von angelegten Variablen intern gelesen; der Java-Warmwasser-Schreibbefehl bleibt Parameter 105. SHI-Steuervariablen zeigen beim Schalten sofort den Wunschwert, während die Bestätigung getrennt erfolgt; bei Fehlern wird die Anzeige zurückgesetzt.
 - **SHI-Schreibablauf:** dokumentierte Modusabhängigkeiten vor der Vorgabe setzen und bestätigen; bei Fehlern selbst geänderte Modi nach Möglichkeit zurücknehmen. Verzögerte Rückmeldung der Warmwasserregister 10005–10008 bis zu 15 Sekunden je Register abwarten. Keine wiederholten Zielwertbefehle; eine fehlende Bestätigung nennt gesendeten und gelesenen Wert. Alle ausgewählten SHI-Steuervariablen werden aus ihren tatsächlichen Holding-Werten aktualisiert; wirksame Reglersollwerte bleiben eigene Istwerte.
 
 Version 4.7 (19.10.2026)

@@ -10,6 +10,12 @@ Gegenstücke verwenden bestehende Variablen; die bisherigen Java-Steuerungen und
 Zeitprogramme bleiben erhalten. SHI-Vorgaben für externe Regelungen stehen als
 eigene Steuervariablen zur Verfügung.
 
+Die Betriebsarten und Heizkorrektur werden intern über Java-Befehl **3003**
+gelesen; **WW Soll** zeigt den wirksamen Sollwert aus **3004, ID 18**.
+Diese Abfragen benötigen keine angelegten Symcon-Variablen. Die Heizkorrektur
+wird aus Parameter 1 gelesen. Details stehen in der
+[Moduldokumentation](WPLUX/README.md#rückmeldungen-der-steuerung).
+
 Die integrierte HTML-SDK-Grafik bietet **Luft/Wasser** und **Sole/Wasser** im
 gleichen Stil, mit passenden Messwerten und optionalen Anlagenkomponenten.
 
