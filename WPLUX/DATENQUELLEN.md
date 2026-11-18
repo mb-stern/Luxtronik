@@ -80,7 +80,16 @@ sichtbar. Regler-Menükennungen werden dynamisch gelesen, nicht fest eingebaut.
 **Steuerung, Zeitprogramme und COP/JAZ** enthält die bisherigen Einstellungen.
 `Anpassung_Temp`, `Anpassung_WW` und `Anpassung_RBE` bleiben Java-Reglereinstellungen.
 Betriebsarten und Zeitprogramme behalten ihre bisherigen Variablen und Aktionen.
-Die Auswahl eines SHI-Reglers ändert deren Protokoll und Inhalt nicht.
+Die Auswahl einer SHI-Steuervariablen stellt die bisherigen Java-Schreibbefehle nicht um.
+
+Warmwasser-Soll und Heizkorrektur werden unabhängig von angelegten Variablen
+intern im gemeinsamen Zyklus gelesen. **Warmwasser Soll** zeigt den aktuell
+wirksamen Sollwert aus Java-Istwert 18 bzw. dessen zugeordneter Ersatzquelle;
+der normale Java-Schreibbefehl verwendet weiterhin Parameter 105. Eine externe
+Beeinflussung kann deshalb in der Anzeige sichtbar werden. **Temperaturkorrektur**
+kommt aus Java-Parameter 1. Betriebsarten und weitere Parameter werden mit einer
+gemeinsamen 3003-Abfrage zwischengespeichert, auch wenn ihre Variablen fehlen.
+Diese Parameterabfrage läuft auch nach einer fehlgeschlagenen Istwertabfrage.
 
 ## SHI: eigene Vorgaben für externe Regelungen
 
@@ -103,8 +112,17 @@ und bestätigt. Bei Warmwasser ist das Modus 10005, danach folgt Sollwert, Offse
 oder Level. Die Register 10005–10008 können ihre Werte
 verzögert übernehmen; das Modul wartet pro Register bis zu 15 Sekunden auf die
 Bestätigung. Währenddessen wird nur gelesen, der Schreibbefehl wird nicht
-wiederholt. Erst bestätigte Werte werden übernommen. Bei abweichender Rückmeldung
+wiederholt. Erst bestätigte Werte gelten als Geräterückmeldung. Bei abweichender Rückmeldung
 nennt die Fehlermeldung gesendeten und gelesenen Wert.
+
+Die geschaltete Symcon-Variable zeigt den gewünschten SHI-Wert sofort nach der
+Prüfung von Freigabe und Wertebereich. Bis zum Rücklesen bleibt er als ausstehend
+geführt: In der SHI-Liste steht **Bestätigung läuft**, im Statusbericht sind
+`pending` und `requestedValue` getrennt vom gelesenen `value`. Ältere Rückmeldungen
+überschreiben den Wunschwert währenddessen nicht. Scheitert die Übernahme, wird
+die Anzeige auf den vor dem Senden gelesenen Wert zurückgesetzt; die nächste
+erfolgreiche Abfrage übernimmt wieder die tatsächliche Rückmeldung. Dadurch
+entstehen keine weiteren Schreibbefehle an den Regler.
 
 Scheitert eine zusammengesetzte Vorgabe, versucht das Modul, die von diesem
 Aufruf geänderten Modi in umgekehrter Reihenfolge zurückzusetzen. Dabei wird

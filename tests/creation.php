@@ -18,7 +18,7 @@ $tests['fresh module and first ApplyChanges work without a device address or par
     }
 };
 $tests['newly configured Java instance starts the shared timer and reads without creation errors'] = static function():void {
-    withServer([[pack('N*',3004,0),frame(3004,array_fill(0,276,0))]],static function(Luxtronik $m):void {
+    withServer(controllerCycles([[pack('N*',3004,0),frame(3004,array_fill(0,276,0))]]),static function(Luxtronik $m):void {
         $m->properties['UpdateInterval']=5;$m->ApplyChanges();
         check($m->errors===[] && $m->status===102,'Configured first save logs errors');
         check($m->timers['UpdateTimer']===5000 && $m->properties['MeasurementBulkSource']==='java','New instance loses Java default or shared polling');

@@ -4,13 +4,18 @@ Grundlage ist das Herstellerhandbuch **83026900aDE**. Java-Steuerungen und SHI s
 unterschiedliche Reglerfunktionen; ähnliche Bezeichnungen begründen keine identische
 Steuervariable. Die Istwertquellen werden unabhängig davon zusammengeführt.
 
-| Bestehende Java-Variable | Java-Parameter | Eigenständige SHI-Variable | SHI-Register |
+| Bestehende Java-Variable | Java-Schreibparameter | Eigenständige SHI-Variable | SHI-Register |
 | --- | --- | --- | --- |
 | `Anpassung_Temp` | 1 | `SHI_Offset_Heizen` | 10002 |
 | `Anpassung_WW` | 105 | `SHI_Sollwert_Warmwasser` | 10006 |
 | `Anpassung_RBE` | 1148 | `SHI_Raumtemperatur_Soll` | 10060 |
 
-Die Java-Variablen behalten Objekt-IDs, Namen, Profile und Java-3002/3003-Aktionen.
+Die Java-Variablen behalten Objekt-IDs, Namen, Profile und ihre Java-Schreibaktionen.
+Bei `Anpassung_WW` bleibt der Schreibparameter 105 erhalten; die Anzeige verwendet
+den aktuell wirksamen Warmwasser-Sollwert aus Java-Istwert 18 bzw. dessen
+zugeordneter Ersatzquelle. Dieser kann sich auch durch eine externe Vorgabe ändern.
+Die Heizkorrektur wird weiterhin aus Parameter 1 zurückgelesen. Beide Rückmeldungen
+werden intern unabhängig davon gelesen, ob Symcon-Variablen angelegt sind.
 SHI-Vorgaben sind zusätzliche externe Eingriffe. Eine Java-Korrektur und ein
 SHI-Offset können gleichzeitig wirken und sich beispielsweise gegenseitig aufheben.
 SHI-Betriebsmodi „Kein Einfluss / Sollwert / Offset / Level“ sind nicht die

@@ -4768,7 +4768,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             && !in_array($property, ['HeatingCircuitPumpRunning1','HeatingCircuitPumpValue1'], true)
             && !$this->ReadPropertyBoolean('VisualizationHeatingCircuit' . $match[2])) return null;
         foreach($this->GetVisualizationIdents($property) as $ident) {
-            $point=$this->GetHybridVisualizationPoint($ident);
+            $point=$this->InternalControlReading($ident)??$this->GetHybridVisualizationPoint($ident);
             if($point!==null) return $point;
         }
         // Existing own/external assignments remain compatible when no internal reading is available.

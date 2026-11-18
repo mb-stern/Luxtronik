@@ -199,6 +199,7 @@ trait LuxtronikDataSources
     private function SyncSHIControlVariables(bool $removeUnselected=false): void
     {
         $writes=$this->SHIWritingEnabled() && $this->ReadPropertyBoolean('InstanceStatus') && $this->InterfaceSupport('modbus')!==false;
+        $pending=$this->PendingSHIWrite();
         foreach($this->SHICatalog() as $point) {
             if($point['bank']!=='holding') continue;
             if(!$this->SHIControlEnabled($point)) {
@@ -207,6 +208,7 @@ trait LuxtronikDataSources
                 continue;
             }
             $this->EnsureSHIVariable($point);
+            if(($pending['ident']??null)===$point['ident']) continue;
             $reading=$writes?$this->GetSHIVisualizationPoint($point['ident']):null;
             if($reading!==null) {
                 $this->SetValueIfChanged($point['ident'],$reading['value']);

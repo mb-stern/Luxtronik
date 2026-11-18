@@ -1327,6 +1327,7 @@ class Luxtronik extends IPSModuleStrict
             $this->SetBuffer('JavaAvailability',json_encode(['source'=>$source,'count'=>0,'failed'=>true,'lastSuccessfulCount'=>$knownCount],JSON_THROW_ON_ERROR));
             $this->SetBuffer('ControlSources','');
             $this->UpdateMeasurementSupplements();
+            $this->RefreshControlValues();
             $this->RefreshVisualization();
             return;
         }
@@ -1364,8 +1365,8 @@ class Luxtronik extends IPSModuleStrict
          * Wichtig: Eine einzige 3003-Abfrage pro Update-Zyklus, nicht eine
          * neue Socket-Verbindung je Sollwert.
          */
-        $this->RefreshControlValues();
         $this->UpdateMeasurementSupplements();
+        $this->RefreshControlValues();
         $this->RefreshVisualization();
     }
 
@@ -1677,93 +1678,68 @@ class Luxtronik extends IPSModuleStrict
     }
 
     /**
-     * Liest die konfigurierten Sollwerte/Betriebsarten mit EINER 3003-Abfrage
-     * und übernimmt nur tatsächlich geänderte Werte nach IP-Symcon.
+     * Liest Parameter intern mit einer 3003-Abfrage pro Zyklus, unabhängig
+     * von Variablen. Warmwasser verwendet die wirksame Rückmeldung aus ID 18.
      */
     private function RefreshControlValues(): void
     {
-        $targets = [];
-
-        if ($this->ReadPropertyBoolean('HeizungVisible')) {
-            $targets['Mode_Heizung'] = ['index' => 3, 'conversion' => 'raw'];
+        // Always cache the controller feedback, independently of optional variables.
+        $targets = [
+            'Mode_Heizung'=>['index'=>3,'conversion'=>'raw','visible'=>'HeizungVisible'],
+            'Mode_WW'=>['index'=>4,'conversion'=>'raw','visible'=>'WarmwasserVisible'],
+            'Mode_Kuehlung'=>['index'=>108,'conversion'=>'raw','visible'=>'KuehlungVisible'],
+            'Mode_Schwimmbad'=>['index'=>119,'conversion'=>'raw','visible'=>'SchwimmbadVisible'],
+            'Anpassung_Temp'=>['index'=>1,'conversion'=>'minus_correction','visible'=>'TempsetVisible'],
+            'Anpassung_RBE'=>['index'=>1148,'conversion'=>'tenth','visible'=>'RBEsetVisible']
+        ];
+        $source=$this->VisualizationSourceKey();
+        $controlSources=['source'=>$source,'updatedAt'=>time(),'idents'=>[],'values'=>[],'sources'=>[]];
+        $water=$this->GetHybridVisualizationPoint('Warmwasser_Soll_Temperatur');
+        if($water!==null) {
+            $controlSources['idents']['Anpassung_WW']=true;
+            $controlSources['values']['Anpassung_WW']=$water['value'];
+            $controlSources['sources']['Anpassung_WW']=$water['source'];
+            if($this->SharedNumericControlEnabled('Anpassung_WW')) $this->SetValueIfChanged('Anpassung_WW',$water['value']);
         }
-
-        if ($this->ReadPropertyBoolean('WarmwasserVisible')) {
-            $targets['Mode_WW'] = ['index' => 4, 'conversion' => 'raw'];
-        }
-
-        if ($this->ReadPropertyBoolean('KuehlungVisible')) {
-            $targets['Mode_Kuehlung'] = ['index' => 108, 'conversion' => 'raw'];
-        }
-
-        if ($this->ReadPropertyBoolean('SchwimmbadVisible')) {
-            $targets['Mode_Schwimmbad'] = ['index' => 119, 'conversion' => 'raw'];
-        }
-
-        if ($this->SharedNumericControlEnabled('Anpassung_Temp')) {
-            $targets['Anpassung_Temp'] = ['index' => 1, 'conversion' => 'minus_correction'];
-        }
-
-        if ($this->SharedNumericControlEnabled('Anpassung_WW')) {
-            $targets['Anpassung_WW'] = ['index' => 105, 'conversion' => 'tenth'];
-        }
-
-        if ($this->SharedNumericControlEnabled('Anpassung_RBE')) {
-            $targets['Anpassung_RBE'] = ['index' => 1148, 'conversion' => 'tenth'];
-        }
-
-        if ($targets === []) {
-            return;
-        }
-
-        $datenRaw = $this->ReadData(3003);
-        $controlSources=['source'=>$this->VisualizationSourceKey(),'updatedAt'=>time(),'idents'=>[]];
-        $this->SetBuffer('ControlSources',json_encode($controlSources,JSON_THROW_ON_ERROR));
-        if ($datenRaw === null) {
-            return;
-        }
-
-        foreach ($targets as $ident => $target) {
-            $index = (int)$target['index'];
-
-            if (!array_key_exists($index, $datenRaw)) {
-                $this->SendDebug(
-                    'Sollwerte empfangen',
-                    "Index {$index} für {$ident} wurde von 3003 nicht geliefert",
-                    0
-                );
-                continue;
-            }
-
-            $value = $datenRaw[$index];
+        $this->SetBuffer('ControlSources',json_encode($controlSources,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+        $datenRaw=$this->ReadData(3003);
+        if($datenRaw===null || $source!==$this->VisualizationSourceKey()) return;
+        foreach($targets as $ident=>$target) {
+            $index=$target['index'];
+            if(!array_key_exists($index,$datenRaw)) continue;
+            $value=$datenRaw[$index];
+            if($target['conversion']==='minus_correction' && $value>2147483647) $value-=4294967296;
+            if($target['conversion']!=='raw') $value*=0.1;
             $controlSources['idents'][$ident]=true;
-
-            switch ($target['conversion']) {
-                case 'minus_correction':
-                    if ($value > 2147483647) {
-                        $value -= 4294967296;
-                    }
-                    $value *= 0.1;
-                    break;
-
-                case 'tenth':
-                    $value *= 0.1;
-                    break;
-
-                case 'raw':
-                default:
-                    break;
-            }
-
-            if ($this->SetValueIfChanged($ident, $value)) {
-                $this->SendDebug(
-                    'Sollwerte empfangen',
-                    "{$ident} wurde von der Luxtronik übernommen: {$value}",
-                    0
-                );
-            }
+            $controlSources['values'][$ident]=$value;
+            $controlSources['sources'][$ident]='Java';
+            if($this->ReadPropertyBoolean($target['visible']) && $this->SetValueIfChanged($ident,$value))
+                $this->SendDebug('Sollwerte empfangen',$ident.' wurde von der Luxtronik übernommen: '.$value,0);
         }
-        $this->SetBuffer('ControlSources',json_encode($controlSources,JSON_THROW_ON_ERROR));
+        $this->SetBuffer('ControlSources',json_encode($controlSources,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+    }
+
+    private function InternalControlReading(string $ident): ?array
+    {
+        $cache=json_decode($this->GetBuffer('ControlSources'),true)??[];
+        if(($cache['source']??'')!==$this->VisualizationSourceKey() || !array_key_exists($ident,$cache['values']??[])) return null;
+        $value=$cache['values'][$ident];
+        $unit=str_starts_with($ident,'Anpassung_')?'°C':'';
+        $id=@$this->GetIDForIdent($ident);
+        $id=$id!==false && IPS_VariableExists($id)?$id:0;
+        $formatted=$unit!==''?number_format((float)$value,1,'.','').' '.$unit:(string)$value;
+        if($id>0 && GetValue($id)===$value) $formatted=GetValueFormatted($id);
+        return ['variableId'=>$id,'ident'=>$ident,'value'=>$value,'formatted'=>$formatted,
+            'unit'=>$unit,'binary'=>false,'source'=>$cache['sources'][$ident]??'Java'];
+    }
+
+    private function StoreInternalControlReading(string $ident,mixed $value,string $source): void
+    {
+        if($source!==$this->VisualizationSourceKey()) return;
+        $cache=json_decode($this->GetBuffer('ControlSources'),true)??[];
+        if(($cache['source']??'')!==$source) $cache=['source'=>$source,'idents'=>[],'values'=>[],'sources'=>[]];
+        $cache['updatedAt']=time();$cache['idents'][$ident]=true;$cache['values'][$ident]=$value;$cache['sources'][$ident]='Java';
+        $this->SetBuffer('ControlSources',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
     }
 
     private function setParameter(string $type, mixed $value): bool
@@ -1812,8 +1788,21 @@ class Luxtronik extends IPSModuleStrict
 
     private function getParameter(string $mode): void
     {
+        if($mode==='Anpassung_WW') {
+            $source=$this->VisualizationSourceKey();
+            $raw=$this->ReadData(3004);
+            if($raw!==null && array_key_exists(18,$raw) && $source===$this->VisualizationSourceKey()) {
+                $value=$this->convertValueBasedOnID($raw[18],18);
+                $this->StoreVisualizationPoints([18=>$value],true);
+                $this->SetValueIfChanged($mode,$value);
+                $this->StoreInternalControlReading($mode,$value,$source);
+            }
+            return;
+        }
+
+        $source=$this->VisualizationSourceKey();
         $datenRaw = $this->ReadData(3003);
-        if ($datenRaw === null) {
+        if ($datenRaw === null || $source!==$this->VisualizationSourceKey()) {
             return;
         }
 
@@ -1823,12 +1812,10 @@ class Luxtronik extends IPSModuleStrict
             case 'Mode_Kuehlung':
             case 'Mode_Schwimmbad':
             case 'Anpassung_Temp':
-            case 'Anpassung_WW':
             case 'Anpassung_RBE':
                 // Index bestimmen
                 $index = match ($mode) {
                     'Anpassung_Temp' => 1,
-                    'Anpassung_WW'   => 105,
                     'Mode_Heizung'   => 3,
                     'Mode_WW'        => 4,
                     'Mode_Kuehlung'  => 108,
@@ -1851,7 +1838,7 @@ class Luxtronik extends IPSModuleStrict
                         $value -= 4294967296;
                     }
                     $value *= 0.1;
-                } elseif (in_array($mode, ['Anpassung_WW', 'Anpassung_RBE'], true)) {
+                } elseif ($mode==='Anpassung_RBE') {
                     $value *= 0.1;
                 }
         
@@ -1863,6 +1850,7 @@ class Luxtronik extends IPSModuleStrict
                         0
                     );
                 }
+                $this->StoreInternalControlReading($mode,$value,$source);
                 break;
         
             default: // Hier werden die ganzen Timer geholt

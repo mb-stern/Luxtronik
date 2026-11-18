@@ -280,17 +280,38 @@ $tests['all selected SHI controls read actual holding values and keep effective 
     check(array_filter($requests,fn($r)=>$r['function']===16)===[],'Reading control values writes back defaults');
 };
 $tests['DHW mode precedes the setpoint and delayed commits are confirmed without repeated writes'] = static function():void {
+    $module=new class extends Luxtronik {
+        public mixed $onValue=null;
+        protected function SetValue(string $ident,mixed $value): bool {
+            $result=parent::SetValue($ident,$value);
+            if($this->onValue!==null) ($this->onValue)($this,$ident,$value);
+            return $result;
+        }
+    };
     $requests=withSHI(static function(Luxtronik $m):void {
         $m->properties['SHIControlList']='[{"id":310005,"enabled":true},{"id":310006,"enabled":true}]';
         invoke($m,'UpdateModbusSupplement');
         $target=$m->GetIDForIdent('SHI_Sollwert_Warmwasser');
         check(GetValue($target)===40.0,'Initial SHI default not read');
+        $shownAt=null;$started=microtime(true);
+        $m->onValue=static function(Luxtronik $instance,string $ident,mixed $value) use (&$shownAt,$target):void {
+            if($ident!=='SHI_Sollwert_Warmwasser' || $value!==50.0) return;
+            $shownAt=microtime(true);
+            $data=json_decode($instance->GetSHIData(),true);
+            $row=array_values(array_filter($data['values'],fn($p)=>$p['bank']==='holding' && $p['address']===10006))[0];
+            check($row['pending'] && $row['requestedValue']===50.0 && $row['value']===40.0,'Desired value masquerades as a confirmed reading');
+            invoke($instance,'SyncSHIControlVariables');
+            check(GetValue($target)===50.0,'Old feedback overwrites the pending display');
+        };
         $m->RequestAction('SHI_Sollwert_Warmwasser',50.0);
+        $m->onValue=null;
+        check($shownAt!==null && $shownAt-$started<0.5,'SHI variable waits for delayed readback before displaying the desired value');
+        check(invoke($m,'PendingSHIWrite')===null,'Confirmed write stays pending');
         check(GetValue($target)===50.0 && GetValue($m->GetIDForIdent('SHI_Modus_Warmwasser'))===1,'Delayed target or mode not published');
         invoke($m,'UpdateModbusSupplement');
         check(GetValue($target)===50.0,'Confirmed target lost on next poll');
     },['holding'=>[10005=>0,10006=>400],'input'=>[10122=>300,10123=>750],
-        'discrete'=>[10001=>1],'enforceDependencies'=>true,'writeDelay'=>[10005=>2.0,10006=>2.0]]);
+        'discrete'=>[10001=>1],'enforceDependencies'=>true,'writeDelay'=>[10005=>2.0,10006=>2.0]],$module);
     $writes=array_values(array_filter($requests,fn($r)=>$r['function']===16));
     check(array_column($writes,'address')===[10005,10006] && array_column($writes,'words')===[[1],[500]],'DHW write repeated or sent before its mode');
 };
@@ -301,12 +322,17 @@ $tests['DHW mode rejection stops the target write and mismatched target reports 
         'fault'=>['function'=>16,'address'=>10005,'kind'=>'ack']]);
     check(array_diff(array_column(array_values(array_filter($requests,fn($r)=>$r['function']===16)),'address'),[10005])===[],'Rejected DHW mode still sends a target');
     $requests=withSHI(static function(Luxtronik $m):void {
+        $m->properties['SHIControlList']='[{"id":310006,"enabled":true}]';
+        invoke($m,'UpdateModbusSupplement');
+        $id=$m->GetIDForIdent('SHI_Sollwert_Warmwasser');
+        check(GetValue($id)===40.0,'Failure test did not read its starting value');
         try {$m->SetSHIValue('SHI_Sollwert_Warmwasser',45.0);throw new LogicException('Ignored target reported success');}
         catch(RuntimeException $error) {
             check(str_contains($error->getMessage(),'10006') && str_contains($error->getMessage(),'45.0 °C')
                 && str_contains($error->getMessage(),'40.0 °C'),'Readback error omits sent or actual temperature');
         }
         check($m->status===201 && json_decode($m->GetSHIData(),true)['stale'],'Failed target is published as confirmed');
+        check(GetValue($id)===40.0 && invoke($m,'PendingSHIWrite')===null,'Failed target leaves the desired value displayed');
     },['holding'=>[10005=>1,10006=>400],'input'=>[10122=>300,10123=>750],'discrete'=>[10001=>1],'ignoreWrites'=>true]);
     check(count(array_filter($requests,fn($r)=>$r['function']===16))===1,'Failed DHW target was resent');
 };
@@ -361,8 +387,8 @@ $tests['selected holding controls preserve existing IDs names types and never wr
     },['discrete'=>[10000=>1]]);check(array_filter($requests,fn($r)=>$r['function']===16)===[],'Configuration wrote default values');
 };
 $tests['Java targets and temporary SHI requests remain separate variables and write protocols'] = static function():void {
-    $values=array_fill(0,106,0);$values[105]=505;
-    withServer([[pack('N*',3002,105,505),pack('N*',3002,105)],[pack('N*',3003,0),frame(3003,$values)]],static function(Luxtronik $m):void {
+    $values=array_fill(0,106,0);$values[105]=505;$values[18]=505;
+    withServer([[pack('N*',3002,105,505),pack('N*',3002,105)],[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $m):void {
         $requests=withSHI(static function(Luxtronik $m):void {
             $m->properties['WWsetVisible']=true;
             $m->properties['SHIControlList']='[{"id":310006,"enabled":true},{"id":310002,"enabled":true}]';
@@ -407,7 +433,7 @@ $tests['uint32 hours do not sign-wrap and optional sentinels remain unavailable'
 };
 
 $tests['selecting SHI controls does not activate or overwrite persistent Java controls'] = static function():void {
-    $values=array_fill(0,1149,0);$values[1]=4294967281;$values[105]=505;$values[1148]=225;
+    $values=array_fill(0,1149,0);$values[1]=4294967281;$values[105]=505;$values[18]=505;$values[1148]=225;
     withServer([[pack('N*',3003,0),frame(3003,$values)]],static function(Luxtronik $m):void {
         $m->properties['SHIControlList']='[{"id":310002,"enabled":true},{"id":310006,"enabled":true},{"id":310060,"enabled":true}]';
         foreach(['Anpassung_Temp'=>'TempsetVisible','Anpassung_WW'=>'WWsetVisible','Anpassung_RBE'=>'RBEsetVisible'] as $ident=>$property) {
@@ -415,6 +441,7 @@ $tests['selecting SHI controls does not activate or overwrite persistent Java co
             $m->properties[$property]=true;shiVariable($m,$ident,0.0);
         }
         invoke($m,'SyncSHIControlVariables');
+        invoke($m,'StoreVisualizationPoints',[18=>50.5]);
         invoke($m,'RefreshControlValues');
         foreach(['Anpassung_Temp'=>-1.5,'Anpassung_WW'=>50.5,'Anpassung_RBE'=>22.5] as $ident=>$expected) check(GetValue($m->GetIDForIdent($ident))===$expected,'Persistent Java readback changed');
         check(GetValue($m->GetIDForIdent('SHI_Offset_Heizen'))===0.0 && GetValue($m->GetIDForIdent('SHI_Sollwert_Warmwasser'))===0.0,'Java readback overwrote SHI requests');
@@ -578,7 +605,7 @@ $tests['a failed optional Modbus scan clears partial values backs off and preser
 
 $tests['normal update reads Java first while the configured write route sends only explicit Modbus commands'] = static function():void {
     $values=array_fill(0,276,0);$values[15]=123;
-    withServer([[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $m):void {
+    withServer(controllerCycles([[pack('N*',3004,0),frame(3004,$values)]]),static function(Luxtronik $m):void {
         $requests=withSHI(static function(Luxtronik $m):void {
             $m->properties['IDListe']='[{"id":15,"enabled":true},{"id":310041,"enabled":true}]';
             $m->Update();
@@ -651,7 +678,7 @@ $tests['timer control source labels match actual write routing and refresh witho
 
 $tests['preferred Modbus measurement overrides Java zeroes remain valid and writing stays disabled'] = static function():void {
     $values=array_fill(0,276,0);$values[15]=123;
-    withServer([[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $m):void {
+    withServer(controllerCycles([[pack('N*',3004,0),frame(3004,$values)]]),static function(Luxtronik $m):void {
         $requests=withSHI(static function(Luxtronik $m):void {
             $m->properties['CommunicationMode']='java';$m->properties['VisualizationHeatingCircuit1']=false;
             $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"modbus"}]';
@@ -897,8 +924,8 @@ $tests['Java source availability respects real frame length and survives tempora
 };
 
 $tests['failed Java polls retain the last confirmed frame length for source selection'] = static function():void {
-    withServer([[pack('N*',3004,0),frame(3004,array_fill(0,50,0))],
-        [pack('N*',3004,0),pack('N*',3003,0,0)]],static function(Luxtronik $m):void {
+    withServer(controllerCycles([[pack('N*',3004,0),frame(3004,array_fill(0,50,0))],
+        [pack('N*',3004,0),pack('N*',3003,0,0)]]),static function(Luxtronik $m):void {
         $m->Update();
         check(in_array('java',invoke($m,'MeasurementSources',15),true) && !in_array('java',invoke($m,'MeasurementSources',50),true),
             'Successful Java frame length not used by source selection');

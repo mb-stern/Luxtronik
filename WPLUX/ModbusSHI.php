@@ -90,6 +90,13 @@ trait LuxtronikModbusSHI
         return is_array($cache) && ($cache['source'] ?? '') === $this->VisualizationSourceKey() ? $cache : [];
     }
 
+    private function PendingSHIWrite(): ?array
+    {
+        $pending=json_decode($this->GetBuffer('PendingSHIWrite'),true)??[];
+        if(($pending['source']??'')!==$this->VisualizationSourceKey() || time()-($pending['startedAt']??0)>60) return null;
+        return $pending;
+    }
+
     private function NewSHIClient(): LuxtronikModbusClient
     {
         return new LuxtronikModbusTCP($this->ReadPropertyString('IPAddress'), $this->ReadPropertyInteger('ModbusPort'),
@@ -277,6 +284,7 @@ trait LuxtronikModbusSHI
             $id=(int)($row['id']??0);
             if ($id>0 && $id<self::MAX_RESPONSE_VALUES && !empty($row['enabled'])) $ids[$id]=true;
         }
+        $ids[18]=true; // Effective DHW target is always needed for native control feedback.
         $ids[257]=true;$ids[268]=true;
         if ($this->ReadPropertyInteger('kwhin')>0) {$ids[151]=true;$ids[152]=true;}
         return $ids;
@@ -430,13 +438,15 @@ trait LuxtronikModbusSHI
     public function GetSHIData(): string
     {
         $cache=$this->SHICache();
+        $pending=$this->PendingSHIWrite();
         $values=[];
         foreach ($this->SHICatalog() as $key=>$point) {
             $entry=$cache['points'][$key]??null;
             $current=$entry!==null && empty($cache['stale']);
             $values[]=['bank'=>$point['bank'],'address'=>$point['address'],'ident'=>$point['ident'],'name'=>$point['label'],
                 'value'=>$entry['value']??null,'unit'=>$point['unit'],'available'=>$current,'writable'=>$point['bank']==='holding',
-                'source'=>$current?'Modbus':null];
+                'source'=>$current?'Modbus':null,'pending'=>($pending['ident']??null)===$point['ident'],
+                'requestedValue'=>($pending['ident']??null)===$point['ident']?$pending['value']:null];
         }
         $java=[];
         foreach ($this->VisualizationCachedPoints() as $ident=>$entry) {
@@ -449,7 +459,7 @@ trait LuxtronikModbusSHI
             'javaSupplementEnabled'=>true,'javaSupplement'=>$java,'measurementPriority'=>['Java','WebSocket','Modbus/SHI'],
             'measurementPreferences'=>$preferences,'javaOnlyWritesRemainAvailable'=>true,
             'nativeControlSource'=>'Java','shiControlsEnabled'=>$this->SHIWritingEnabled(),
-            'writeSource'=>$this->SHIWritingEnabled()?'Modbus/SHI':'SHI-Bedienung aus'],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+            'writeSource'=>$this->SHIWritingEnabled()?'Modbus/SHI':'SHI-Bedienung aus'],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_PRESERVE_ZERO_FRACTION);
     }
 
     private function SHIWriteDefinition(string $ident): array
@@ -505,6 +515,7 @@ trait LuxtronikModbusSHI
         $attempted=false;
         $changedModes=[];
         $source=null;
+        $optimistic=null;
         try {
             $source=$this->VisualizationSourceKey();
             $client=$this->NewSHIClient();
@@ -535,6 +546,12 @@ trait LuxtronikModbusSHI
                     $mode=$this->ReadSHIPoint($client,$catalog['holding:'.$address]);
                     if ($mode!==null && $mode!==0) throw new RuntimeException('Vor Raumtemperaturvorgabe die SHI-Heizungs-/Mischkreisvorgaben auf keinen Einfluss setzen.');
                 }
+            }
+            if($id!==false && IPS_VariableExists($id)) {
+                $optimistic=['source'=>$source,'ident'=>$Ident,'variableId'=>$id,'startedAt'=>time(),
+                    'value'=>$this->DecodeModbusValue([$word],$point['datatype'],(float)$point['factor']),'before'=>$current];
+                $this->SetBuffer('PendingSHIWrite',json_encode($optimistic,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+                $this->SetValueIfChanged($Ident,$optimistic['value']);
             }
             // Required modes must already be confirmed when the target is sent.
             $attempted=true;
@@ -568,6 +585,7 @@ trait LuxtronikModbusSHI
             $keys=($writtenKeys['source']??'')===$this->VisualizationSourceKey()?($writtenKeys['keys']??[]):[];
             $this->SetBuffer('SHIWrittenKeys',json_encode(['source'=>$this->VisualizationSourceKey(),
                 'keys'=>array_values(array_unique([...$keys,...array_keys($confirmed)]))],JSON_THROW_ON_ERROR));
+            $this->SetBuffer('PendingSHIWrite','');
             $this->PublishSHIValues();
             $this->SendDebug('Datenquelle',$point['ident'].': Schreiben über Modbus (holding:'.$point['address'].') bestätigt: '.$this->SHIFormatted($point,$Value),0);
             return true;
@@ -600,9 +618,13 @@ trait LuxtronikModbusSHI
                 $this->SetStatus(201);
                 $this->LogMessage('SHI: Vorgabe möglicherweise teilweise übernommen; Zustand erneut abfragen. '.$error->getMessage(),KL_ERROR);
             }
+            if($optimistic!==null && $source===$this->VisualizationSourceKey()
+                && @$this->GetIDForIdent($Ident)===$optimistic['variableId'] && IPS_VariableExists($optimistic['variableId']))
+                $this->SetValueIfChanged($Ident,$optimistic['before']);
             throw $error;
         } finally {
             $client?->close();
+            $this->SetBuffer('PendingSHIWrite','');
             IPS_SemaphoreLeave($lock);
             $this->RefreshVisualization();
         }
@@ -625,6 +647,7 @@ trait LuxtronikModbusSHI
     {
         $selected=$this->SHIControlSelection();$rows=[];
         $writes=$this->SHIWritingEnabled();
+        $pending=$this->PendingSHIWrite();
         foreach($this->SHICatalog() as $point) {
             if($point['bank']!=='holding') continue;
             $reading=$writes?$this->GetSHIVisualizationPoint($point['ident']):null;
@@ -641,11 +664,13 @@ trait LuxtronikModbusSHI
             if(!empty($selected[$point['selection']])) {
                 $status=!$this->ReadPropertyBoolean('InstanceStatus')?'Modul ausgeschaltet':($reading===null?'Keine aktuellen Daten':($permission===false?'Am Regler nicht freigegeben':($permission===null?'Freigabe noch ungeprüft':'Bereit')));
             }
+            $waiting=($pending['ident']??null)===$point['ident'];
+            if($waiting) $status='Bestätigung läuft';
             $rows[]=['enabled'=>$selected[$point['selection']]??false,'id'=>$point['selection'],
                 'name'=>preg_replace('/^SHI[- :]+/u','',$point['label']),'register'=>$point['address'],
                 'range'=>$point['min'].' … '.$point['max'].($point['unit']!==''?' '.$point['unit']:''),
                 'activation'=>implode('; ',$activation),'status'=>$status,
-                'value'=>$reading['formatted']??'Keine aktuellen Modbus-Daten'];
+                'value'=>$waiting?$this->SHIFormatted($point,$pending['value']):($reading['formatted']??'Keine aktuellen Modbus-Daten')];
         }
         return ['type'=>'List','name'=>'SHIControlList','caption'=>'Modbus-Steuervariablen','rowCount'=>10,
             'add'=>false,'delete'=>false,'loadValuesFromConfiguration'=>false,

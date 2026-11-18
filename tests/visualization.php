@@ -171,8 +171,8 @@ $tests['live messages refresh only registered variables and update removed/recre
     check(isset($module->messages[$new][VM_UPDATE]) && end($module->updates)['data']['outdoorTemperature']['variableId'] === $new, 'New object not rebound');
 };
 $tests['graphic actions use native Luxtronik write/read-back and preserve variable IDs'] = static function (): void {
-    $values = array_fill(0, 106, 0); $values[105] = 505;
-    withServer([[pack('N*', 3002, 105, 505), pack('N*', 3002, 105)], [pack('N*', 3003, 0), frame(3003, $values)]], static function (Luxtronik $module): void {
+    $values = array_fill(0, 106, 0); $values[105] = 505; $values[18] = 505;
+    withServer([[pack('N*', 3002, 105, 505), pack('N*', 3002, 105)], [pack('N*', 3004, 0), frame(3004, $values)]], static function (Luxtronik $module): void {
         invoke($module, 'CreateVariableProfiles');
         $id = visualizationVariable($module, 'Anpassung_WW', 45.0, 'WPLUX.Wset');
         $module->properties['WWsetVisible'] = true;
@@ -404,7 +404,7 @@ $tests['empty ID list supplies the whole graphic internally without creating mea
     $values = array_fill(0, 269, 0);
     foreach ([10=>250, 11=>245, 12=>270, 15=>4294967261, 17=>485, 18=>500, 21=>249, 22=>200, 40=>1, 41=>0, 80=>5, 254=>607, 257=>6500, 268=>1500] as $id=>$value) $values[$id]=$value;
     $updated=$values; $updated[10]=251;
-    withServer([[pack('N*',3004,0),frame(3004,$values)], [pack('N*',3004,0),frame(3004,$updated)]], static function (Luxtronik $module): void {
+    withServer(controllerCycles([[pack('N*',3004,0),frame(3004,$values)], [pack('N*',3004,0),frame(3004,$updated)]]), static function (Luxtronik $module): void {
         invoke($module,'CreateVariableProfiles');
         $module->Update();
         $payload=visualizationPayload($module);
@@ -581,7 +581,7 @@ $tests['internal cache is source-bound and failed Java scans do not masquerade a
     $module->properties['IPAddress']='192.0.2.10';
     check(!isset(invoke($module,'BuildVisualizationData')['inputPower']),'Readings leaked across devices');
     $values=array_fill(0,269,0); $values[21]=249;
-    withServer([[pack('N*',3004,0),frame(3004,$values)],[pack('N*',3004,0),pack('N*',3003,0,0)]],static function (Luxtronik $module):void {
+    withServer(controllerCycles([[pack('N*',3004,0),frame(3004,$values)],[pack('N*',3004,0),pack('N*',3003,0,0)]]),static function (Luxtronik $module):void {
         $module->Update(); $buffer=$module->buffers['VisualizationPointCache'];
         $module->Update();
         check($module->buffers['VisualizationPointCache']===$buffer,'Failed scan changed internal values');
@@ -1042,7 +1042,7 @@ $tests['variable callbacks retain ordinary visualization errors and restore the 
 
 $tests['retired footer selections neither create variables nor subscribe external values'] = static function (): void {
     $values=array_fill(0,301,0);$values[15]=80;$values[300]=123;
-    withServer([[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $module):void {
+    withServer(controllerCycles([[pack('N*',3004,0),frame(3004,$values)]]),static function(Luxtronik $module):void {
         $external=new Luxtronik();$id=visualizationVariable($external,'FormerFooter',42.0);
         $module->properties['IDListe']='[{"id":15,"enabled":false,"visualizationFooter":true},{"id":300,"visualizationFooter":true}]';
         $module->properties['VisualizationExternalFooter']=json_encode([['label'=>'Former footer','variableID'=>$id]]);

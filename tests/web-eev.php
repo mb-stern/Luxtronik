@@ -295,7 +295,7 @@ $tests['Java remains the preferred measurement source and objects retain valid z
 
 $tests['automatic WebSocket supplement still runs after a failed Java exchange'] = static function():void {
     withEEVPeer(static function(int $port):void {
-        withServer([[pack('N*',3004,0),pack('N*',3003,0,0)]],static function(Luxtronik $java) use($port):void {
+        withServer(controllerCycles([[pack('N*',3004,0),pack('N*',3003,0,0)]]),static function(Luxtronik $java) use($port):void {
             $module=new WebEEVTestModule();$module->webTestPort=$port;
             $module->properties['IPAddress']='127.0.0.1';$module->properties['Port']=$java->properties['Port'];
             $module->properties['CommunicationMode']='java';
@@ -306,8 +306,8 @@ $tests['automatic WebSocket supplement still runs after a failed Java exchange']
     });
 };
 $tests['Java with WebSocket supplementation retains the confirmed Java control write and readback'] = static function():void {
-    $values=array_fill(0,106,0);$values[105]=505;
-    withServer([[pack('N*',3002,105,505),pack('N*',3002,105)],[pack('N*',3003,0),frame(3003,$values)]],static function(Luxtronik $module):void {
+    $values=array_fill(0,106,0);$values[105]=505;$values[18]=505;
+    withServer([[pack('N*',3002,105,505),pack('N*',3002,105)],[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $module):void {
         $module->properties['CommunicationMode']='java';$module->properties['WWsetVisible']=true;
         invoke($module,'CreateVariableProfiles');
         $module->RegisterVariableFloat('Anpassung_WW','Existing target','WPLUX.Wset');$module->EnableAction('Anpassung_WW');
