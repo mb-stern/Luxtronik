@@ -227,6 +227,36 @@ $tests['invalid and incomplete transport replies cannot publish a partial scan']
         },['input'=>[10108=>-25],'fault'=>['function'=>4,'address'=>10120,'kind'=>$kind]]);
     }
 };
+$tests['all existing SHI names survive save and slider repair even when matching old defaults'] = static function():void {
+    // Also preserve names if the SDK applies the supplied name on registration.
+    $m=new class extends Luxtronik {
+        public function RegisterVariableFloat(string $ident,string $name,string|array $profile='',int $position=0): bool {
+            $created=parent::RegisterVariableFloat($ident,$name,$profile,$position);
+            if(str_starts_with($ident,'SHI_')) IPS_SetName($this->GetIDForIdent($ident),$name);
+            return $created;
+        }
+    };
+    $expected=[];$selected=[];
+    foreach(invoke($m,'SHICatalog') as $point) {
+        if($point['bank']!=='holding') continue;
+        invoke($m,'EnsureSHIVariable',$point);$id=$m->GetIDForIdent($point['ident']);
+        $base=preg_replace('/^SHI[- :]+/u','',$point['label']);
+        check(IPS_GetName($id)==='SHI: '.$base,'New variable label is inconsistent');
+        foreach(['SHI-'.$base,'SHI '.$base,'SHI: '.$base,'Meine '.$base] as $name) {
+            IPS_SetName($id,$name);
+            if($point['factor']<1) $GLOBALS['testVariables'][$id]['native_presentation']['STEP_SIZE']=1;
+            invoke($m,'EnsureSHIVariable',$point);
+            check($m->GetIDForIdent($point['ident'])===$id && IPS_GetName($id)===$name,'Existing SHI name overwritten: '.$name);
+            if($point['factor']<1) check(IPS_GetVariablePresentation($id)['STEP_SIZE']===0.1,'Name preservation disabled slider repair');
+        }
+        $name='SHI-'.$base;IPS_SetName($id,$name);$expected[$id]=$name;
+        $selected[]=['id'=>$point['selection'],'enabled'=>true];
+    }
+    $m->properties['SHIControlList']=json_encode($selected);
+    $m->ApplyChanges();$m->ApplyChanges();
+    foreach($expected as $id=>$name) check(IPS_VariableExists($id) && IPS_GetName($id)===$name,'Saving replaced an object or renamed an existing SHI control');
+};
+
 $tests['all fractional SHI controls repair whole-number profiles on the same objects'] = static function():void {
     $m=new Luxtronik();$catalog=invoke($m,'SHICatalog');$tested=0;
     foreach($catalog as $point) {

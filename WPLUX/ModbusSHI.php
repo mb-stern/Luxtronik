@@ -413,9 +413,6 @@ trait LuxtronikModbusSHI
         $label=$this->SHIVariableLabel($point);
         $existing=@$this->GetIDForIdent($ident);
         if ($existing!==false) {
-            $name=IPS_GetName($existing);
-            if($point['bank']==='holding' && $name!==$label && preg_match('/^SHI[- :]+/u',$name)
-                && preg_replace('/^SHI[- :]+/u','',$name)===substr($label,5)) IPS_SetName($existing,$label);
             if($point['legacy']===null && $point['factor']<1 && IPS_GetVariable($existing)['VariableType']===VARIABLETYPE_FLOAT)
                 $this->EnsureSHIFloatPresentation($point,$existing);
             return;
@@ -465,7 +462,7 @@ trait LuxtronikModbusSHI
             $presentation=['PRESENTATION'=>$slider,'MIN'=>(float)$point['min'],'MAX'=>(float)$point['max'],
                 'STEP_SIZE'=>$step,'DIGITS'=>$digits,'SUFFIX'=>' '.$point['unit'],'PERCENTAGE'=>false];
             if(array_intersect_key($default,$presentation)!=$presentation)
-                $this->RegisterVariableFloat($point['ident'],$this->SHIVariableLabel($point),$presentation,$point['selection']);
+                $this->RegisterVariableFloat($point['ident'],IPS_GetName($id),$presentation,$point['selection']);
         }
         // A converted slider can override its default with the old whole-number step.
         $custom=$variable['VariableCustomPresentation']??[];

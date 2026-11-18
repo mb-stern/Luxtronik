@@ -110,10 +110,11 @@ Unter Modbus / SHI – externe Regelung die gewünschten Vorgaben auswählen und
 übernehmen. Dadurch werden eigene Steuervariablen angelegt, auch ohne bestehende
 Verbindung. Bedienbar sind sie mit aktueller Rückmeldung und Freigabe am Regler.
 
-Die Steuervariablen heißen einheitlich „SHI: Modus Heizen“, „SHI: Sollwert Heizen“,
-„SHI: Offset Heizen“ usw. Bisherige Standardnamen werden auf denselben Objekten
-vereinheitlicht; eigene Namen bleiben erhalten. Im SHI-Konfigurationsbereich
-stehen die Funktionsnamen ohne zusätzlichen SHI-Präfix.
+Neu angelegte Steuervariablen heißen einheitlich „SHI: Modus Heizen“,
+„SHI: Sollwert Heizen“, „SHI: Offset Heizen“ usw. Namen bestehender Variablen
+werden nicht automatisch geändert, auch wenn sie wie frühere Standardnamen
+aussehen. Bei der Schrittweitenkorrektur wird der aktuelle Name beibehalten.
+Im SHI-Konfigurationsbereich stehen die Funktionsnamen ohne zusätzlichen SHI-Präfix.
 
 SHI-Temperaturen, Offsets und Leistungsgrenzen sind in 0,1er-Schritten
 bedienbar, beispielsweise +0,5 K beim Heizungs-Offset. Vorhandene Modulprofile
