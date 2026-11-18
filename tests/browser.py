@@ -209,6 +209,31 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     assert page.locator('#textIndoorTemperatureLabel').text_content()=='Soll-Innentemperatur'
                 page.evaluate('(p)=>window.handleMessage(p)',payload)
 
+                # Brine cabinet keeps the same visual style and uses actual source telemetry.
+                brine=json.loads(json.dumps(payload))
+                brine['config'].update(heatingPumpType='G2W',sourceInletTemperature='brineIn',sourceOutletTemperature='brineOut',hpRunning='brinePump')
+                brine['data'].update(brineIn={'value':0,'formatted':'0.0 °C'},brineOut={'value':-2.5,'formatted':'-2.5 °C'},brinePump={'value':False})
+                page.evaluate('(p)=>window.handleMessage(p)',brine)
+                assert page.locator('#gHPFan').is_hidden()
+                assert page.locator('#wpFanGrille').is_hidden()
+                assert page.locator('#gBrineHeatPump').is_visible()
+                assert page.locator('#textBrineInlet').text_content()=='Eintritt: 0.0 °C'
+                assert page.locator('#textBrineOutlet').text_content()=='Austritt: -2.5 °C'
+                assert page.locator('#textBrinePumpState').text_content()=='Solepumpe: Aus'
+                assert page.locator('#textFanSpeed,#textTimeUntilDefrost').count()==0
+                brine['data']['brinePump']['value']=True
+                page.evaluate('(p)=>window.handleMessage(p)',brine)
+                assert page.locator('#textBrinePumpState').text_content()=='Solepumpe: Ein'
+                brine['data'].pop('brineIn')
+                brine['data'].pop('brineOut')
+                brine['data'].pop('brinePump')
+                page.evaluate('(p)=>window.handleMessage(p)',brine)
+                assert page.locator('#textBrineInlet').text_content()=='Eintritt: —'
+                assert page.locator('#textBrinePumpState').text_content()=='Solepumpe: —'
+                page.evaluate('(p)=>window.handleMessage(p)',payload)
+                assert page.locator('#gBrineHeatPump').is_hidden()
+                assert page.locator('#gHPFan').is_visible()
+
                 # OpenWeather codes replace the original sun without remote images.
                 assert page.locator('#gOutdoorWeatherIcon').count()==1
                 assert page.locator('#gOutdoorWeatherIcon circle').count()==1

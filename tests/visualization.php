@@ -801,6 +801,26 @@ $tests['each graphic field has exactly one fixed Ident and never chooses another
     check(isset($required[254],$required[231],$required[236],$required[233]) && !isset($required[155],$required[193],$required[198]),'Obsolete alternative points still requested for the graphic');
 };
 
+$tests['brine graphic uses source temperatures and pump output independently of fan telemetry'] = static function (): void {
+    $module=new Luxtronik();
+    check(invoke($module,'BuildCardConfig')['heatingPumpType']==='A2W','Existing air graphic default changed');
+    $module->properties['VisualizationHeatPumpType']='G2W';
+    invoke($module,'StoreVisualizationPoints',[19=>0.0,20=>-2.5,43=>false,184=>500,176=>7.3]);
+    $payload=visualizationPayload($module);
+    check($payload['config']['heatingPumpType']==='G2W','Brine setting missing from payload');
+    check($payload['data']['sourceInletTemperature']['value']===0.0,'Zero source inlet discarded');
+    check($payload['data']['sourceOutletTemperature']['value']===-2.5,'Negative source outlet discarded');
+    check($payload['data']['hpRunning']['value']===false,'Fan speed starts brine pump');
+    check($payload['data']['suctionTemperature']['value']===7.3,'Suction temperature replaced with source inlet');
+    $required=invoke($module,'GetVisualizationRequiredPointIDs');
+    check(isset($required[19],$required[20],$required[43]) && !isset($required[184],$required[141]),'Brine graphic requests air-only measurements');
+    check($module->GetIDForIdent('Waermequellen_Eintrittstemperatur')===false,'Graphic creates measurement variables');
+    invoke($module,'StoreVisualizationPoints',[43=>true],true);
+    check(invoke($module,'BuildVisualizationData')['hpRunning']['value']===true,'Brine pump output not updated');
+    $form=fields(json_decode($module->GetConfigurationForm(),true));
+    check(count($form['VisualizationHeatPumpType']['options'])===2,'Pump type selector missing');
+};
+
 $tests['direct circuit exposes its saved name beside activation'] = static function (): void {
     $module=new Luxtronik();$form=fields(json_decode($module->GetConfigurationForm(),true));
     foreach ([1,2] as $n) {

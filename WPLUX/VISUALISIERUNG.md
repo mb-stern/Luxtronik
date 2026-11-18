@@ -28,10 +28,22 @@ Einstellungen **„Maximieren-Button anzeigen“** aktivieren. Bei bestehenden
 Instanzen die Modulkonfiguration einmal übernehmen, damit der Darstellungstyp
 aktualisiert wird. Ältere Symcon-Versionen verwenden weiterhin den HTML-Typ 1.
 
-Die Bereiche **Modbus TCP / SHI** und **HTML-SDK / Visualisierung** stehen vor der
+Die Bereiche **Modbus / SHI – externe Regelung** und **HTML-SDK / Visualisierung** stehen vor der
 ID-Auswahlliste. Die Visualisierungseinstellungen bleiben schlank:
 
 - Komponenten-Checkboxen für Puffer, Warmwasserspeicher und Solarthermie.
+- Auswahl **Wärmepumpentyp: Luft/Wasser oder Sole/Wasser**. Bestehende Instanzen
+  behalten Luft/Wasser als Voreinstellung. Sole/Wasser verwendet dasselbe Gehäuse
+  mit geschlossener Front statt Lüfterrad und Lüftergitter. Am Gerät stehen
+  **Solepumpe: Ein/Aus**, **Eintritt** und **Austritt**. Die Temperaturen stammen
+  aus `Waermequellen_Eintrittstemperatur` (Java-ID 19) und
+  `Waermequellen_Austrittstemperatur` (20), der Pumpenzustand aus
+  `Ausgang_Solepumpe_Ventilator` (43). Die vorhandene Lesequellenauswahl gilt auch
+  hier. Fehlende Werte erscheinen als „—“; 0 °C und negative Werte bleiben gültig.
+  Eine Pumpendrehzahl oder ein Sole-Durchfluss werden daraus nicht abgeleitet.
+  Lüfterdrehzahl und Abtau-Restzeit werden in dieser Variante nicht angezeigt
+  und für die Grafik nicht angefordert. Die Verdichter-Ansaugtemperatur bleibt
+  als eigener Kältekreiswert erhalten und wird nicht als Sole-Eintritt bezeichnet.
 - Optionale Warmwasser-Zirkulation mit Pumpe, Leitung und Hahn; ihr Zustand
   stammt intern von `Ausgang_Zirkulationspumpe` (ID 46).
 - Ein direkter Heizkreis mit frei wählbarer Bezeichnung; ein zweiter Heizkreis
@@ -328,8 +340,8 @@ In der COP-/JAZ-Zeile öffnet „Fehler: Anzahl“ die gespeicherte Historie mit
 Fehlercode und vollständigem Meldungstext. WebSocket wird für diese Daten bevorzugt;
 Java bleibt die Reserve. Die Historie stellt keine aktuellen Alarmzustände dar.
 Die vorhandenen IDs 95–105 werden wiederverwendet, die zusätzliche Auswahl-ID 400020
-bietet den gesamten Meldungstext als Stringvariable. Die konfigurierte Reglerzeitzone
-bestimmt die Umrechnung der Fehlerdaten in Zeitstempel.
+bietet den gesamten Meldungstext als Stringvariable. Für die Umrechnung der
+Fehlerdaten in Zeitstempel wird standardmäßig die Symcon-Zeitzone verwendet.
 
 Das Umschaltventil zeigt ohne zusätzliche Beschriftung seinen angeforderten
 Durchgang: BUP (38) ein führt nach rechts zum Warmwasserspeicher, aus nach oben
@@ -362,7 +374,7 @@ Gegenüber steht die Heißgastemperatur (`Heisgastemperatur`, Java-ID 14) nach d
 Verdichter vor dem Kondensator. Beide verwenden die vorhandene Lesequellenauswahl
 mit automatischer Ergänzung fehlender Werte; nicht gelieferte Temperaturen
 werden ausgeblendet, 0 °C bleibt ein gültiger Messwert.
-Die Lüfterdrehzahl (`Ventilator_Drehzahl`, ID 184) steht
+Bei Luft/Wasser steht die Lüfterdrehzahl (`Ventilator_Drehzahl`, ID 184)
 über dem Lüfterrad. Unter dem Gerätebild ergänzt `Zeit_bis_Abtauen` (ID 141)
 die Lauf-/Standzeit, sofern der Regler den Wert liefert. Im SHI-Betrieb können
 beide Werte über die vorhandene optionale Java-Ergänzung kommen. Es werden keine

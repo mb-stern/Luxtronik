@@ -56,9 +56,18 @@ benötigte Modusabhängigkeiten werden geschrieben und zurückgelesen. Ein Fehle
 führt weder zu unbestätigten Erfolgswerten noch zu einem zusätzlichen Java-Schreibzugriff.
 
 Laut Anleitung fallen Vorgaben nach 15 Minuten ohne Modbus-Anfrage auf Standard
-zurück. Eine regelmäßig laufende Istwertabfrage kann diese Kommunikation aufrecht
-halten. Eine aktive Vorgabe deshalb über ihren Modus beenden, bevor die Variable
-abgewählt wird. Das Modul sendet alte Sollwerte nach einem Neustart nicht erneut.
+zurück. Der Zeitraum beginnt nicht pauschal beim letzten Schreiben. Das Modul
+liest ausgewählte SHI-Steuervariablen und zuletzt geschriebene Modusregister;
+auch solche Leseanfragen können die Kommunikation aufrechterhalten. Die Vorgabe
+wird dabei nicht erneut geschrieben. Eine aktive Vorgabe deshalb über ihren
+Modus beenden, bevor die Variable abgewählt wird. Das Modul sendet alte Sollwerte
+nach einem Neustart nicht erneut.
+
+Eine separate Rückmeldung „Sollwert gelöscht“ ist nicht dokumentiert. Geänderte
+Registerwerte werden beim nächsten erfolgreichen Lesen in die bestehenden
+Variablen übernommen. Modus 0 beendet den Einfluss auch dann, wenn der numerische
+Sollwert noch gespeichert bleibt. Ein lokales Zurücksetzen nach 15 Minuten würde
+daher keinen bestätigten Reglerzustand darstellen.
 
 ## Quellen und Grenzen
 

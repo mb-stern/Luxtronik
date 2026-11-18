@@ -77,6 +77,12 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
                         if (($fault['kind']??'')==='identity') {fwrite($connection,pack('nnnCC',$h['t']+1,0,3,$h['unit'],$f|0x80)."\2");continue;}
                         if (($fault['kind']??'')==='ack') {fwrite($connection,pack('nnnCCnn',$h['t'],0,6,$h['unit'],16,$a+1,$count));continue;}
                     }
+                    // Simulate an independent controller change, including watchdog fallback.
+                    if (file_exists($folder.'/external-registers.json')) {
+                        $updates=json_decode(file_get_contents($folder.'/external-registers.json'),true,512,JSON_THROW_ON_ERROR);
+                        foreach($updates as $updateBank=>$values) foreach($values as $address=>$value) $model[$updateBank][$address]=$value;
+                        unlink($folder.'/external-registers.json');
+                    }
                     $raw=$model[$bank][$a]??null;
                     if ($raw===null || (is_array($raw) && isset($raw['exception']))) $reply=pack('CC',$f|0x80,is_array($raw)?$raw['exception']:2);
                     elseif ($f===16) {
@@ -107,7 +113,7 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
     $m=$existing??new Luxtronik();$m->properties['CommunicationMode']='modbus';$m->properties['IPAddress']='127.0.0.1';
     $m->properties['ModbusJavaSupplement']=$options['javaSupplement']??false;
     $m->properties['ModbusPort']=$port;$m->properties['ModbusUnitID']=$options['unit']??1;
-    try {$test($m);} finally {touch($folder.'/done');pcntl_waitpid($pid,$status);}
+    try {$test($m,$folder.'/external-registers.json');} finally {touch($folder.'/done');pcntl_waitpid($pid,$status);}
     $lines=file_exists($folder.'/requests')?file($folder.'/requests',FILE_IGNORE_NEW_LINES):[];
     foreach (glob($folder.'/*') as $file) unlink($file);rmdir($folder);
     check(pcntl_wifexited($status) && pcntl_wexitstatus($status)===0,'SHI peer failed');
@@ -904,6 +910,28 @@ $tests['selected SHI controls create independent variables even while offline an
     check($m->GetIDForIdent('Anpassung_Temp')===false && $m->GetIDForIdent('Anpassung_WW')===false,'SHI selection created persistent Java settings');
     check(!$m->actions['SHI_Offset_Heizen'] && !$m->actions['SHI_Sollwert_Warmwasser'],'Offline controls are actionable');
     check($m->writes===0,'Configuration applied default control values');
+};
+
+$tests['polling never replays SHI demands and controller fallback updates existing control variables'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m,string $externalRegisters):void {
+        $m->properties['SHIControlList']='[{"id":310000,"enabled":true},{"id":310002,"enabled":true}]';
+        invoke($m,'UpdateModbusSupplement');
+        $mode=$m->GetIDForIdent('SHI_Modus_Heizen');
+        $offset=$m->GetIDForIdent('SHI_Offset_Heizen');
+        $m->RequestAction('SHI_Offset_Heizen',1.5);
+        for($i=0;$i<3;++$i) invoke($m,'UpdateModbusSupplement');
+        check(GetValue($mode)===2 && GetValue($offset)===1.5,'Active demand changed while polling');
+        // A mode reset alone ends influence; a retained numeric value is not an active demand.
+        file_put_contents($externalRegisters,json_encode(['holding'=>[10000=>0]]));
+        invoke($m,'UpdateModbusSupplement');
+        check(GetValue($mode)===0 && GetValue($offset)===1.5,'Controller mode reset ignored or unsent offset invented');
+        file_put_contents($externalRegisters,json_encode(['holding'=>[10002=>0]]));
+        invoke($m,'UpdateModbusSupplement');
+        check(GetValue($offset)===0.0,'Controller offset reset not reflected in existing variable');
+        check($m->GetIDForIdent('SHI_Modus_Heizen')===$mode && $m->GetIDForIdent('SHI_Offset_Heizen')===$offset,'Fallback replaced variable objects');
+    },['discrete'=>[10000=>1],'holding'=>[10000=>0,10002=>0,10065=>0]]);
+    $writes=array_values(array_filter($requests,static fn($r)=>$r['function']===16));
+    check(array_column($writes,'address')===[10002,10000],'Polling resent or reset SHI commands');
 };
 
 $tests['direct TCP reads and writes ignore an old attached gateway and preserve measurement objects'] = static function():void {

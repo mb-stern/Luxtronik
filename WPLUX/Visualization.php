@@ -41,6 +41,8 @@ trait LuxtronikVisualization
     ];
 
     private const VISUALIZATION_EXTRA_IDENT_MAP = [
+        'SourceInletTemperature' => ['Waermequellen_Eintrittstemperatur'],
+        'SourceOutletTemperature' => ['Waermequellen_Austrittstemperatur'],
         'PoolControlVariable' => ['Mode_Schwimmbad'],
         'RoomTemperatureSetpointVariable' => ['Anpassung_RBE'],
         'HeatPumpReturnTemperature' => ['Ruecklauftemperatur_Heizkreis'],
@@ -99,6 +101,7 @@ trait LuxtronikVisualization
         $this->RegisterPropertyBoolean('VisualizationRoomIcons', true); // Legacy saved setting; display is now selected per room.
         $this->RegisterPropertyInteger('VisualizationWeatherCode', 0);
         $this->RegisterPropertyBoolean('VisualizationCirculation', false);
+        $this->RegisterPropertyString('VisualizationHeatPumpType', 'A2W');
         $this->RegisterPropertyString('VisualizationSolarTarget', 'hotwater');
 
         // Zentrale Status- und Steuerungszuordnung
@@ -570,7 +573,9 @@ HTML;
             'fullConfigurationPreview'   => $this->ReadPropertyBoolean('FullConfigurationPreview'),
             'luxtronikWebInterfaceURL'    => $this->GetLuxtronikWebInterfaceURL(),
             'luxtronikWebSocketPassword' => $this->ReadPropertyString('WebSocketPassword'),
-            'heatingPumpType'            => 'A2W',
+            'heatingPumpType'            => $this->ReadPropertyString('VisualizationHeatPumpType') === 'G2W' ? 'G2W' : 'A2W',
+            'sourceInletTemperature'     => $this->DataKey('SourceInletTemperature', 'sourceInletTemperature'),
+            'sourceOutletTemperature'    => $this->DataKey('SourceOutletTemperature', 'sourceOutletTemperature'),
 
             'operatingStatus'             => $this->DataKey('OperatingStatusVariable', 'operatingStatus'),
             'heatingPumpStatusOnOff'     => $this->DataKey('HeatingPumpStatusOnOff', 'heatingPumpStatusOnOff'),
@@ -585,7 +590,8 @@ HTML;
             'returnTemperatureSetpoint'  => $this->DataKey('ReturnTemperatureSetpointVariable', 'returnTemperatureSetpoint'),
             'heatPumpReturnTemperature' => $this->DataKey('HeatPumpReturnTemperature', 'heatPumpReturnTemperature'),
 
-            'hpRunning'                  => $this->DataKeyWithFallback('FanSpeed', 'HpRunning', 'hpRunning'),
+            'hpRunning'                  => $this->ReadPropertyString('VisualizationHeatPumpType') === 'G2W'
+                ? $this->DataKey('HpRunning', 'hpRunning') : $this->DataKeyWithFallback('FanSpeed', 'HpRunning', 'hpRunning'),
             'fanSpeed'                   => $this->DataKey('FanSpeed', 'fanSpeed'),
             'compressorRunning'          => $this->DataKey('CompressorRunning', 'compressorRunning'),
             'circulatingPumpRunning'     => $this->DataKey('CirculatingPumpRunning', 'circulatingPumpRunning'),
@@ -778,7 +784,7 @@ HTML;
         }
 
         $fan = $this->GetVisualizationPointData('FanSpeed');
-        if ($fan !== null) {
+        if ($fan !== null && $this->ReadPropertyString('VisualizationHeatPumpType') !== 'G2W') {
             $fanValue = $fan['value'];
             $data['hpRunning'] = $this->BinaryData(is_numeric($fanValue)
                 ? (float)$fanValue > 0.0 : $this->NormalizeBinaryValue($fanValue));
@@ -3817,7 +3823,34 @@ window.SymconHeatPump = {
             // FanSpeed steuert die Drehzahl. Nur wenn FanSpeed nicht konfiguriert
             // ist, wird HpRunning als Fallback verwendet.
             const fanReading = group('gFanSpeedReading', svg.querySelector('#gHPUnitCabinet'));
-            const fanSpeedText = formatted(cfg.fanSpeed);
+            const brine = cfg.heatingPumpType === 'G2W';
+            show('#gHPFan', !brine);
+            show('#wpFanGrille', !brine);
+            const brineFront = group('gBrineHeatPump', svg.querySelector('#gHeatPumpDeviceImage'));
+            brineFront.setAttribute('role','img');
+            brineFront.setAttribute('aria-label','Sole/Wasser-Wärmepumpe');
+            show('#gBrineHeatPump', brine);
+            if (brine) {
+                node(brineFront,'rect',{x:73,y:610,width:139,height:185,rx:5,
+                    fill:'var(--wp-equipment-face)',stroke:'var(--wp-border2)','stroke-width':2});
+                node(brineFront,'rect',{x:85,y:625,width:115,height:35,rx:3,
+                    fill:'var(--wp-panel1)',stroke:'var(--wp-border2)'});
+                fittedText(brineFront,{class:'sm',x:142.5,y:649,'text-anchor':'middle'},'Sole / Wasser',111);
+                const sourceKnown = raw(cfg.hpRunning) !== null;
+                fittedText(brineFront,{id:'textBrinePumpState',class:'sm',x:142.5,y:598,
+                    'text-anchor':'middle','dominant-baseline':'text-after-edge'},
+                    'Solepumpe: ' + (sourceKnown ? (binary(cfg.hpRunning) ? 'Ein' : 'Aus') : '—'),160);
+                const inlet = temperature(cfg.sourceInletTemperature) || '—';
+                const outlet = temperature(cfg.sourceOutletTemperature) || '—';
+                fittedText(brineFront,{id:'textBrineInlet',class:'sm',x:142.5,y:693,'text-anchor':'middle'},'Eintritt: ' + inlet,128);
+                fittedText(brineFront,{id:'textBrineOutlet',class:'sm',x:142.5,y:725,'text-anchor':'middle'},'Austritt: ' + outlet,128);
+                node(brineFront,'path',{d:'M96 748V771Q96 783 108 783H177Q189 783 189 771V748',
+                    fill:'none',stroke:'#499ce8','stroke-width':4,'stroke-linecap':'round'});
+                node(brineFront,'path',{d:'M114 748V764Q114 771 121 771H164Q171 771 171 764V748',
+                    fill:'none',stroke:'#f07868','stroke-width':4,'stroke-linecap':'round'});
+                node(brineFront,'title',{},'Sole-Eintritt: Wärmequelle ID 19; Sole-Austritt: ID 20; Pumpenausgang: ID 43. Keine Drehzahl- oder Durchflussmessung.');
+            }
+            const fanSpeedText = brine ? '' : formatted(cfg.fanSpeed);
             if (fanSpeedText) fittedText(fanReading,{id:'textFanSpeed',class:'sm',x:145,y:602,
                 'text-anchor':'middle','dominant-baseline':'text-after-edge'},
                 'Lüfter: ' + fanSpeedText + (/(?:rpm|u\s*\/\s*(?:min|m))\b/i.test(fanSpeedText) ? '' : ' RPM'),160);
@@ -3834,7 +3867,7 @@ window.SymconHeatPump = {
                 svg.appendChild(style);
             }
 
-            if (fanRotor) {
+            if (fanRotor && !brine) {
                 let rpm = 0;
                 if (cfg.fanSpeed && data[cfg.fanSpeed]) {
                     const fanRaw = raw(cfg.fanSpeed);
@@ -3930,7 +3963,7 @@ window.SymconHeatPump = {
             const cycleText = compressorStateKnown ? (compressorActive ? 'Läuft seit ' : 'Steht seit ') + (elapsed || '—') : 'Lauf-/Standzeit —';
             fittedText(cycleReadings, {id:'textHeatPumpCycle',class:'sm',x:142.5,y:863,'text-anchor':'middle','dominant-baseline':'text-after-edge',style:'font-size:18px'},cycleText,175);
             const defrostTime = formatted(cfg.timeUntilDefrost);
-            if (defrostTime) fittedText(cycleReadings,{id:'textTimeUntilDefrost',class:'sm',x:142.5,y:895,'text-anchor':'middle','dominant-baseline':'text-after-edge',style:'font-size:18px'},'Abtauen in ' + defrostTime,175);
+            if (!brine && defrostTime) fittedText(cycleReadings,{id:'textTimeUntilDefrost',class:'sm',x:142.5,y:895,'text-anchor':'middle','dominant-baseline':'text-after-edge',style:'font-size:18px'},'Abtauen in ' + defrostTime,175);
             node(cycleReadings,'title',{},compressorStateKnown
                 ? 'Reglerwert: ' + (compressorActive ? 'Waermepumpe_laeuft_seit (ID 67)' : 'Verdichter_Standzeit (ID 73)')
                 : 'Verdichterzustand nicht verfügbar');
@@ -4598,6 +4631,8 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     {
         $items = [
             ['type' => 'Label', 'caption' => 'Komponenten auswählen; die Grafik erhält ihre internen Messwerte automatisch, unabhängig von der ID-Liste.'],
+            ['type'=>'Select','name'=>'VisualizationHeatPumpType','caption'=>'Wärmepumpentyp',
+                'options'=>[['caption'=>'Luft/Wasser','value'=>'A2W'],['caption'=>'Sole/Wasser','value'=>'G2W']]],
             $this->VariableSelect('Wettercode (OpenWeather, z. B. 10d; optional)', 'VisualizationWeatherCode'),
             ['type' => 'RowLayout', 'items' => [
                 ['type' => 'CheckBox', 'name' => 'TankHP', 'caption' => 'Reihenpuffer im Heizungsrücklauf'],
@@ -4774,6 +4809,9 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     {
         $idents = [];
         foreach (self::LUXTRONIK_IDENT_MAP + self::VISUALIZATION_EXTRA_IDENT_MAP as $property => $candidates) {
+            $brine = $this->ReadPropertyString('VisualizationHeatPumpType') === 'G2W';
+            if ($brine && in_array($property, ['FanSpeed', 'TimeUntilDefrost'], true)) continue;
+            if (!$brine && in_array($property, ['SourceInletTemperature', 'SourceOutletTemperature'], true)) continue;
             if (preg_match('/^Mixer(?:Actual|Target|Open|Close|Pump)([1-3])$/D', $property)) continue;
             if (preg_match('/^(?:RefluxTemperatureHeating|HeatingCircuitPumpRunning|HeatingCircuitPumpValue)[23]$/D', $property) || $property==='SupplyTemperatureHeating3') continue;
             if ($property === 'ThermalSolarPanelTemp' && !$this->ReadPropertyBoolean('ThermalSolarAvailable')) continue;
