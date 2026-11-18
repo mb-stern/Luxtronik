@@ -89,6 +89,30 @@ Ausgewählte Einträge erzeugen nach **Übernehmen** eigene Steuervariablen, auc
 noch keine Verbindung besteht. Bedienbar sind sie erst mit gültiger Rückmeldung und
 passender Freigabe. Auswählen, Speichern und zyklisches Lesen schreiben keine Werte.
 
+Alle ausgewählten SHI-Steuervariablen werden aus ihren Holding-Registern gelesen.
+Die Anzeige übernimmt den tatsächlichen Registerwert, auch wenn der zugehörige
+SHI-Modus auf **Kein Einfluss** steht. Die Anleitung nennt dafür unter anderem
+35 °C als Standardwert für Heizen (10001) und 40 °C für Warmwasser (10006).
+Diese Werte sind externe Vorgaben. Die aktuell wirksamen Reglersollwerte stehen
+getrennt in der Istwertliste: **Rücklauf Soll Heizkreis** (Input-Register 10101)
+und **Warmwasser Soll Temperatur** (Input-Register 10121). Sie werden nicht in
+die SHI-Steuervariablen kopiert.
+
+Vor jeder SHI-Vorgabe werden die dokumentierten Modusabhängigkeiten geschrieben
+und bestätigt. Bei Warmwasser ist das Modus 10005, danach folgt Sollwert, Offset
+oder Level. Die Register 10005–10008 können ihre Werte
+verzögert übernehmen; das Modul wartet pro Register bis zu 15 Sekunden auf die
+Bestätigung. Währenddessen wird nur gelesen, der Schreibbefehl wird nicht
+wiederholt. Erst bestätigte Werte werden übernommen. Bei abweichender Rückmeldung
+nennt die Fehlermeldung gesendeten und gelesenen Wert.
+
+Scheitert eine zusammengesetzte Vorgabe, versucht das Modul, die von diesem
+Aufruf geänderten Modi in umgekehrter Reihenfolge zurückzusetzen. Dabei wird
+zuerst frisch geprüft, ob sie noch den selbst gesendeten Werten entsprechen.
+Zwischenzeitlich anderweitig geänderte Modi werden nicht überschrieben. Eine
+nicht bestätigte Rücknahme wird gesondert protokolliert; die Anzeige bleibt
+bis zu einer erfolgreichen Abfrage unbestätigt.
+
 Unter **Hinweise zu SHI** wird das Zusammenspiel der vier Heizvariablen erklärt:
 
 | Variable | Funktion |

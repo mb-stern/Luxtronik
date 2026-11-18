@@ -468,16 +468,25 @@ trait LuxtronikModbusSHI
         return ((int)round($raw)) & 0xffff;
     }
 
-    private function ConfirmSHIWrite(LuxtronikModbusClient $client,int $address,int $word): void
+    private function ConfirmSHIWrite(LuxtronikModbusClient $client,int $address,int $word,?float $waitSeconds=null): void
     {
         $client->writeHoldingRegisters($address,[$word]);
-        $deadline=microtime(true)+1.5;
+        // Some controllers commit the DHW group on a delayed control cycle.
+        // Only read while waiting: repeating the write can cancel a pending value.
+        $deadline=microtime(true)+($waitSeconds??(in_array($address,[10005,10006,10007,10008],true)?15.0:1.5));
+        $actual=[];
         do {
-            if ($client->readHoldingRegisters($address,1)===[$word]) return;
+            $actual=$client->readHoldingRegisters($address,1);
+            if ($actual===[$word]) return;
             if (microtime(true)>=$deadline) break;
             usleep(100000);
         } while (true);
-        throw new RuntimeException('SHI-Schreibwert '.$address.' wurde beim Rücklesen nicht bestätigt.');
+        $point=$this->SHICatalog()['holding:'.$address];
+        $wanted=$this->SHIFormatted($point,$this->DecodeModbusValue([$word],$point['datatype'],(float)$point['factor']));
+        $value=$this->DecodeModbusValue($actual,$point['datatype'],(float)$point['factor']);
+        $received=$value===null?'nicht verfügbar':$this->SHIFormatted($point,$value);
+        throw new RuntimeException('SHI-Schreibwert '.$address.' wurde beim Rücklesen nicht bestätigt. Gesendet: '.$wanted
+            .'; zurückgelesen: '.$received.'.');
     }
 
     /** Only documented holding registers, validated before connecting; never replayed by polling. */
@@ -494,7 +503,10 @@ trait LuxtronikModbusSHI
         if (!IPS_SemaphoreEnter($lock,1000)) throw new RuntimeException('Eine SHI-Abfrage oder Bedienaktion läuft bereits.');
         $client=null;
         $attempted=false;
+        $changedModes=[];
+        $source=null;
         try {
+            $source=$this->VisualizationSourceKey();
             $client=$this->NewSHIClient();
             $catalog=$this->SHICatalog();
             $deps=$point['deps'];
@@ -524,19 +536,28 @@ trait LuxtronikModbusSHI
                     if ($mode!==null && $mode!==0) throw new RuntimeException('Vor Raumtemperaturvorgabe die SHI-Heizungs-/Mischkreisvorgaben auf keinen Einfluss setzen.');
                 }
             }
-            // Stage the requested value first, then activate its documented mode.
+            // Required modes must already be confirmed when the target is sent.
             $attempted=true;
-            $this->ConfirmSHIWrite($client,$point['address'],$word);
             foreach ($deps as $address=>$expected) {
-                if ($before[$address]!==$expected) $this->ConfirmSHIWrite($client,$address,$expected);
+                if ($before[$address]!==$expected) {
+                    $changedModes[$address]=['before'=>$before[$address],'expected'=>$expected];
+                    $this->ConfirmSHIWrite($client,$address,$expected);
+                }
             }
+            $this->ConfirmSHIWrite($client,$point['address'],$word);
             $confirmed=[];
             foreach ([$point['address'],...array_keys($deps)] as $address) {
                 $value=$this->ReadSHIPoint($client,$catalog['holding:'.$address]);
                 $expected=$address===$point['address']?$this->DecodeModbusValue([$word],$point['datatype'],(float)$point['factor']):$deps[$address];
-                if ($value!==$expected) throw new RuntimeException('SHI-Gesamtvorgabe beim abschließenden Rücklesen nicht bestätigt.');
+                if ($value!==$expected) {
+                    $definition=$catalog['holding:'.$address];
+                    throw new RuntimeException('SHI-Gesamtvorgabe für Register '.$address.' nicht bestätigt. Gesendet: '
+                        .$this->SHIFormatted($definition,$expected).'; zurückgelesen: '
+                        .($value===null?'nicht verfügbar':$this->SHIFormatted($definition,$value)).'.');
+                }
                 $confirmed['holding:'.$address]=['value'=>$value,'changedAt'=>microtime(true)];
             }
+            if($source!==$this->VisualizationSourceKey()) throw new RuntimeException('Die SHI-Geräteverbindung wurde während des Schreibens geändert.');
             $cache=$this->SHICache();
             $cache['source']=$this->VisualizationSourceKey();
             // Writing cannot make an earlier failed/full scan current again.
@@ -552,6 +573,27 @@ trait LuxtronikModbusSHI
             return true;
         } catch (Throwable $error) {
             if ($attempted) {
+                // Restore only modes changed by this call, while they still match our write.
+                // Use a fresh connection after a possibly malformed or interrupted reply.
+                $client?->close();$client=null;
+                if($changedModes!==[] && $source===$this->VisualizationSourceKey()) {
+                    $recovery=null;
+                    try {
+                        $recovery=$this->NewSHIClient();
+                        foreach(array_reverse($changedModes,true) as $address=>$mode) {
+                            $current=$this->ReadSHIPoint($recovery,$catalog['holding:'.$address]);
+                            // A DHW mode may still be pending while the old value is read.
+                            // Writing that old value also cancels/replaces the pending mode.
+                            if($current===$mode['before'] && $address!==10005) continue;
+                            if($current!==$mode['expected'] && $current!==$mode['before']) throw new RuntimeException('Modus '.$address.' wurde zwischenzeitlich geändert; keine Rücknahme.');
+                            $restore=$this->EncodeSHIValue($catalog['holding:'.$address],$mode['before']);
+                            $this->ConfirmSHIWrite($recovery,$address,$restore,1.5);
+                        }
+                    } catch(Throwable $recoveryError) {
+                        if($recoveryError instanceof LuxtronikInstanceUnavailable) throw $recoveryError;
+                        $this->LogMessage('SHI: Vorherige Modi konnten nicht vollständig wiederhergestellt werden. '.$recoveryError->getMessage(),KL_ERROR);
+                    } finally {$recovery?->close();}
+                }
                 $cache=$this->SHICache();$cache['stale']=true;
                 $this->SetBuffer('SHICache',json_encode($cache,JSON_THROW_ON_ERROR));
                 $this->DisableSHIActions();

@@ -52,7 +52,7 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
                 }
                 return $result;
             };
-            $requestCount=0;
+            $requestCount=0;$pendingWrites=[];
             while (!file_exists($folder.'/done')) {
                 $r=[$listener];$w=[];$e=[];
                 if (!stream_select($r,$w,$e,0,100000)) continue;
@@ -83,13 +83,26 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
                         foreach($updates as $updateBank=>$values) foreach($values as $address=>$value) $model[$updateBank][$address]=$value;
                         unlink($folder.'/external-registers.json');
                     }
+                    foreach($pendingWrites as $pendingAddress=>$pending) if(microtime(true)>=$pending['due']) {
+                        $model['holding'][$pendingAddress]=$pending['word'];unset($pendingWrites[$pendingAddress]);
+                    }
                     $raw=$model[$bank][$a]??null;
                     if ($raw===null || (is_array($raw) && isset($raw['exception']))) $reply=pack('CC',$f|0x80,is_array($raw)?$raw['exception']:2);
                     elseif ($f===16) {
                         check(strlen($pdu)===6+2*$count && ord($pdu[5])===2*$count,'Bad write frame');
                         // Only fixture-documented holdings may be written.
                         check($count===1 && isset($model['holding'][$a]),'Write outside documented register set');
-                        if (empty($options['ignoreWrites'])) $model['holding'][$a]=$words[0];
+                        $ready=true;
+                        if(!empty($options['enforceDependencies'])) foreach($catalog as $definition) {
+                            if($definition['bank']!=='holding' || $definition['address']!==$a) continue;
+                            foreach($definition['deps'] as $dependency=>$required)
+                                if(($model['holding'][$dependency]??null)!==$required) $ready=false;
+                        }
+                        if (empty($options['ignoreWrites']) && !in_array($a,$options['ignoreWritesAt']??[],true) && $ready) {
+                            $delay=$options['writeDelay'][$a]??0;
+                            if($delay>0) $pendingWrites[$a]=['word'=>$words[0],'due'=>microtime(true)+$delay];
+                            else $model['holding'][$a]=$words[0];
+                        }
                         $reply=pack('Cnn',16,$a,$count);
                     } elseif ($f===2) {
                         check($count===1,'Unexpected discrete range');$reply=pack('CCC',2,1,$raw?1:0);
@@ -221,7 +234,7 @@ $tests['all 41 holding writes validate encode confirm and activate only document
         $value=$point['options']!==[]?(int)array_key_last($point['options']):($point['min']<0?-1.5:$point['min']+$point['factor']);
         if ($point['datatype']==='bool') $value=true;
         $input=[10122=>300,10123=>750];$di=array_fill_keys(range(10000,10011),1);
-        $options=['input'=>$input,'discrete'=>$di,'holding'=>[10040=>1]];
+        $options=['input'=>$input,'discrete'=>$di,'holding'=>[10040=>1],'enforceDependencies'=>true];
         $requests=withSHI(static function(Luxtronik $m) use($point,$value):void {
             check($m->SetSHIValue($point['ident'],$value),'Write not confirmed');
             $snapshot=json_decode($m->GetSHIData(),true);
@@ -230,9 +243,72 @@ $tests['all 41 holding writes validate encode confirm and activate only document
         },$options);
         $writes=array_values(array_filter($requests,fn($r)=>$r['function']===16));
         $expected=((int)round((float)$value/$point['factor'])) & 0xffff;
-        check($writes[0]['address']===$point['address'] && $writes[0]['words']===[$expected],'Wrong write encoding/order');
+        $target=array_values(array_filter($writes,fn($write)=>$write['address']===$point['address']));
+        check(count($target)===1 && $target[0]['words']===[$expected],'Wrong write encoding or repeated target');
+        check(end($writes)['address']===$point['address'],'Target sent before a required mode');
         foreach ($writes as $write) check($write['address']===$point['address'] || array_key_exists($write['address'],$point['deps']),'Undocumented collateral write');
     }
+};
+$tests['all selected SHI controls read actual holding values and keep effective setpoints separate'] = static function():void {
+    $fixture=json_decode(file_get_contents(__DIR__.'/fixtures/shi-registers.json'),true);
+    $holdings=[];$wanted=[];$selections=[];
+    foreach($fixture as $point) {
+        if($point['bank']!=='holding') continue;
+        $value=$point['options']!==[]?(int)array_key_last($point['options']):($point['min']<0?-1.5:$point['min']+$point['factor']);
+        if($point['datatype']==='bool') $value=true;
+        if($point['address']===10006) $value=50.0;
+        $holdings[$point['address']]=((int)round((float)$value/$point['factor'])) & 0xffff;
+        $wanted[$point['ident']]=$value;
+        $selections[]=['id'=>$point['selection'],'enabled'=>true];
+    }
+    $requests=withSHI(static function(Luxtronik $m,string $externalRegisters) use($wanted,$selections):void {
+        $m->properties['CommunicationMode']='java';
+        $m->properties['SHIControlList']=json_encode($selections);
+        $m->properties['IDListe']='[{"id":12,"enabled":true,"preferredSource":"modbus"},{"id":18,"enabled":true,"preferredSource":"modbus"}]';
+        invoke($m,'UpdateModbusSupplement');
+        foreach($wanted as $ident=>$value) {
+            $id=$m->GetIDForIdent($ident);
+            check($id!==false && abs((float)GetValue($id)-(float)$value)<0.000001,'Holding value not read: '.$ident);
+        }
+        check(GetValue($m->GetIDForIdent('Ruecklauf_Soll_Heizkreis'))===28.0,'Effective return target replaced with the SHI demand');
+        check(GetValue($m->GetIDForIdent('Warmwasser_Soll_Temperatur'))===55.0,'Effective DHW target replaced with the SHI demand');
+        $id=$m->GetIDForIdent('SHI_Sollwert_Warmwasser');
+        file_put_contents($externalRegisters,json_encode(['holding'=>[10006=>450]]));
+        invoke($m,'UpdateModbusSupplement');
+        check($m->GetIDForIdent('SHI_Sollwert_Warmwasser')===$id && GetValue($id)===45.0,'Changed holding value does not refresh the existing control');
+    },['holding'=>$holdings,'input'=>[10101=>280,10121=>550],'discrete'=>array_fill_keys(range(10000,10011),1)]);
+    check(array_filter($requests,fn($r)=>$r['function']===16)===[],'Reading control values writes back defaults');
+};
+$tests['DHW mode precedes the setpoint and delayed commits are confirmed without repeated writes'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m):void {
+        $m->properties['SHIControlList']='[{"id":310005,"enabled":true},{"id":310006,"enabled":true}]';
+        invoke($m,'UpdateModbusSupplement');
+        $target=$m->GetIDForIdent('SHI_Sollwert_Warmwasser');
+        check(GetValue($target)===40.0,'Initial SHI default not read');
+        $m->RequestAction('SHI_Sollwert_Warmwasser',50.0);
+        check(GetValue($target)===50.0 && GetValue($m->GetIDForIdent('SHI_Modus_Warmwasser'))===1,'Delayed target or mode not published');
+        invoke($m,'UpdateModbusSupplement');
+        check(GetValue($target)===50.0,'Confirmed target lost on next poll');
+    },['holding'=>[10005=>0,10006=>400],'input'=>[10122=>300,10123=>750],
+        'discrete'=>[10001=>1],'enforceDependencies'=>true,'writeDelay'=>[10005=>2.0,10006=>2.0]]);
+    $writes=array_values(array_filter($requests,fn($r)=>$r['function']===16));
+    check(array_column($writes,'address')===[10005,10006] && array_column($writes,'words')===[[1],[500]],'DHW write repeated or sent before its mode');
+};
+$tests['DHW mode rejection stops the target write and mismatched target reports both temperatures'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m):void {
+        shiThrows(fn()=>$m->SetSHIValue('SHI_Sollwert_Warmwasser',45.0));
+    },['holding'=>[10005=>0,10006=>400],'input'=>[10122=>300,10123=>750],'discrete'=>[10001=>1],
+        'fault'=>['function'=>16,'address'=>10005,'kind'=>'ack']]);
+    check(array_diff(array_column(array_values(array_filter($requests,fn($r)=>$r['function']===16)),'address'),[10005])===[],'Rejected DHW mode still sends a target');
+    $requests=withSHI(static function(Luxtronik $m):void {
+        try {$m->SetSHIValue('SHI_Sollwert_Warmwasser',45.0);throw new LogicException('Ignored target reported success');}
+        catch(RuntimeException $error) {
+            check(str_contains($error->getMessage(),'10006') && str_contains($error->getMessage(),'45.0 °C')
+                && str_contains($error->getMessage(),'40.0 °C'),'Readback error omits sent or actual temperature');
+        }
+        check($m->status===201 && json_decode($m->GetSHIData(),true)['stale'],'Failed target is published as confirmed');
+    },['holding'=>[10005=>1,10006=>400],'input'=>[10122=>300,10123=>750],'discrete'=>[10001=>1],'ignoreWrites'=>true]);
+    check(count(array_filter($requests,fn($r)=>$r['function']===16))===1,'Failed DHW target was resent');
 };
 $tests['invalid types ranges enum gaps and fractional resolution are rejected before connecting'] = static function ():void {
     $requests=withSHI(static function(Luxtronik $m):void {
@@ -251,11 +327,27 @@ $tests['controller DHW bounds and conflicting room-control modes are respected b
     $requests=withSHI(static function(Luxtronik $m):void {shiThrows(fn()=>$m->SetSHIValue('Anpassung_WW',60.0));shiThrows(fn()=>$m->SetSHIValue('Anpassung_RBE',22.0));},['input'=>[10123=>550],'discrete'=>[10001=>1,10005=>1],'holding'=>[10010=>2]]);
     check(array_filter($requests,fn($r)=>$r['function']===16)===[],'Invalid combined control wrote data');
 };
-$tests['failed acknowledgements and mismatched readback do not activate a mode or report success'] = static function ():void {
+$tests['failed acknowledgements and mismatched readback restore changed modes without reporting success'] = static function ():void {
     foreach ([['fault'=>['function'=>16,'address'=>10002,'kind'=>'ack']],['ignoreWrites'=>true]] as $option) {
         $requests=withSHI(static function(Luxtronik $m):void {shiThrows(fn()=>$m->SetSHIValue('Anpassung_Temp',-2.5));check($m->status===201,'Write failure not reported');},$option+['discrete'=>[10000=>1]]);
-        check(array_filter($requests,fn($r)=>$r['function']===16 && $r['address']!==10002)===[],'Unconfirmed value activated a mode');
+        $modeWrites=array_values(array_filter($requests,fn($r)=>$r['function']===16 && $r['address']===10000));
+        check($modeWrites!==[] && (isset($option['ignoreWrites']) || end($modeWrites)['words']===[0]),'Failed target leaves the newly activated mode enabled');
     }
+};
+$tests['a rejected target restores only changed prerequisite modes in reverse order'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m):void {
+        shiThrows(fn()=>$m->SetSHIValue('SHI_Offset_Heizen',1.0));
+        $client=invoke($m,'NewSHIClient');
+        try {
+            check($client->readHoldingRegisters(10000,1)===[1],'Failed target leaves a changed heating mode active');
+            check($client->readHoldingRegisters(10065,1)===[3],'Failed target loses the prior overall mode');
+        } finally {$client->close();}
+        check($m->status===201 && json_decode($m->GetSHIData(),true)['stale'],'Unconfirmed target reported as successful');
+    },['discrete'=>[10000=>1],'holding'=>[10000=>1,10065=>3,10002=>0],
+        'enforceDependencies'=>true,'ignoreWritesAt'=>[10002]]);
+    $writes=array_values(array_filter($requests,fn($r)=>$r['function']===16));
+    check(array_column($writes,'address')===[10065,10000,10002,10000,10065],'Prerequisites restored in the wrong order or target resent');
+    check(array_column($writes,'words')===[[0],[2],[10],[1],[3]],'Rollback did not preserve the old mode values');
 };
 $tests['selected holding controls preserve existing IDs names types and never write on ApplyChanges'] = static function ():void {
     $requests=withSHI(static function(Luxtronik $m):void {
@@ -286,7 +378,7 @@ $tests['Java targets and temporary SHI requests remain separate variables and wr
             check(GetValue($native)===50.5 && GetValue($external)===55.0,'SHI write changed the native Java target');
             check($m->GetIDForIdent('Anpassung_WW')===$native && IPS_GetName($native)==='Mein dauerhaftes WW-Soll','Native Java variable identity changed');
         },['input'=>[10122=>300,10123=>650],'discrete'=>[10000=>1,10001=>1]],$m);
-        check(array_column(array_values(array_filter($requests,fn($r)=>$r['function']===16)),'address')===[10006,10005],'Native Java action was translated into SHI');
+        check(array_column(array_values(array_filter($requests,fn($r)=>$r['function']===16)),'address')===[10005,10006],'Native Java action was translated into SHI or DHW mode was set too late');
     });
 };
 
@@ -590,7 +682,7 @@ $tests['Modbus writes coexist with Java-only mode and timer actions'] = static f
             $m->properties['CommunicationMode']='java';shiThrows(fn()=>$m->RequestAction('SHI_PC_Limit',5.0));
         },['discrete'=>[10000=>1]],$m);
         $writes=array_values(array_filter($requests,static fn($r)=>$r['function']===16));
-        check(array_column($writes,'address')===[10002,10000],'Java-only actions were reinterpreted as Modbus writes');
+        check(array_column($writes,'address')===[10000,10002],'Java-only actions were reinterpreted as Modbus writes');
     });
 };
 
@@ -931,7 +1023,7 @@ $tests['polling never replays SHI demands and controller fallback updates existi
         check($m->GetIDForIdent('SHI_Modus_Heizen')===$mode && $m->GetIDForIdent('SHI_Offset_Heizen')===$offset,'Fallback replaced variable objects');
     },['discrete'=>[10000=>1],'holding'=>[10000=>0,10002=>0,10065=>0]]);
     $writes=array_values(array_filter($requests,static fn($r)=>$r['function']===16));
-    check(array_column($writes,'address')===[10002,10000],'Polling resent or reset SHI commands');
+    check(array_column($writes,'address')===[10000,10002],'Polling resent or reset SHI commands');
 };
 
 $tests['direct TCP reads and writes ignore an old attached gateway and preserve measurement objects'] = static function():void {

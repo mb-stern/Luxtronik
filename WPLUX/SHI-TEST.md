@@ -51,9 +51,25 @@ getrennt behandelt. [Vergleich](SHI-JAVA-VERGLEICH.md),
 [Konfiguration](DATENQUELLEN.md), [vollständiger Katalog](SHI-REGISTER.md).
 
 Auswahl und zyklisches Lesen schreiben keine Werte. Erst eine Aktion prüft
-Datentyp, Bereich, Auflösung, aktuelle Gerätegrenzen und Freigabe. Zielwert und
-benötigte Modusabhängigkeiten werden geschrieben und zurückgelesen. Ein Fehler
+Datentyp, Bereich, Auflösung, aktuelle Gerätegrenzen und Freigabe. Zuerst werden
+die benötigten Modi geschrieben und bestätigt, danach folgt der Zielwert. Ein Fehler
 führt weder zu unbestätigten Erfolgswerten noch zu einem zusätzlichen Java-Schreibzugriff.
+Selbst geänderte Modi werden bei einem Fehler nach frischer Prüfung nach Möglichkeit
+zurückgenommen; ein fremder oder nicht mehr eindeutig zugeordneter Modus wird
+nicht überschrieben. Eine fehlende Bestätigung der Rücknahme wird protokolliert.
+
+Warmwasser: Zuerst wird der benötigte Modus 10005 gesetzt und bestätigt, danach
+die Vorgabe (10006/10007/10008). Einige Firmwarestände übernehmen diese Register
+verzögert. Daher wird bis zu 15 Sekunden je Register ausschließlich zurückgelesen,
+ohne den Befehl zu wiederholen. Die tatsächliche Verzögerung hängt vom Regler ab.
+[Erfahrungen einer anderen SHI-Integration](https://github.com/Bankaifan/ha-luxtronik-shi/blob/main/docs/firmware-3.92.3-shi-analysis.md#deferred-writes-of-the-hot-water-group)
+beschreiben eine solche Verzögerung für die Warmwassergruppe; dies ersetzt keinen
+Test des jeweiligen Geräts.
+
+Die SHI-Sollwerte sind eigene, lesbare Holding-Werte. Bei Modus 0 können sie
+beispielsweise 35 °C (Heizen, 10001) oder 40 °C (Warmwasser, 10006) melden, während
+die wirksamen Sollwerte im Regler anders lauten. Diese sind als Istwerte über
+Input-Register 10101 (Rücklauf Soll) bzw. 10121 (Warmwasser Soll) verfügbar.
 
 Laut Anleitung fallen Vorgaben nach 15 Minuten ohne Modbus-Anfrage auf Standard
 zurück. Der Zeitraum beginnt nicht pauschal beim letzten Schreiben. Das Modul
