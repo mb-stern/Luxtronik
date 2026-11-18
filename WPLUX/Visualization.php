@@ -341,8 +341,6 @@ trait LuxtronikVisualization
         overflow: hidden;
     }
 
-    html.wp-embedded #wp-root { padding-top: 48px; }
-
     #wp-error {
         display: none;
         margin: 8px;
@@ -1654,7 +1652,6 @@ window.customCards.push({
  */
 window.SymconHeatPump = {
   init(payload) {
-        document.documentElement.classList.toggle('wp-embedded', window.parent !== window);
         let currentConfig = payload.config || {};
         let currentControls = payload.controls || {};
         let embeddedSvg = payload.svg || '';

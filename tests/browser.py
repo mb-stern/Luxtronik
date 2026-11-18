@@ -801,16 +801,18 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 mixed.close()
             print(json.dumps({'optional_second_outlet':'PASS','series_return_buffer':'PASS','DHW_temperature_hold':'PASS'}))
 
-            # Symcon's title/maximize overlay must remain above the embedded diagram.
+            # Embedded diagrams use the full tile even while the host title is shown.
             Path(artifacts,'embedded-title.html').write_text('<style>body{margin:0}iframe{width:100vw;height:100vh;border:0}#host-title{position:absolute;top:8px;left:12px;font:24px Arial;z-index:5}</style><div id="host-title">Luxtronik</div><iframe src="configured.html"></iframe>')
             for width,height in [(1200,240),(390,400)]:
                 embedded=browser.new_page(viewport={'width':width,'height':height})
                 embedded.goto(f'http://127.0.0.1:{server.server_port}/embedded-title.html')
                 frame=embedded.frame_locator('iframe')
-                assert frame.locator('#wp-root').evaluate('e=>getComputedStyle(e).paddingTop')=='48px'
-                title=embedded.locator('#host-title').bounding_box()
-                button=frame.locator('#gHPStatusWW').bounding_box()
-                assert button['y']>title['y']+title['height'],(title,button)
+                assert frame.locator('#wp-root').evaluate('e=>getComputedStyle(e).paddingTop')=='0px'
+                bounds=frame.locator('#wp-root').bounding_box()
+                assert bounds=={'x':0,'y':0,'width':width,'height':height},bounds
+                before=frame.locator('#wp-card').bounding_box()
+                embedded.locator('#host-title').evaluate('e=>e.style.display="none"')
+                assert frame.locator('#wp-card').bounding_box()==before
                 embedded.close()
 
             # Selected room count controls the layout and scales a sole reading up.
