@@ -1193,6 +1193,36 @@ $tests['cold start during DHW does not invent a previously displayed heating tem
     check($first['data']['supplyTemperatureHeating']['value']===null && $first['data']['supplyTemperatureHeating']['displayHold'],'Initial hot-water reading was invented as a heating baseline');
 };
 
+$tests['native title visibility updates the live layout without changing settings or requiring 9.1 fields'] = static function():void {
+    $module=new Luxtronik();
+    check(invoke($module,'BuildCardConfig')['hostTitleHidden']===null,'Legacy object invents title visibility');
+    foreach(['8.1','8.2','9.0','9.0 (Build 123)'] as $version) {
+        $GLOBALS['testKernelVersion']=$version;
+        check(invoke($module,'BuildCardConfig')['hostTitleHidden']===false,'Pre-9.1 title missing: '.$version);
+    }
+    foreach(['9.1','9.1 RUST','unknown'] as $version) {
+        $GLOBALS['testKernelVersion']=$version;
+        check(invoke($module,'BuildCardConfig')['hostTitleHidden']===null,'Unknown title state guessed: '.$version);
+    }
+    unset($GLOBALS['testKernelVersion']);
+    $module->GetVisualizationTile();
+    check($module->errors===[],'Legacy object without title field fails');
+    if(!defined('OM_CHANGEHIDDENTITLE')) define('OM_CHANGEHIDDENTITLE',10417);
+    $module->GetVisualizationTile();
+    check(isset($module->messages[$module->InstanceID][OM_CHANGEHIDDENTITLE]),'Initial native title event not subscribed');
+    $before=$module->properties;
+    try {
+        foreach([false,true,false] as $hidden) {
+            $GLOBALS['testObjectInfo'][$module->InstanceID]=['ObjectIsHiddenTitle'=>$hidden];
+            $module->MessageSink(1,$module->InstanceID,OM_CHANGEHIDDENTITLE,[$hidden]);
+            $update=end($module->updates);
+            check($update['type']==='update' && $update['config']['hostTitleHidden']===$hidden,'Title change not forwarded live');
+            check(isset($module->messages[$module->InstanceID][OM_CHANGEHIDDENTITLE]),'Native title event not subscribed');
+        }
+        check($module->properties===$before && $module->writes===0 && $module->errors===[],'Title changes write device settings or report errors');
+    } finally {unset($GLOBALS['testObjectInfo'][$module->InstanceID]);}
+};
+
 $failed=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }

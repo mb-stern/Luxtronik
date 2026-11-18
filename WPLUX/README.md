@@ -208,10 +208,14 @@ XML- und neue JSON-Antworten werden unterstützt. Das Passwort kommt aus der
 Instanzkonfiguration; das Original-Webinterface lässt sich ebenfalls öffnen.
 
 Die Grafik übernimmt die im Modul berechneten COP-/JAZ-Variablen und nutzt die
-verfügbare Kachelfläche. Ab Symcon 9.1 übernimmt sie den vom HTML-SDK gelieferten
-oberen Abstand (`--margin-top`) automatisch; es gibt keinen festen Titelabstand.
-Die Titelzeile kann in den visuellen Einstellungen ausgeblendet werden. Ältere
-Versionen verwenden weiterhin die bisherige HTML-Darstellung ohne zusätzlichen Abstand.
+verfügbare Kachelfläche. Ab Symcon 9.1 liest sie die tatsächliche Titeleinstellung
+(`ObjectIsHiddenTitle`): Ein ausgeblendeter Titel gibt die volle Fläche frei,
+ein eingeblendeter Titel erhält oben Platz entsprechend der Kachelschriftgröße.
+Die Einstellung wird beim Umschalten sofort übernommen. Ein größerer SDK-Abstand
+wird bei sichtbarem Titel berücksichtigt. Vor 9.1 wird die stets sichtbare
+Titelzeile anhand der erkannten Symcon-Version berücksichtigt. Ältere Versionen
+behalten die bisherige HTML-Darstellung; fehlende 9.1-Eigenschaften verursachen
+keinen Fehler.
 Die Soll-Innentemperatur wird mit einer Nachkommastelle und °C angezeigt.
 
 [Einrichtung und Details zur Grafik](VISUALISIERUNG.md)
@@ -249,7 +253,7 @@ Version 5.0 (in Vorbereitung; Änderungen seit der bisherigen Version)
 - **Neue HTML-SDK-Grafik:** Luft/Wasser oder Sole/Wasser im gleichen Stil; bei Sole mit Quellen-Eintritt, -Austritt und Pumpenzustand statt Lüfter und Abtau-Restzeit. Ein Standard-Heizkreis und optional ein zweiter Kreis, Reihenpuffer im Rücklauf, Warmwasser, Solarthermie mit wählbarem Speicherziel sowie Zirkulation.
 - **Bedienung in der Grafik:** Betriebsarten und Sollwerte, bis zu drei Raumtemperaturen und Heizstäbe, optionales Wettersymbol und bedienbares Reglerdisplay. Die Darstellung folgt dem Symcon-Design und ist ab 9.1 maximierbar.
 - **COP und JAZ:** interner COP automatisch ohne externe Leistungsquelle; ausgewählte externe Messung hat Vorrang. Elektrische Leistung und Energiezähler bleiben getrennt.
-- **Aktualisierung und Darstellung:** Sammelauswahl der Lesequelle, keine zusätzliche Modbus-Cachepause zwischen Aktualisierungen, verständliche SHI-Freigaben, automatische Anpassung an den oberen HTML-SDK-Abstand ab 9.1 ohne feste Titelreserve, verständlicher Displayzugang und einheitliche Temperaturdarstellung. Die registerbedingte 100-W-Auflösung bleibt bestehen.
+- **Aktualisierung und Darstellung:** Sammelauswahl der Lesequelle, keine zusätzliche Modbus-Cachepause zwischen Aktualisierungen, verständliche SHI-Freigaben, automatische Anpassung an die tatsächliche Titelsichtbarkeit ab 9.1, verständlicher Displayzugang und einheitliche Temperaturdarstellung. Die registerbedingte 100-W-Auflösung bleibt bestehen.
 - **Robustere Einrichtung:** neue Instanz ohne konfigurierte IP mit deaktivierter Abfrage und ohne Verbindungsfehler im Systemlog; lokale Prüfungen für Anlage, Protokolle, Steuerung und Darstellung. Gerätetests und die Prüfung im jeweiligen Symcon-System bleiben zusätzlich erforderlich.
 
 Version 4.7 (19.10.2026)

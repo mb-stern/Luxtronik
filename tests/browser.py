@@ -815,10 +815,35 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     card=frame.locator('#wp-card').bounding_box()
                     assert card=={'x':0,'y':inset,'width':width,'height':height-inset},card
                 frame.locator('html').evaluate('e=>e.style.removeProperty("--margin-top")')
+                # Native title state works even if this host always supplies a zero inset.
+                title_payload=json.loads(json.dumps(payload))
+                title_payload['config']['hostTitleHidden']=False
+                frame.locator('html').evaluate('(e,p)=>window.handleMessage(p)',title_payload)
+                card=frame.locator('#wp-card').bounding_box()
+                title=embedded.locator('#host-title').bounding_box()
+                assert card['y']>=title['y']+title['height'],(title,card)
+                frame.locator('html').evaluate('e=>e.style.setProperty("--font-size","40px")')
+                assert frame.locator('#wp-card').bounding_box()['y']==66
+                frame.locator('html').evaluate('e=>e.style.setProperty("--margin-top","80px")')
+                assert frame.locator('#wp-card').bounding_box()['y']==80
+                title_payload['config']['hostTitleHidden']=True
+                frame.locator('html').evaluate('(e,p)=>window.handleMessage(p)',title_payload)
+                assert frame.locator('#wp-card').bounding_box()=={'x':0,'y':0,'width':width,'height':height}
+                frame.locator('html').evaluate('e=>{e.style.removeProperty("--margin-top");e.style.removeProperty("--font-size");}')
                 before=frame.locator('#wp-card').bounding_box()
                 embedded.locator('#host-title').evaluate('e=>e.style.display="none"')
                 assert frame.locator('#wp-card').bounding_box()==before
                 embedded.close()
+            # A native SDK webview can supply requestAction without an enclosing iframe.
+            native_host=browser.new_page(viewport={'width':390,'height':400})
+            native_host.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
+            title_payload['config']['hostTitleHidden']=False
+            native_host.evaluate('(p)=>{window.requestAction=()=>{};window.handleMessage(p);}',title_payload)
+            assert native_host.locator('#wp-card').bounding_box()=={'x':0,'y':56,'width':390,'height':344}
+            title_payload['config']['hostTitleHidden']=True
+            native_host.evaluate('(p)=>window.handleMessage(p)',title_payload)
+            assert native_host.locator('#wp-card').bounding_box()=={'x':0,'y':0,'width':390,'height':400}
+            native_host.close()
 
             # Selected room count controls the layout and scales a sole reading up.
             for width in [1200,390]:
