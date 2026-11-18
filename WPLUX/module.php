@@ -1301,13 +1301,17 @@ class Luxtronik extends IPSModuleStrict
 
         $daten_raw = $this->ReadData(3004);
         if ($daten_raw === null) {
-            $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>0,'failed'=>true],JSON_THROW_ON_ERROR));
+            $source=$this->VisualizationSourceKey();
+            $previous=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
+            $knownCount=($previous['source']??'')===$source
+                ?($previous['lastSuccessfulCount']??(empty($previous['failed'])?($previous['count']??null):null)):null;
+            $this->SetBuffer('JavaAvailability',json_encode(['source'=>$source,'count'=>0,'failed'=>true,'lastSuccessfulCount'=>$knownCount],JSON_THROW_ON_ERROR));
             $this->SetBuffer('ControlSources','');
             $this->UpdateMeasurementSupplements();
             $this->RefreshVisualization();
             return;
         }
-        $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>count($daten_raw)],JSON_THROW_ON_ERROR));
+        $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>count($daten_raw),'lastSuccessfulCount'=>count($daten_raw)],JSON_THROW_ON_ERROR));
         $this->RememberJavaFirmware($daten_raw);
         $JavaWerte = count($daten_raw);
         $graphicPoints = $this->HybridMeasurementIDs();

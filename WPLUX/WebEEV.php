@@ -746,7 +746,7 @@ trait LuxtronikWebEEV
             foreach(self::WEB_ONLY_POINTS as $id=>$point) if(empty($point['aliasOf']) || !empty($saved[$id])) $element['values'][]=[
                 'enabled'=>$saved[$id]??false,'id'=>$id,'name'=>$point['label'],'interface'=>'WebSocket'];
             foreach($element['values'] as &$row) {
-                $row['preferredSource']=$this->MeasurementSourceOrder((int)$row['id'])[0];
+                $row['preferredSource']=$this->MeasurementSourceOrder((int)$row['id'])[0]??$this->ReadPropertyString('MeasurementBulkSource');
                 $row['source']=$this->CurrentPointSource((int)$row['id']);
             }
             unset($row);

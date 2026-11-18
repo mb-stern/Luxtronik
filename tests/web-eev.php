@@ -220,7 +220,7 @@ $tests['failed web reads clear current openings and back off without changing pr
     },['badAccept'=>true]);
 };
 $tests['expired or disabled WebSocket readings disappear and the list identifies WebSocket-only selections'] = static function():void {
-    $module=new Luxtronik();$module->properties['IPAddress']='127.0.0.1';
+    $module=new Luxtronik();$module->properties['IPAddress']='127.0.0.1';invoke($module,'MarkInterfaceSupported','websocket');
     $source=invoke($module,'WebEEVSourceKey');
     invoke($module,'SetBuffer','WebEEVCache',json_encode(['source'=>$source,'updatedAt'=>time()-100,'values'=>['EEV_Heizen'=>['value'=>42.9,'webId'=>'old']]]));
     check(invoke($module,'GetWebEEVPoint','EEV_Heizen')===null,'Expired web value returned');

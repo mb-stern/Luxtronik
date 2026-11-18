@@ -21,6 +21,11 @@ trait LuxtronikDataSources
             $rows[$id]=array_replace($rows[$id]??[],array_intersect_key($row,array_flip(['id','enabled','preferredSource'])));
             $rows[$id]['id']=$id;
         }
+        foreach($rows as $id=>&$row) {
+            $sources=$this->MeasurementSources((int)$id);
+            if($sources!==[] && !in_array($row['preferredSource']??'', $sources,true)) $row['preferredSource']=$sources[0];
+        }
+        unset($row);
         $ids=array_keys(self::DATA_POINT_CONFIG+$this->WebDefinitions()+$selections+$rows);
         $changed=0;
         foreach($ids as $id) {
@@ -42,7 +47,10 @@ trait LuxtronikDataSources
     private function MeasurementSources(int $id): array
     {
         $sources=[];
-        if($id>=0 && $id<self::MAX_RESPONSE_VALUES) $sources[]='java';
+        $java=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
+        $javaCount=($java['source']??'')===$this->VisualizationSourceKey()
+            ?($java['lastSuccessfulCount']??(empty($java['failed'])?($java['count']??null):null)):null;
+        if($id>=0 && $id<self::MAX_RESPONSE_VALUES && ($javaCount===null || $id<(int)$javaCount)) $sources[]='java';
         if(isset($this->WebDefinitions()[$id]) && $this->InterfaceSupport('websocket')!==false) $sources[]='websocket';
         $shi=$this->SHISelections()[$id]??null;
         if($shi!==null && $shi['bank']!=='holding' && $this->InterfaceSupport('modbus')!==false) $sources[]='modbus';
@@ -52,10 +60,11 @@ trait LuxtronikDataSources
     private function MeasurementSourceOrder(int $id): array
     {
         $available=$this->MeasurementSources($id);
+        if($available===[]) return [];
         $preferred=$this->ReadPropertyString('MeasurementBulkSource');
         foreach($this->MeasurementRows() as $row)
             if((int)($row['id']??0)===$id) {$preferred=$row['preferredSource']??$preferred;break;}
-        if(!in_array($preferred,$available,true)) $preferred=$available[0]??'java';
+        if(!in_array($preferred,$available,true)) $preferred=$available[0];
         return array_values(array_unique([$preferred,...$available]));
     }
 

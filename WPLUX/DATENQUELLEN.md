@@ -2,8 +2,10 @@
 
 ## Einrichten
 
-Unter **Verbindung und Lesen** stehen Geräte-IP, das gemeinsame
-Aktualisierungsintervall und das Webinterface-Passwort. WebSocket wird automatisch
+Direkt unter **Modul aktiv** stehen unter **Verbindung und Lesen** Geräte-IP,
+gemeinsames Aktualisierungsintervall, Java-Port, Webinterface-Passwort und -Zeitzone
+sowie Modbus-Port, Geräteadresse und Antwortwartezeit. Ein weiteres Ausklappmenü
+ist dafür nicht nötig. WebSocket wird automatisch
 geprüft; eine Statuszeile zeigt die Verfügbarkeit. Java bleibt die voreingestellte
 Quelle. Bei fehlenden Daten ergänzen WebSocket und Modbus die zugeordneten Werte.
 XML und JSON werden automatisch unterschieden. Bei fehlender Erreichbarkeit lässt
@@ -24,9 +26,15 @@ Die Formularanzeige selbst führt keine Netzwerkabfrage aus.
 Ein Verbindungsfehler bleibt „noch nicht bestätigt“ und beweist keine fehlende
 Unterstützung. Beim erkannten Firmwarewechsel werden nur Erkennungscaches erneuert.
 
-**Quellen je Istwert einstellen** blendet die optionale bevorzugte Quelle und
-Einzelzuordnungen ein. Die Wahl wird mit dem normalen **Übernehmen** gespeichert.
-Vorhandene Einzelzuordnungen bleiben erhalten, bis eine andere Quelle gewählt wird.
+**Quellen je Istwert einstellen** blendet Quellenwahl und Einzelzuordnungen direkt
+über der Istwertliste ein. Der Knopf **Für alle passenden Messwerte übernehmen**
+steht neben der Quellenwahl. Der Bearbeitungsdialog wird für jeden Istwert einzeln
+erzeugt und bietet nur zugeordnete Protokolle mit bestätigter Firmware- oder
+Schnittstellenunterstützung an. Java wird bei einem erfolgreich gelesenen kürzeren
+Datenrahmen für die darin fehlenden IDs nicht angeboten. Ein späterer
+Verbindungsfehler verwirft diese bekannte Zuordnung nicht. Einzeländerungen im
+Dialog werden mit dem normalen **Übernehmen** gespeichert; die Sammelauswahl
+ändert nur passende Messwerte. Bestehende Variablen und Auswahl-IDs bleiben erhalten.
 
 ## Eine gemeinsame Istwertliste
 
@@ -103,16 +111,19 @@ Anschließend werden Wert und Modus zurückgelesen. Ein Schreibfehler löst kein
 zusätzliche Java-Schreibaktion aus.
 
 Die SHI-Anleitung nennt einen Rückfall auf Standardwerte nach **15 Minuten ohne
-Modbus-Anfrage**. Normales Abfragen hält die Kommunikation aufrecht, sendet jedoch
+Modbus-Anfrage** (Seite 5). Jede Anfrage, auch ein Lesezugriff, beginnt diese
+Rückfallzeit erneut. Die regelmäßigen Abfragen des Moduls halten die Vorgaben
+deshalb auch länger als 15 Minuten nach einer Wertänderung aktiv. Sie senden
 keine alten Schreibwerte erneut. Eine aktive Vorgabe wird über ihren SHI-Modus
 beendet; das Löschen der Symcon-Variable beendet sie nicht automatisch.
 
 ## Direkte Modbus-TCP-Anbindung
 
 Das Modul verbindet sich selbst mit der oben eingetragenen IP-Adresse der
-Wärmepumpe. Unter **Modbus / SHI – externe Regelung** stehen Modbus-Port
-(normalerweise **502**) und Geräteadresse / Unit-ID (normalerweise **1**).
-Die Antwortwartezeit bleibt unter **Verbindungsdetails** einstellbar.
+Wärmepumpe. Unter **Verbindung und Lesen** stehen Modbus-Port (normalerweise
+**502**), Geräteadresse / Unit-ID (normalerweise **1**) und Modbus-Antwortwartezeit
+(in Millisekunden). Die Webinterface-Zeitzone dient zur Auswertung der Zeitangaben
+des Reglers; leer bedeutet Symcon-Zeitzone.
 Der gemeinsame Aktualisierungszyklus liest alle benötigten Werte.
 
 Es werden kein Symcon-Modbus-Gateway, kein Client Socket und keine zusätzlichen

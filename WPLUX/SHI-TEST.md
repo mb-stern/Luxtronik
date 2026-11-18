@@ -8,7 +8,7 @@ Regler-/Symcon-Kombination benötigt weiterhin einen Gerätetest.
 
 1. Geräte-IP, gemeinsames Aktualisierungsintervall und Webinterface-Passwort unter
    **Verbindung und Lesen** eintragen. WebSocket wird automatisch erkannt.
-2. Unter **Modbus / SHI – externe Regelung** Modbus-Port **502** und Geräteadresse
+2. Unter **Verbindung und Lesen** Modbus-Port **502** und Geräteadresse
    **1** einstellen (sofern der Regler andere Werte benötigt, diese verwenden).
    Die Verbindung erfolgt direkt aus dem Modul zur Geräte-IP.
 3. Gewünschte Messvariablen in der gemeinsamen **Istwertliste** wählen.
@@ -21,7 +21,7 @@ Regler-/Symcon-Kombination benötigt weiterhin einen Gerätetest.
 Symcon-Modbus-Gateway und Client Socket werden nicht benötigt. Bereits angelegte
 Instanzen werden weder verwendet noch gelöscht. Auch ein noch angehängtes Gateway
 leitet keine Modbus-Anfragen mehr weiter. Der vorhandene Aktualisierungstimer
-bleibt der einzige Timer; der Timeout unter Verbindungsdetails ist die
+bleibt der einzige Timer; der Modbus-Timeout unter Verbindung und Lesen ist die
 Antwortwartezeit der direkten Verbindung.
 
 ## Messwerte und Steuerungen

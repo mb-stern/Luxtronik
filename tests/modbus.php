@@ -7,6 +7,11 @@ function WPLUX_RefreshWriteSourceLabels(int $id, bool $enabled): void
     $GLOBALS['testWriteSourceRefreshes'][] = [$id, $enabled];
 }
 
+function WPLUX_GetMeasurementRowForm(int $id,int $MeasurementID,bool $ShowSources): string
+{
+    return $GLOBALS['testRowFormTargets'][$id]->GetMeasurementRowForm($MeasurementID,$ShowSources);
+}
+
 function IPS_SetProperty(int $id,string $name,mixed $value): bool
 {
     $GLOBALS['testPropertyChanges'][]=[$id,$name,$value];
@@ -139,7 +144,7 @@ $tests['catalogue covers every documented bank exactly and retains the original 
     foreach ([10=>10105,11=>10100,12=>10101,13=>10102,15=>10108,16=>10109,17=>10120,18=>10121,19=>10110,20=>10111,21=>10140,22=>10141,24=>10150,25=>10151,151=>10322,152=>10324,153=>10328,154=>10320,189=>10113,227=>10106,257=>10300,268=>10301] as $id=>$address) check($legacy[$id]===$address,'Existing mapping changed');
 };
 $tests['interface column identifies Java Modbus and shared values without renaming objects'] = static function ():void {
-    $m=new Luxtronik();check($m->properties['CommunicationMode']==='java','Java default changed');
+    $m=new Luxtronik();check($m->properties['CommunicationMode']==='java','Java default changed');invoke($m,'RememberFirmwareString','V3.92.3');
     foreach (['java','modbus'] as $mode) {
         $m->properties['CommunicationMode']=$mode;$m->properties['ShowAdvancedModbusPoints']=true;$form=fields(json_decode($m->GetConfigurationForm(),true));$rows=array_column($form['IDListe']['values'],null,'id');
         check($rows[15]['interface']==='Java + Modbus + WebSocket' && $rows[14]['interface']==='Java + WebSocket' && !isset($rows[310041],$rows[310006]) && count($form['SHIControlList']['values'])===41
@@ -493,7 +498,7 @@ $tests['normal update reads Java first while the configured write route sends on
 };
 
 $tests['default list contains only additional Modbus measurements and retains selected advanced and legacy rows'] = static function():void {
-    $m=new Luxtronik();$form=fields(json_decode($m->GetConfigurationForm(),true));$rows=array_column($form['IDListe']['values'],null,'id');
+    $m=new Luxtronik();invoke($m,'RememberFirmwareString','V3.92.3');$form=fields(json_decode($m->GetConfigurationForm(),true));$rows=array_column($form['IDListe']['values'],null,'id');
     check($form['CommunicationMode']['type']==='Select' && !isset($form['CommunicationMode']['value']),'Write selection is not bound to the existing Java-default property');
     check(!isset($form['ModbusWrites']) && !isset($form['ModbusReadSupplement']) && !isset($form['ModbusJavaSupplement']) && !isset($form['WebSocketSupplement']),'Obsolete reading switches remain');
     check(!isset($rows[310041],$rows[110350],$rows[400003]) && isset($rows[210000],$rows[110103]),'Read-only registers are not in the unified list or aliases leak into it');
@@ -733,6 +738,85 @@ $tests['simple form preserves stable properties and uses one interval and one me
     check(array_filter($m->formUpdates,fn($u)=>$u[0]==='IDListe' && str_starts_with($u[1],'columns.') && $u[2]===true)!==[],'Advanced columns do not expand');
 };
 
+$tests['measurement row editor offers only confirmed mapped protocols and preserves the draft'] = static function():void {
+    $m=new Luxtronik();
+    check(array_column(fields(json_decode($m->GetMeasurementRowForm(15,true),true))['preferredSource']['options'],'value')===['java'],
+        'Unconfirmed additional protocols are offered');
+    invoke($m,'RememberFirmwareString','V3.92.3');
+    $before=[$m->properties,$m->buffers,$m->writes];
+    foreach([400009=>['websocket'],110103=>['modbus'],110310=>['websocket','modbus'],15=>['java','websocket','modbus']] as $id=>$expected) {
+        $editor=fields(json_decode($m->GetMeasurementRowForm($id,true),true));
+        check(array_column($editor['preferredSource']['options'],'value')===$expected,'Unsupported protocol in editor for '.$id);
+    }
+    $form=fields(json_decode($m->GetConfigurationForm(),true));
+    $id=$m->InstanceID;$IDListe=['id'=>400009];$AdvancedSourceSelection=true;
+    $GLOBALS['testRowFormTargets'][$id]=$m;
+    try {$editor=fields(eval($form['IDListe']['form']));} finally {unset($GLOBALS['testRowFormTargets'][$id]);}
+    check(array_column($editor['preferredSource']['options'],'value')===['websocket'],'List form script does not filter the actual selected row');
+    check(!isset(fields(json_decode($m->GetMeasurementRowForm(15,false),true))['preferredSource']),'Advanced selection leaks into the normal editor');
+    check([$m->properties,$m->buffers,$m->writes]===$before,'Opening an editor changes configuration or sends commands');
+    invoke($m,'RememberFirmwareString','V3.79');
+    $editor=fields(json_decode($m->GetMeasurementRowForm(15,true),true));
+    check(array_column($editor['preferredSource']['options'],'value')===['java'],'Old firmware still offers Modbus or WebSocket');
+    check(!isset(fields(json_decode($m->GetMeasurementRowForm(400009,true),true))['preferredSource']),'A value without a supported protocol has a selectable source');
+};
+
+$tests['Java source availability respects real frame length and survives temporary connection failure'] = static function():void {
+    $m=new Luxtronik();invoke($m,'RememberFirmwareString','V3.92.3');
+    $source=invoke($m,'VisualizationSourceKey');
+    $m->buffers['JavaAvailability']=json_encode(['source'=>$source,'count'=>20]);
+    check(invoke($m,'MeasurementSources',15)===['java','websocket','modbus'] && invoke($m,'MeasurementSources',21)===['websocket','modbus'],
+        'A missing Java value is advertised as supported');
+    $m->buffers['JavaAvailability']=json_encode(['source'=>$source,'count'=>0,'failed'=>true,'lastSuccessfulCount'=>20]);
+    check(!in_array('java',invoke($m,'MeasurementSources',21),true) && in_array('java',invoke($m,'MeasurementSources',15),true),
+        'A connection failure forgets known Java capabilities');
+    check(invoke($m,'MeasurementSourceOrder',300)===[],'An unsupported value invents a Java fallback');
+    $m->properties['IPAddress']='192.0.2.44';
+    check(in_array('java',invoke($m,'MeasurementSources',21),true),'Frame capabilities leaked to another controller');
+};
+
+$tests['failed Java polls retain the last confirmed frame length for source selection'] = static function():void {
+    withServer([[pack('N*',3004,0),frame(3004,array_fill(0,50,0))],
+        [pack('N*',3004,0),pack('N*',3003,0,0)]],static function(Luxtronik $m):void {
+        $m->Update();
+        check(in_array('java',invoke($m,'MeasurementSources',15),true) && !in_array('java',invoke($m,'MeasurementSources',50),true),
+            'Successful Java frame length not used by source selection');
+        $m->Update();
+        $availability=json_decode($m->buffers['JavaAvailability'],true);
+        check($availability['failed'] && $availability['lastSuccessfulCount']===50,'Failed poll erased confirmed Java capabilities');
+        check(in_array('java',invoke($m,'MeasurementSources',15),true) && !in_array('java',invoke($m,'MeasurementSources',50),true),
+            'Failed poll reopened unsupported Java sources');
+    });
+};
+
+$tests['connection settings are flat below the active switch and the bulk button accompanies its selector'] = static function():void {
+    $m=new Luxtronik();$m->properties['AdvancedSourceSelection']=true;invoke($m,'RememberFirmwareString','V3.92.3');
+    $form=json_decode($m->GetConfigurationForm(),true);$all=fields($form);
+    check(($form['elements'][1]['name']??'')==='ConnectionAndReading' && $form['elements'][1]['type']==='ColumnLayout',
+        'Connection settings are not directly below the active switch');
+    foreach(['IPAddress','UpdateInterval','Port','WebSocketPassword','WebSocketTimezone','ModbusPort','ModbusUnitID','ModbusTimeout'] as $name)
+        check(isset(fields($form['elements'][1])[$name]),'Connection setting is elsewhere: '.$name);
+    check(!str_contains(json_encode($form),'Verbindungsdetails'),'Extra connection expansion remains');
+    $choice=$all['MeasurementSourceChoice'];
+    check($choice['items'][0]['name']==='MeasurementBulkSource' && $choice['items'][1]['type']==='Button','Bulk button is separated from the selector');
+    foreach($form['elements'] as $element) if(($element['caption']??'')==='Diagnose und erweiterte Einstellungen')
+        check(!str_contains(json_encode($element),'Für alle passenden Messwerte'),'Bulk button is duplicated in diagnostics');
+    invoke($m,'RememberFirmwareString','V3.79');
+    $all=fields(json_decode($m->GetConfigurationForm(),true));
+    check(array_column($all['MeasurementBulkSource']['options'],'value')===['java'],'Global selector offers unsupported protocols');
+};
+
+$tests['bulk Java preview never assigns Java to WebSocket-only or Modbus-only values'] = static function():void {
+    $m=new Luxtronik();invoke($m,'RememberFirmwareString','V3.92.3');
+    $m->PreviewMeasurementSource('java','[{"id":400009,"enabled":true,"preferredSource":"java"},{"id":110103,"enabled":true,"preferredSource":"java"},{"id":15,"enabled":true,"preferredSource":"modbus"}]');
+    $updates=array_values(array_filter($m->formUpdates,fn($u)=>$u[0]==='IDListe' && $u[1]==='values'));
+    $rows=json_decode(end($updates)[2],true);
+    check(array_column($rows,'preferredSource')===['websocket','modbus','java'],'Bulk preview assigned a protocol unsupported by the value');
+    $m->properties['IDListe']='[{"id":110310,"enabled":true,"preferredSource":"java"}]';
+    $list=array_column(fields(json_decode($m->GetConfigurationForm(),true))['IDListe']['values'],null,'id');
+    check($list[110310]['preferredSource']==='websocket','Form fallback differs from the reading source order');
+};
+
 $tests['internal COP uses heat ID 257 in kW and electrical ID 268 in W without measurement objects'] = static function():void {
     $m=new Luxtronik();
     $m->properties['InternalCOP']=false; // Previously saved switch must not prevent automatic calculation.
@@ -854,7 +938,7 @@ $tests['firmware change preserves selected variables names values and source pre
     invoke($m,'RememberFirmwareString','V3.79');
     foreach(['WebInventory','WebEEVCache','SHICache'] as $key) check($m->buffers[$key]==='','Previous firmware cache survived: '.$key);
     $form=fields(json_decode($m->GetConfigurationForm(),true));$rows=array_column($form['IDListe']['values'],null,'id');
-    check($rows[15]['preferredSource']==='modbus' && $rows[15]['interface']==='Java' && $rows[110350]['enabled'] && $rows[400009]['enabled'],'Saved protocol selection lost on older firmware');
+    check($rows[15]['preferredSource']==='java' && $rows[15]['interface']==='Java' && $rows[110350]['enabled'] && $rows[400009]['enabled'],'Unsupported preference still offered or saved rows lost on older firmware');
     invoke($m,'SyncSHIControlVariables');
     check($m->properties===$properties && $m->buffers['unrelated']==='keep'
         && $m->GetIDForIdent('SHI_Offset_Heizen')===$old && GetValue($old)===-1.5 && IPS_GetName($old)==='Meine externe Korrektur','Firmware detection replaced user state');

@@ -713,7 +713,7 @@ $tests['configuration panels precede the native list without footer settings'] =
         $form=json_decode($module->GetConfigurationForm(),true);
         $positions=[];
         foreach ($form['elements'] as $index=>$element) $positions[$element['name']??$element['caption']??'']=$index;
-        check($positions['Verbindung und Lesen']<$positions['IDListe'] && $positions['IDListe']<$positions['Steuerung, Zeitprogramme und COP/JAZ'],'Connection measurements and controls are not clearly ordered');
+        check($positions['ConnectionAndReading']<$positions['IDListe'] && $positions['IDListe']<$positions['Steuerung, Zeitprogramme und COP/JAZ'],'Connection measurements and controls are not clearly ordered');
         $all=fields($form);
         check(!isset($all['VisualizationExternalFooter']),'Footer settings retained');
         $captions=json_encode($form,JSON_UNESCAPED_UNICODE);
