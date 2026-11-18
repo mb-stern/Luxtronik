@@ -18,7 +18,7 @@ beispielsweise eine zeitweise Anhebung bei PV-Überschuss.
 3. [Installation](#3-installation)
 4. [Einrichtung und Datenquellen](#4-einrichtung-und-datenquellen)
 5. [Variablen und Profile](#5-variablen-und-profile)
-6. [Visualisierung und häufige Fragen](#6-visualisierung-und-häufige-fragen)
+6. [Visualisierung](#6-visualisierung)
 7. [PHP-Befehle](#7-php-befehle)
 8. [Versionen](#8-versionen)
 
@@ -186,7 +186,7 @@ WPLUX.Ver   |  Integer
 WPLUX.kW    |  Float
 WPLUX.Cop   |  Float
 
-### 6. Visualisierung und häufige Fragen
+### 6. Visualisierung
 
 Die Instanz in der Symcon-Kachelvisualisierung mit ihrer individuellen
 Darstellung verwenden. Unter **HTML-SDK / Visualisierung** den Wärmepumpentyp
@@ -199,34 +199,17 @@ und -Austritt (20) am geschlossenen Gerätegehäuse im gleichen Stil. Lüfter,
 Lüfterdrehzahl und Abtau-Restzeit entfallen. Verdichter-Ansaugtemperatur und
 Sole-Eintritt bleiben getrennte Messungen. Fehlende Werte erscheinen als „—“.
 
-**Ein Heizkreis ohne Mischer?** Dafür **Heizkreis 1 (Standard)** auswählen.
-Er verwendet den normalen WP-Vorlauf. Bei zwei Heizkreisen werden die
-Mischkreis-Vorlauftemperaturen 1 und 2 verwendet, ohne Mischersymbole zu zeichnen.
-Der optionale Puffer ist ein Reihenpuffer im Rücklauf. Das Schema wird über die
-Komponentenwahl an die Anlage angepasst.
+**Heizkreis 1 (Standard)** verwendet den normalen WP-Vorlauf. Bei zwei
+Heizkreisen werden die Mischkreis-Vorlauftemperaturen 1 und 2 verwendet, ohne
+Mischersymbole zu zeichnen. Der optionale Puffer ist ein Reihenpuffer im Rücklauf.
 
-**Was öffnet „Regler / Display“?** Das bedienbare Reglerdisplay über WebSocket.
-Alte XML- und neue JSON-Antworten werden unterstützt. Das Passwort kommt aus der
-Instanzkonfiguration. Das Original-Webinterface lässt sich ebenfalls öffnen.
+**Regler / Display** öffnet das bedienbare Reglerdisplay über WebSocket. Alte
+XML- und neue JSON-Antworten werden unterstützt. Das Passwort kommt aus der
+Instanzkonfiguration; das Original-Webinterface lässt sich ebenfalls öffnen.
 
-**Warum wirken Modbus-Leistungskurven grob?** Die betreffenden SHI-Register haben
-eine Auflösung von 100 W. Ein kürzeres Intervall erhöht diese Auflösung nicht.
-Für feinere Kurven können Wärmeleistung (257) und Leistungsaufnahme (268) über
-Java gelesen werden. Energiezähler in kWh sind davon getrennte Werte.
-
-**Wie wird COP berechnet?** Ohne ausgewählte externe Leistung nutzt das Modul
-Wärmeleistung 257 in kW geteilt durch Leistungsaufnahme 268 in W / 1000. Eine
-gewählte externe Leistungsmessung hat Vorrang. Die JAZ benötigt die konfigurierten
-Energiezähler. Die Grafik übernimmt die berechneten COP-/JAZ-Variablen.
-
-**Warum lässt sich ein SHI-Warmwasserwert nicht schalten?** Die entsprechende
-Freigabe am Regler muss aktiv sein. Bei fehlender oder unbekannter Freigabe bleibt
-die Aktion gesperrt. SHI-Warmwasser-Soll und bisheriger Java-Warmwasser-Sollwert
-sind eigene Vorgaben; ein Wechsel der Istwertquelle stellt die Steuerung nicht um.
-
-Der Instanzname hat einen eigenen Bereich oberhalb der Grafik. Die
-Soll-Innentemperatur wird einheitlich mit einer Nachkommastelle und °C angezeigt.
-Eine eigene Gerätebild-Datei kann derzeit nicht ausgewählt werden.
+Die Grafik übernimmt die im Modul berechneten COP-/JAZ-Variablen. Der Instanzname
+hat einen eigenen Bereich oberhalb der Grafik. Die Soll-Innentemperatur wird mit
+einer Nachkommastelle und °C angezeigt.
 
 [Einrichtung und Details zur Grafik](VISUALISIERUNG.md)
 
@@ -263,7 +246,7 @@ Version 5.0 (in Vorbereitung; Änderungen seit der bisherigen Version)
 - **Neue HTML-SDK-Grafik:** Luft/Wasser oder Sole/Wasser im gleichen Stil; bei Sole mit Quellen-Eintritt, -Austritt und Pumpenzustand statt Lüfter und Abtau-Restzeit. Ein Standard-Heizkreis und optional ein zweiter Kreis, Reihenpuffer im Rücklauf, Warmwasser, Solarthermie mit wählbarem Speicherziel sowie Zirkulation.
 - **Bedienung in der Grafik:** Betriebsarten und Sollwerte, bis zu drei Raumtemperaturen und Heizstäbe, optionales Wettersymbol und bedienbares Reglerdisplay. Die Darstellung folgt dem Symcon-Design und ist ab 9.1 maximierbar.
 - **COP und JAZ:** interner COP automatisch ohne externe Leistungsquelle; ausgewählte externe Messung hat Vorrang. Elektrische Leistung und Energiezähler bleiben getrennt.
-- **Testerfeedback umgesetzt:** Sammelauswahl der Lesequelle, keine zusätzliche Modbus-Cachepause zwischen Aktualisierungen, verständliche SHI-Freigaben, Platz für den Instanztitel, verständlicher Displayzugang und einheitliche Temperaturdarstellung. Die registerbedingte 100-W-Auflösung bleibt bestehen.
+- **Aktualisierung und Darstellung:** Sammelauswahl der Lesequelle, keine zusätzliche Modbus-Cachepause zwischen Aktualisierungen, verständliche SHI-Freigaben, Platz für den Instanztitel, verständlicher Displayzugang und einheitliche Temperaturdarstellung. Die registerbedingte 100-W-Auflösung bleibt bestehen.
 - **Robustere Einrichtung:** neue Instanz ohne konfigurierte IP mit deaktivierter Abfrage und ohne Verbindungsfehler im Systemlog; lokale Prüfungen für Anlage, Protokolle, Steuerung und Darstellung. Gerätetests und die Prüfung im jeweiligen Symcon-System bleiben zusätzlich erforderlich.
 
 Version 4.7 (19.10.2026)
