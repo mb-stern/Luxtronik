@@ -794,8 +794,9 @@ $tests['connection settings are flat below the active switch and the bulk button
     $form=json_decode($m->GetConfigurationForm(),true);$all=fields($form);
     check(($form['elements'][1]['name']??'')==='ConnectionAndReading' && $form['elements'][1]['type']==='ColumnLayout',
         'Connection settings are not directly below the active switch');
-    foreach(['IPAddress','UpdateInterval','Port','WebSocketPassword','WebSocketTimezone','ModbusPort','ModbusUnitID','ModbusTimeout'] as $name)
+    foreach(['IPAddress','UpdateInterval','Port','WebSocketPassword','ModbusPort','ModbusUnitID','ModbusTimeout'] as $name)
         check(isset(fields($form['elements'][1])[$name]),'Connection setting is elsewhere: '.$name);
+    check(!isset($all['WebSocketTimezone']),'Unnecessary timezone control retained');
     check(!str_contains(json_encode($form),'Verbindungsdetails'),'Extra connection expansion remains');
     $choice=$all['MeasurementSourceChoice'];
     check($choice['items'][0]['name']==='MeasurementBulkSource' && $choice['items'][1]['type']==='Button','Bulk button is separated from the selector');

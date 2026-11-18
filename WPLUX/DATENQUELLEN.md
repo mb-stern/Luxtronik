@@ -3,7 +3,7 @@
 ## Einrichten
 
 Direkt unter **Modul aktiv** stehen unter **Verbindung und Lesen** Geräte-IP,
-gemeinsames Aktualisierungsintervall, Java-Port, Webinterface-Passwort und -Zeitzone
+gemeinsames Aktualisierungsintervall, Java-Port und Webinterface-Passwort
 sowie Modbus-Port, Geräteadresse und Antwortwartezeit. Ein weiteres Ausklappmenü
 ist dafür nicht nötig. WebSocket wird automatisch
 geprüft; eine Statuszeile zeigt die Verfügbarkeit. Java bleibt die voreingestellte
@@ -111,10 +111,13 @@ Anschließend werden Wert und Modus zurückgelesen. Ein Schreibfehler löst kein
 zusätzliche Java-Schreibaktion aus.
 
 Die SHI-Anleitung nennt einen Rückfall auf Standardwerte nach **15 Minuten ohne
-Modbus-Anfrage** (Seite 5). Jede Anfrage, auch ein Lesezugriff, beginnt diese
-Rückfallzeit erneut. Die regelmäßigen Abfragen des Moduls halten die Vorgaben
-deshalb auch länger als 15 Minuten nach einer Wertänderung aktiv. Sie senden
-keine alten Schreibwerte erneut. Eine aktive Vorgabe wird über ihren SHI-Modus
+Modbus-Anfrage** (Seite 5). Diese Rückfallüberwachung gehört zum Regler.
+Das Modul liest Modbus bedarfsgesteuert; laufende Java- oder WebSocket-Abfragen
+belegen keine Modbus-Kommunikation. Es sendet keine alten Schreibwerte erneut.
+Die [Analyse der Firmware 3.92.3](https://github.com/Bankaifan/ha-luxtronik-shi/blob/main/docs/firmware-3.92.3-shi-analysis.md#shi-watchdog)
+beschreibt dagegen 600 Sekunden und einen Neustart des Zählers bei jedem
+Modbus-Zugriff einschließlich Lesen. Dauer und Details dürfen daher nicht pauschal
+für jede Firmware vorausgesetzt werden. Eine aktive Vorgabe wird über ihren SHI-Modus
 beendet; das Löschen der Symcon-Variable beendet sie nicht automatisch.
 
 ## Direkte Modbus-TCP-Anbindung
@@ -122,8 +125,8 @@ beendet; das Löschen der Symcon-Variable beendet sie nicht automatisch.
 Das Modul verbindet sich selbst mit der oben eingetragenen IP-Adresse der
 Wärmepumpe. Unter **Verbindung und Lesen** stehen Modbus-Port (normalerweise
 **502**), Geräteadresse / Unit-ID (normalerweise **1**) und Modbus-Antwortwartezeit
-(in Millisekunden). Die Webinterface-Zeitzone dient zur Auswertung der Zeitangaben
-des Reglers; leer bedeutet Symcon-Zeitzone.
+(in Millisekunden). Zeitangaben aus dem Webinterface werden standardmäßig mit der
+Symcon-Zeitzone ausgewertet.
 Der gemeinsame Aktualisierungszyklus liest alle benötigten Werte.
 
 Es werden kein Symcon-Modbus-Gateway, kein Client Socket und keine zusätzlichen

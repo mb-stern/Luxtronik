@@ -719,8 +719,7 @@ trait LuxtronikWebEEV
         $panel['items'][]=['type'=>'ExpansionPanel','caption'=>'Diagnose','items'=>[
             ['type'=>'Button','caption'=>'Alle WebSocket-Werte prüfen und Bericht herunterladen','download'=>'luxtronik-websocket-diagnose.json',
                 'onClick'=>'echo "data:application/json;base64," . base64_encode(WPLUX_RunWebSocketDiagnostic($id));'],
-            ['type'=>'ValidationTextBox','name'=>'WebSocketTimezone','caption'=>'Zeitzone des Reglers (leer = Symcon)'],
-            ['type'=>'Label','caption'=>'Die Diagnose liest alle Informationsseiten mit den gespeicherten Zugangsdaten. Fehlerdatum und Zeitstempel verwenden die angegebene Zeitzone, sonst die Symcon-Zeitzone.']]];
+            ['type'=>'Label','caption'=>'Die Diagnose liest alle Informationsseiten mit den gespeicherten Zugangsdaten. Fehlerdatum und Zeitstempel verwenden standardmäßig die Symcon-Zeitzone.']]];
         if(!empty($cache['error'])) $panel['items'][]=['type'=>'Label','caption'=>'WebSocket: '.$cache['error']];
         $index=count($form['elements']);
         $saved=[];

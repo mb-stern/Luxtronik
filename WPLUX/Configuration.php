@@ -101,13 +101,12 @@ trait LuxtronikConfiguration
         }
         $source['onChange']='WPLUX_PreviewMeasurementSource($id, $MeasurementBulkSource, is_string($IDListe) ? $IDListe : json_encode($IDListe));';
         $connection['Port']['caption']='Java-Port';
-        $timezone=$find($web['items'],'WebSocketTimezone');$timezone['caption']='Webinterface-Zeitzone (leer = Symcon)';
         $timeout=$find($modbus['items'],'ModbusTimeout');$timeout['caption']='Modbus-Antwortwartezeit (Millisekunden)';
         $connectionPanel=['type'=>'ColumnLayout','name'=>'ConnectionAndReading','items'=>[
             ['type'=>'Label','caption'=>'Verbindung und Lesen','bold'=>true],
             ['type'=>'RowLayout','items'=>[$connection['IPAddress'],$connection['UpdateInterval'],$connection['Port']]],
             ['type'=>'Label','name'=>'FirmwareStatus','caption'=>$this->FirmwareStatusCaption()],
-            ['type'=>'RowLayout','visible'=>$webSupport!==false,'items'=>[$password,$timezone]],
+            $password,
             ['type'=>'RowLayout','visible'=>$modbusSupport!==false,'items'=>[
                 $find($modbus['items'],'ModbusPort'),$find($modbus['items'],'ModbusUnitID'),$timeout]],
             ['type'=>'Label','name'=>'WebSocketStatus','caption'=>$this->WebSocketStatusCaption(),'visible'=>$webSupport!==false],
@@ -161,7 +160,7 @@ trait LuxtronikConfiguration
                 ['type'=>'Label','caption'=>'Beispiel: Für deine Temperaturkorrektur reicht es, „Offset Heizen“ anzuhaken und zu übernehmen. Sendest du darüber per Schalten beziehungsweise RequestAction() eine Korrektur, setzt das Modul „Modus Heizen“ automatisch auf 2. Die Modusvariable musst du dafür nicht zusätzlich anlegen.'],
                 ['type'=>'Label','caption'=>'Sendest du später über „Sollwert Heizen“ einen direkten Sollwert, schaltet das Modul automatisch auf Modus 1 um. Der gespeicherte Offset wirkt dann nicht mehr.'],
                 ['type'=>'Label','caption'=>'SHI-Vorgaben sind externe Eingriffe zusätzlich zur normalen Java-Reglerkonfiguration. Eine aktive Vorgabe wird über den zugehörigen SHI-Modus beendet, nicht durch Löschen ihrer Symcon-Variable.'],
-                ['type'=>'Label','caption'=>'Die 15 Minuten aus der SHI-Anleitung sind eine Rückfallzeit ab der letzten Modbus-Anfrage. Auch Lesen zählt als Anfrage: Die regelmäßigen Abfragen des Moduls halten die Vorgaben deshalb aktiv. Für das Beenden der Heizvorgabe „Modus Heizen“ auf 0 – Kein Einfluss schalten.']]]]];
+                ['type'=>'Label','caption'=>'Die SHI-Anleitung nennt einen Rückfall nach 15 Minuten ohne Modbus-Anfragen. Diesen Rückfall steuert der Regler. Das Modul liest Modbus bedarfsgesteuert und schreibt Vorgaben nur beim Schalten; Java- und WebSocket-Abfragen sind davon unabhängig. Zum gezielten Beenden der Heizvorgabe „Modus Heizen“ auf 0 – Kein Einfluss schalten.']]]]];
         $download=null;
         foreach($web['items'] as $item) foreach($item['items']??[] as $field) if(isset($field['download'])) $download=$field;
         if($download!==null) $download['visible']=$webSupport!==false;
