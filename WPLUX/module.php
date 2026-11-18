@@ -44,6 +44,7 @@ class Luxtronik extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowAdvancedModbusPoints', false);
         $this->RegisterPropertyString('SHIControlList', '[]');
         $this->RegisterPropertyBoolean('AdvancedSourceSelection', false);
+        // Retained for saved configurations; COP source selection is now automatic.
         $this->RegisterPropertyBoolean('InternalCOP', true);
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
@@ -206,7 +207,6 @@ class Luxtronik extends IPSModuleStrict
         $tempsetVisible = $this->SharedNumericControlEnabled('Anpassung_Temp');
         $wwsetVisible = $this->SharedNumericControlEnabled('Anpassung_WW');
         $rbesetVisible = $this->SharedNumericControlEnabled('Anpassung_RBE');
-        $copVarId = $this->ReadPropertyInteger('kwin');
         $jazVarId = $this->ReadPropertyInteger('kwhin');
         $hz_timerWeekVisible = $this->ReadPropertyInteger('HZ_TimerWeekVisible');
         $hz_timerWeekendVisible = $this->ReadPropertyInteger('HZ_TimerWeekendVisible');
@@ -299,13 +299,9 @@ class Luxtronik extends IPSModuleStrict
             $this->UnregisterNativeNumericControl('Anpassung_RBE');
         }
 
-        if (($copVarId !== 0 && IPS_VariableExists($copVarId)) || $this->ReadPropertyBoolean('InternalCOP')) {
-            $created = $this->RegisterVariableFloat('copfaktor', 'COP-Faktor', 'WPLUX.Cop', 7);
-            if ($created) {
-                $this->SetValueIfChanged('copfaktor', 0);
-            }
-        } else {
-            $this->UnregisterVariable('copfaktor');
+        $created = $this->RegisterVariableFloat('copfaktor', 'COP-Faktor', 'WPLUX.Cop', 7);
+        if ($created) {
+            $this->SetValueIfChanged('copfaktor', 0);
         }
 
         if ($jazVarId !== 0 && IPS_VariableExists($jazVarId)) {
@@ -1153,7 +1149,6 @@ class Luxtronik extends IPSModuleStrict
                             'caption' => 'JAZ & COP berechnen',
                             'bold'    => true
                         ],
-                        ['type'=>'CheckBox','name'=>'InternalCOP','caption'=>'COP mit interner Leistungsaufnahme berechnen, wenn keine externe Quelle gewählt ist'],
                         [
                             'type'  => 'RowLayout',
                             'items' => [
@@ -1866,10 +1861,10 @@ class Luxtronik extends IPSModuleStrict
         if($kwInVarId > 0 && IPS_VariableExists($kwInVarId)) {
             $reading=['value'=>GetValue($kwInVarId),'unit'=>$this->GetVariableUnit($kwInVarId)];
             $power=$this->VisualizationPowerReading($reading,'kW');
-        } elseif($this->ReadPropertyBoolean('InternalCOP')) {
+        } else {
             $reading=$this->GetHybridVisualizationPoint('Leistungsaufnahme');
             $power=$reading===null?null:$this->VisualizationPowerReading($reading,'W');
-        } else return;
+        }
         if($power===null || !is_finite($value) || $value<0) return;
         $kw_in=$power['watts']/1000;
         if ((float)$kw_in == 0.0) {

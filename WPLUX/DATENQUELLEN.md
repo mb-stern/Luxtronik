@@ -123,10 +123,11 @@ Steuervariablen, eigene Namen und Auswahl-IDs bleiben erhalten.
 
 ## COP und Diagnose
 
-Ohne externen COP-Leistungsmesser kann der interne COP aus **ID 257 (kW)** geteilt
-durch **ID 268 (W) / 1000** berechnet werden. Eine gewählte externe Leistungsvariable
-hat Vorrang. Die interne Berechnung ist separat abschaltbar; die JAZ-Konfiguration
-bleibt erhalten. Energiezähler in kWh werden nicht als momentane Leistung benutzt.
+Ohne ausgewählte externe Leistungsquelle wird der COP automatisch aus
+**ID 257 (kW)** geteilt durch **ID 268 (W) / 1000** berechnet. Eine gewählte externe
+Leistungsvariable hat Vorrang. Beim Wechsel der Quelle bleibt die bestehende
+COP-Variable erhalten. Die JAZ-Konfiguration bleibt unverändert. Energiezähler in
+kWh werden nicht als momentane Leistung benutzt.
 
 Die eingeklappten Diagnosefunktionen liefern WebSocket-Inventar und Modbus-Status.
 Die normale Konfiguration benötigt keine separaten WebSocket-Schalter oder Timer.

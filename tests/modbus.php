@@ -735,6 +735,7 @@ $tests['simple form preserves stable properties and uses one interval and one me
 
 $tests['internal COP uses heat ID 257 in kW and electrical ID 268 in W without measurement objects'] = static function():void {
     $m=new Luxtronik();
+    $m->properties['InternalCOP']=false; // Previously saved switch must not prevent automatic calculation.
     invoke($m,'StoreVisualizationPoints',[257=>8.0,268=>2000.0]);
     $m->ApplyChanges();$id=$m->GetIDForIdent('copfaktor');
     check($id!==false && GetValue($id)===4.0,'Internal COP missing or watts treated as kilowatts');
@@ -746,6 +747,10 @@ $tests['internal COP uses heat ID 257 in kW and electrical ID 268 in W without m
     $external=new Luxtronik();$meter=shiVariable($external,'power',1.0);
     $m->properties['kwin']=$meter;invoke($m,'RefreshDerivedMeasurements');
     check(GetValue($id)===8.0,'External COP input lost priority');
+    $GLOBALS['testVariables'][$meter]['value']=0.0;invoke($m,'RefreshDerivedMeasurements');
+    check(GetValue($id)===0.0,'Valid external zero fell back to the internal input');
+    $m->properties['kwin']=0;invoke($m,'RefreshDerivedMeasurements');
+    check(GetValue($id)===4.0 && $m->GetIDForIdent('copfaktor')===$id,'Clearing the external source did not restore automatic internal COP on the same variable');
 };
 
 $tests['selected SHI controls create independent variables even while offline and write no defaults'] = static function():void {

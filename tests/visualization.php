@@ -356,8 +356,10 @@ $tests['saving existing meter selections immediately publishes newly created COP
     check(end($module->updates)['data']['computedCOP']['value'] == 4.0, 'Native COP calculation not displayed');
     $module->properties['kwin'] = 0;
     $module->properties['InternalCOP'] = false;
+    invoke($module, 'StoreVisualizationPoints', [257=>9.0,268=>3000.0]);
     $module->ApplyChanges();
-    check(end($module->updates)['config']['computedCOP'] === '' && end($module->updates)['config']['computedJAZ'] !== '', 'Removed COP selection retained or JAZ removed');
+    check($module->GetIDForIdent('copfaktor')===$cop && end($module->updates)['data']['computedCOP']['value']==3.0
+        && end($module->updates)['config']['computedJAZ']!=='', 'Automatic internal COP replaced its variable or affected JAZ');
 };
 
 function roomVisualization(int $count): Luxtronik

@@ -277,7 +277,7 @@ trait LuxtronikModbusSHI
             $id=(int)($row['id']??0);
             if ($id>0 && $id<self::MAX_RESPONSE_VALUES && !empty($row['enabled'])) $ids[$id]=true;
         }
-        if ($this->ReadPropertyInteger('kwin')>0 || $this->ReadPropertyBoolean('InternalCOP')) {$ids[257]=true;$ids[268]=true;}
+        $ids[257]=true;$ids[268]=true;
         if ($this->ReadPropertyInteger('kwhin')>0) {$ids[151]=true;$ids[152]=true;}
         return $ids;
     }
