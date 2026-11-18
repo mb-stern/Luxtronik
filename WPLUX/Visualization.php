@@ -1103,11 +1103,12 @@ HTML;
             }
         }
 
+        $reading=$this->GetVisualizationPointData($property);
         return [
             'configured'   => true,
             'variableId'   => $variableId,
-            'currentValue'     => GetValue($variableId),
-            'formattedValue'   => GetValueFormatted($variableId),
+            'currentValue'     => $reading['value']??GetValue($variableId),
+            'formattedValue'   => $reading['formatted']??GetValueFormatted($variableId),
             'min'              => max($fallbackMin, $min),
             'max'          => min($fallbackMax, $max),
             'step'         => $step,

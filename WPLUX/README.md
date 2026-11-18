@@ -110,6 +110,11 @@ Unter **Modbus / SHI – externe Regelung** die gewünschten Vorgaben auswählen
 übernehmen. Dadurch werden eigene Steuervariablen angelegt, auch ohne bestehende
 Verbindung. Bedienbar sind sie mit aktueller Rückmeldung und Freigabe am Regler.
 
+SHI-Temperaturen, Offsets und Leistungsgrenzen sind in **0,1er-Schritten**
+bedienbar, beispielsweise +0,5 K beim Heizungs-Offset. Vorhandene Modulprofile
+und Schieberegler mit ganzen Schritten werden ohne Neuanlage der Variablen
+korrigiert. Betriebsmodi, Levels und Schalter behalten ihre festgelegten Werte.
+
 Am Beispiel **310000 bis 310003**:
 
 | Variable | Wirkung |
@@ -201,6 +206,11 @@ aus ID 18. Dieser kann durch eine externe Vorgabe abweichen. **Heizkorrektur aus
 Java-Parameter 1** und **SHI-Offset Heizen aus Holding-Register 10002** sind
 eigenständige Vorgaben.
 
+Die Kachel **Heizkorrektur** verwendet die interne Rückmeldung von Parameter 1
+direkt, auch wenn eine zugehörige Variable erst später angelegt wird. Der
+Schreibweg bleibt die normale Java-Heizkorrektur; SHI-Offset und Java-Korrektur
+werden nicht automatisch ineinander übertragen.
+
 #### Profile
 
 Name   | Typ
@@ -291,6 +301,7 @@ Version 5.0 (in Vorbereitung; Änderungen seit der bisherigen Version)
 - **Robustere Einrichtung:** neue Instanz ohne konfigurierte IP mit deaktivierter Abfrage und ohne Verbindungsfehler im Systemlog; lokale Prüfungen für Anlage, Protokolle, Steuerung und Darstellung. Gerätetests und die Prüfung im jeweiligen Symcon-System bleiben zusätzlich erforderlich.
 - **Schutz vor Warnungskaskaden:** Bei nicht verfügbarer Instanzschnittstelle werden Aktualisierung, Variablenmeldungen, Formular, Grafik und Konfiguration beim ersten Fehler abgebrochen. Beide Symcon-Meldungen „InstanceInterface is not available“ und „InstanceInterface is not a PHP module“ werden erkannt.
 - **Aktuelle Steuerrückmeldungen:** Betriebsarten über Java 3003 (Warmwasser 4, Heizung 3, Kühlen 108), Warmwasser Soll über 3004/ID 18 und Heizkorrektur über 3003/Parameter 1. Die Werte werden unabhängig von angelegten Variablen intern gelesen; der Java-Warmwasser-Schreibbefehl bleibt Parameter 105. SHI-Steuervariablen zeigen beim Schalten sofort den Wunschwert, während die Bestätigung getrennt erfolgt; bei Fehlern wird die Anzeige zurückgesetzt.
+- **SHI-Nachkommastellen:** Die 19 Vorgaben mit Zehntelauflösung erhalten eine ausdrückliche Schieberegler-Schrittweite von 0,1. Vorhandene Modulprofile und konvertierte Schieberegler mit ganzen Schritten werden auf derselben Variable korrigiert. Die Heizkorrektur-Kachel übernimmt den intern gelesenen Java-Parameter 1 direkt.
 - **SHI-Schreibablauf:** dokumentierte Modusabhängigkeiten vor der Vorgabe setzen und bestätigen; bei Fehlern selbst geänderte Modi nach Möglichkeit zurücknehmen. Verzögerte Rückmeldung der Warmwasserregister 10005–10008 bis zu 15 Sekunden je Register abwarten. Keine wiederholten Zielwertbefehle; eine fehlende Bestätigung nennt gesendeten und gelesenen Wert. Alle ausgewählten SHI-Steuervariablen werden aus ihren tatsächlichen Holding-Werten aktualisiert; wirksame Reglersollwerte bleiben eigene Istwerte.
 
 Version 4.7 (19.10.2026)

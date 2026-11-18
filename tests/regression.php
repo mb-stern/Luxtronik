@@ -336,6 +336,23 @@ $tests['native control feedback is always cached and external changes refresh op
         check(invoke($module,'InternalControlReading','Anpassung_Temp')===null,'Control cache leaks across devices');
     });
 };
+$tests['Java parameter 1 reaches the correction tile independently of optional measurement objects'] = static function():void {
+    $calc=array_fill(0,269,0);$before=array_fill(0,1200,0);$after=$before;$after[1]=5;
+    withServer([
+        [pack('N*',3004,0),frame(3004,$calc)],[pack('N*',3003,0),frame(3003,$before)],
+        [pack('N*',3004,0),frame(3004,$calc)],[pack('N*',3003,0),frame(3003,$after)]
+    ],static function(Luxtronik $module):void {
+        $module->properties['IDListe']='[]';$module->Update();$module->Update();
+        check($module->GetIDForIdent('Anpassung_Temp')===false,'Reading parameter 1 creates a control');
+        check(invoke($module,'InternalControlReading','Anpassung_Temp')['value']===0.5,'Raw parameter 1 value 5 not read as 0.5');
+        invoke($module,'CreateVariableProfiles');$module->properties['TempsetVisible']=true;
+        $module->RegisterVariableFloat('Anpassung_Temp','Meine Heizkorrektur','WPLUX.Tset');$module->EnableAction('Anpassung_Temp');
+        $control=invoke($module,'BuildControlData')['heatingTemperatureCorrection'];
+        check($control['configured'] && $control['currentValue']===0.5 && $control['step']===0.5,'Tile depends on the newly created variable default instead of internally read parameter 1');
+        check(str_contains($control['formattedValue'],'0.5'),'Correction tile formats the wrong value');
+        check($module->GetIDForIdent('SHI_Offset_Heizen')===false,'Java correction creates or mixes in a SHI offset');
+    });
+};
 $tests['WW Java writes use the persistent command but display the effective target from ID 18'] = static function():void {
     $calc=array_fill(0,106,0);$calc[17]=505;$calc[18]=450;$calc[105]=600;
     withServer([[pack('N*',3002,105,505),pack('N*',3002,105)],[pack('N*',3004,0),frame(3004,$calc)]],static function(Luxtronik $module):void {

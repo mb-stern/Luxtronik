@@ -227,6 +227,63 @@ $tests['invalid and incomplete transport replies cannot publish a partial scan']
         },['input'=>[10108=>-25],'fault'=>['function'=>4,'address'=>10120,'kind'=>$kind]]);
     }
 };
+$tests['all fractional SHI controls repair whole-number profiles on the same objects'] = static function():void {
+    $m=new Luxtronik();$catalog=invoke($m,'SHICatalog');$tested=0;
+    foreach($catalog as $point) {
+        if($point['bank']!=='holding' || $point['factor']>=1) continue;
+        $profile='WPLUX.SHI.H'.$point['address'];
+        IPS_CreateVariableProfile($profile,VARIABLETYPE_FLOAT);
+        IPS_SetVariableProfileValues($profile,(float)$point['min'],(float)$point['max'],1);
+        IPS_SetVariableProfileDigits($profile,0);
+        $value=max(0.5,$point['min']+0.5);
+        $id=shiVariable($m,$point['ident'],$value,'Mein '.$point['ident'],$profile);
+        $GLOBALS['testVariables'][$id]['custom_action']=91234;
+        invoke($m,'EnsureSHIVariable',$point);
+        $presentation=IPS_GetVariablePresentation($id);
+        check($presentation['PRESENTATION']===VARIABLE_PRESENTATION_SLIDER && $presentation['STEP_SIZE']===0.1
+            && $presentation['DIGITS']===1,'Fractional SHI control still offers whole steps: '.$point['ident']);
+        check($presentation['MIN']===$point['min']*1.0 && $presentation['MAX']===$point['max']*1.0
+            && $presentation['SUFFIX']===' '.$point['unit'],'SHI slider lost its documented range/unit');
+        check(IPS_GetVariableProfile($profile)['StepSize']===0.1 && IPS_GetVariableProfile($profile)['Digits']===1,'Legacy profile was not repaired');
+        check($m->GetIDForIdent($point['ident'])===$id && GetValue($id)===$value
+            && IPS_GetName($id)==='Mein '.$point['ident'] && IPS_GetVariable($id)['VariableCustomAction']===91234,'Repair changed object identity, value, name or custom action');
+        ++$tested;
+    }
+    check($tested===19 && $m->writes===0,'Fractional repair omitted controls or changed values');
+};
+
+$tests['SHI converted sliders keep custom settings while recovering fractional input'] = static function():void {
+    $m=new Luxtronik();$catalog=invoke($m,'SHICatalog');$point=$catalog['holding:10002'];
+    invoke($m,'EnsureSHIVariable',$point);$id=$m->GetIDForIdent($point['ident']);
+    $custom=['PRESENTATION'=>VARIABLE_PRESENTATION_SLIDER,'MIN'=>-3.0,'MAX'=>3.0,'STEP_SIZE'=>1,
+        'DIGITS'=>0,'SUFFIX'=>' K','ICON'=>'Temperature','GRADIENT_TYPE'=>3];
+    IPS_SetVariableCustomPresentation($id,$custom);
+    invoke($m,'EnsureSHIVariable',$point);
+    check(IPS_GetVariablePresentation($id)===array_replace($custom,['STEP_SIZE'=>0.1,'DIGITS'=>1]),'Repair overwrote unrelated custom slider settings');
+    $custom['STEP_SIZE']=0.5;$custom['DIGITS']=2;
+    IPS_SetVariableCustomPresentation($id,$custom);invoke($m,'EnsureSHIVariable',$point);
+    check(IPS_GetVariablePresentation($id)===$custom,'A working fractional custom step was replaced');
+    $custom=['PRESENTATION'=>'{4153A8D4-5C33-C65F-C1F3-7B61AAF99B1C}','PROFILE'=>'Mein.Eigenes.Profil'];
+    IPS_SetVariableCustomPresentation($id,$custom);invoke($m,'EnsureSHIVariable',$point);
+    check(IPS_GetVariablePresentation($id)===$custom,'Custom profile was replaced');
+};
+
+$tests['every fractional SHI control accepts half-unit actions and confirms the same value'] = static function():void {
+    $fixture=json_decode(file_get_contents(__DIR__.'/fixtures/shi-registers.json'),true);
+    foreach($fixture as $point) {
+        if($point['bank']!=='holding' || $point['factor']>=1) continue;
+        $value=max(0.5,$point['min']+0.5);
+        $requests=withSHI(static function(Luxtronik $m) use($point,$value):void {
+            $m->properties['SHIControlList']=json_encode([['id'=>$point['selection'],'enabled'=>true]]);
+            invoke($m,'SyncSHIControlVariables');$id=$m->GetIDForIdent($point['ident']);
+            $m->RequestAction($point['ident'],$value);
+            check(GetValue($id)===$value && IPS_GetVariablePresentation($id)['STEP_SIZE']===0.1,'Half-unit SHI action rounded its value or lost fractional input');
+        },['input'=>[10122=>300,10123=>750],'discrete'=>array_fill_keys(range(10000,10011),1),'holding'=>[10040=>1],'enforceDependencies'=>true]);
+        $targets=array_values(array_filter($requests,fn($r)=>$r['function']===16 && $r['address']===$point['address']));
+        check(count($targets)===1 && $targets[0]['words']===[(int)round($value*10)],'Half-unit target rounded or sent more than once');
+    }
+};
+
 $tests['all 41 holding writes validate encode confirm and activate only documented dependencies'] = static function ():void {
     $fixture=json_decode(file_get_contents(__DIR__.'/fixtures/shi-registers.json'),true);
     foreach ($fixture as $point) {

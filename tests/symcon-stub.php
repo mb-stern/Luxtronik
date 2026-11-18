@@ -13,6 +13,7 @@ const VM_CHANGEPROFILEACTION = 10605;
 const OM_CHILDADDED = 10412;
 const OM_CHILDREMOVED = 10413;
 const IM_CHANGESTATUS = 10505;
+const VARIABLE_PRESENTATION_SLIDER = '{6B9CAEEC-5958-C223-30F7-BD36569FC57A}';
 
 $GLOBALS['testVariables'] = [];
 $GLOBALS['testNextID'] = 10000;
@@ -26,8 +27,8 @@ function IPS_SemaphoreEnter(string $name, int $wait): bool {
 function IPS_SemaphoreLeave(string $name): bool { unset($GLOBALS['testSemaphores'][$name]); return true; }
 
 function IPS_VariableProfileExists(string $name): bool { return isset($GLOBALS['testProfiles'][$name]); }
-function IPS_CreateVariableProfile(string $name, int $type): void { $GLOBALS['testProfiles'][$name] = ['Type' => $type, 'Associations' => []]; }
-function IPS_SetVariableProfileValues(string $name, float $min, float $max, float $step): void { $GLOBALS['testProfiles'][$name] += ['MinValue' => $min, 'MaxValue' => $max, 'StepSize' => $step]; }
+function IPS_CreateVariableProfile(string $name, int $type): void { $GLOBALS['testProfiles'][$name] = ['ProfileType' => $type, 'Associations' => []]; }
+function IPS_SetVariableProfileValues(string $name, float $min, float $max, float $step): void { $GLOBALS['testProfiles'][$name] = array_replace($GLOBALS['testProfiles'][$name], ['MinValue' => $min, 'MaxValue' => $max, 'StepSize' => $step]); }
 function IPS_SetVariableProfileDigits(string $name, int $digits): void { $GLOBALS['testProfiles'][$name]['Digits'] = $digits; }
 function IPS_SetVariableProfileText(string $name, string $prefix, string $suffix): void { $GLOBALS['testProfiles'][$name]['Prefix'] = $prefix; $GLOBALS['testProfiles'][$name]['Suffix'] = $suffix; }
 function IPS_SetVariableProfileAssociation(string $name, float $value, string $text, string $icon, int $color): void { $GLOBALS['testProfiles'][$name]['Associations'][] = ['Value' => $value, 'Name' => $text]; }
@@ -39,7 +40,14 @@ function IPS_GetName(int $id): string { return $GLOBALS['testVariables'][$id]['n
 function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '', 'ObjectPosition' => $GLOBALS['testVariables'][$id]['position'] ?? 0]; }
 function IPS_SetPosition(int $id, int $position): bool { $GLOBALS['testVariables'][$id]['position']=$position; return true; }
 function IPS_GetParent(int $id): int { return $GLOBALS['testVariables'][$id]['instance'] ?? 0; }
-function IPS_GetVariablePresentation(int $id): array { return $GLOBALS['testVariables'][$id]['presentation'] ?? []; }
+function IPS_GetVariablePresentation(int $id): array {
+    $v=$GLOBALS['testVariables'][$id];
+    return ($v['custom_presentation']??[]) ?: ($v['presentation']??$v['native_presentation']??[]);
+}
+function IPS_SetVariableCustomPresentation(int $id,array $presentation): bool {
+    $GLOBALS['testVariables'][$id]['custom_presentation']=$presentation;
+    $GLOBALS['testPresentationChanges'][]=[$id,$presentation];return true;
+}
 function GetValueFormatted(int $id): string {
     $variable = $GLOBALS['testVariables'][$id];
     $profile = $GLOBALS['testProfiles'][$variable['profile']] ?? [];
@@ -49,7 +57,7 @@ function GetValueFormatted(int $id): string {
     foreach (is_array($options) ? $options : [] as $option) {
         if ((string)$option['Value'] === (string)$variable['value']) return (string)($option['Caption'] ?? $option['Name']);
     }
-    return $variable['formatted'] ?? (string)$variable['value'] . ($profile['Suffix'] ?? '');
+    return $variable['formatted'] ?? (string)$variable['value'] . ($presentation['SUFFIX'] ?? $profile['Suffix'] ?? '');
 }
 
 function IPS_VariableExists(int $id): bool
@@ -61,7 +69,8 @@ function IPS_GetVariable(int $id): array
 {
     $v = $GLOBALS['testVariables'][$id];
     return ['VariableType' => $v['type'], 'VariableProfile' => $v['profile'],
-        'VariableCustomProfile' => '', 'VariableAction' => $v['action'] ?? 0, 'VariableCustomAction' => $v['custom_action'] ?? 0];
+        'VariableCustomProfile' => $v['custom_profile']??'', 'VariableAction' => $v['action'] ?? 0, 'VariableCustomAction' => $v['custom_action'] ?? 0,
+        'VariablePresentation'=>$v['native_presentation']??[], 'VariableCustomPresentation'=>$v['custom_presentation']??[]];
 }
 
 function GetValue(int $id): mixed
@@ -174,7 +183,7 @@ class IPSModuleStrict
     {
         return $this->register($ident, VARIABLETYPE_INTEGER, 0, $name, $profile, $position);
     }
-    public function RegisterVariableFloat(string $ident, string $name, string $profile = '', int $position = 0): bool
+    public function RegisterVariableFloat(string $ident, string $name, string|array $profile = '', int $position = 0): bool
     {
         return $this->register($ident, VARIABLETYPE_FLOAT, 0.0, $name, $profile, $position);
     }
@@ -182,11 +191,14 @@ class IPSModuleStrict
     {
         return $this->register($ident, VARIABLETYPE_STRING, '', $name, $profile, $position);
     }
-    private function register(string $ident, int $type, mixed $initial, string $name, string $profile, int $position = 0): bool
+    private function register(string $ident, int $type, mixed $initial, string $name, string|array $profile, int $position = 0): bool
     {
+        $presentation=is_array($profile)?$profile:[];
+        $profile=is_array($profile)?($profile['PROFILE']??''):$profile;
         $id = $this->GetIDForIdent($ident);
         if ($id !== false && IPS_GetVariable($id)['VariableType'] === $type) {
             $GLOBALS['testVariables'][$id]['profile'] = $profile;
+            $GLOBALS['testVariables'][$id]['native_presentation']=$presentation;
             return false;
         }
         if ($id !== false) {
@@ -194,7 +206,7 @@ class IPSModuleStrict
         }
         $GLOBALS['testVariables'][++$GLOBALS['testNextID']] = [
             'ident' => $ident, 'instance' => $this->InstanceID, 'type' => $type, 'value' => $initial,
-            'name' => $name, 'profile' => $profile, 'position' => $position
+            'name' => $name, 'profile' => $profile, 'position' => $position, 'native_presentation'=>$presentation
         ];
         return true;
     }
