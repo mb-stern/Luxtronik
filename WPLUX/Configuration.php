@@ -120,6 +120,7 @@ trait LuxtronikConfiguration
             $find($modbus['items'],'ModbusPort'),$find($modbus['items'],'ModbusUnitID'),
             $this->SHIControlForm(),
             ['type'=>'ExpansionPanel','caption'=>'Hinweise zu SHI','items'=>[
+                ['type'=>'Label','caption'=>'Am Beispiel 310000 bis 310003 erklärt'],
                 ['type'=>'Label','caption'=>'Die vier Heizvariablen gehören zusammen: „Modus Heizen“ bestimmt, welche der drei anderen Vorgaben wirkt.'],
                 ['type'=>'Label','caption'=>'Modus Heizen: 0 = kein Einfluss, 1 = Sollwert verwenden, 2 = Offset verwenden, 3 = Level verwenden.'],
                 ['type'=>'Label','caption'=>'Sollwert Heizen: Gibt die Rücklauf-Solltemperatur direkt vor, beispielsweise 30 °C. Wirkt bei Modus 1.'],
