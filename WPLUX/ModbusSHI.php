@@ -632,7 +632,7 @@ trait LuxtronikModbusSHI
             ['type'=>'NumberSpinner','name'=>'ModbusPort','caption'=>'Modbus-Port'],
             ['type'=>'NumberSpinner','name'=>'ModbusUnitID','caption'=>'Modbus-Geräteadresse (Unit-ID)'],
             ['type'=>'NumberSpinner','name'=>'ModbusTimeout','caption'=>'Modbus-Timeout (Millisekunden, 100–5000)'],
-            ['type'=>'Label','name'=>'SHIWarmWaterStatus','caption'=>$this->SHIWarmWaterStatus()],
+            ['type'=>'Label','name'=>'SHIWarmWaterStatus','visible'=>false,'caption'=>$this->SHIWarmWaterStatus()],
             ['type'=>'ExpansionPanel','caption'=>'Modbus-Steuervariablen','items'=>[
                 ['type'=>'Label','caption'=>'Auswahl legt Variablen an. Erst eine Bedienaktion sendet einen Wert; Auswahl und Aktivierung senden keine Sollwerte. WW-Soll, Heizkorrektur und Raumtemperatur-Soll können auch unter Timer / Zusatzfunktionen aktiviert sein und werden nicht doppelt angelegt.'],
                 $this->SHIControlForm()]],

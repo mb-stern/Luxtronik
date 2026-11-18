@@ -161,6 +161,11 @@ class Luxtronik extends IPSModuleStrict
     {
          //Never delete this line!
         parent::ApplyChanges();
+        $this->RunWithInstanceInterface(fn() => $this->ApplyInstanceChanges(), 'Konfiguration');
+    }
+
+    private function ApplyInstanceChanges(): void
+    {
         $this->SetVisualizationType(
             defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN')
                 ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN
@@ -1000,6 +1005,12 @@ class Luxtronik extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
+        return $this->RunWithInstanceInterface(fn() => $this->BuildConfigurationForm(), 'Konfigurationsformular',
+            '{"elements":[{"type":"Label","caption":"Die Modulinstanz ist derzeit nicht verfügbar."}]}');
+    }
+
+    private function BuildConfigurationForm(): string
+    {
         $controlCaptions = $this->TimerControlWriteCaptions();
         // Namen und IDs kommen direkt aus der zentralen ID-Konfiguration
         // am Schluss dieser module.php. Eine separate Java-Datensatzdatei ist
@@ -1257,20 +1268,22 @@ class Luxtronik extends IPSModuleStrict
         $this->RunWithInstanceInterface(fn() => $this->UpdateInstance(), 'Aktualisierung');
     }
 
-    private function RunWithInstanceInterface(callable $callback, string $operation): void
+    private function RunWithInstanceInterface(callable $callback, string $operation, mixed $fallback = null): mixed
     {
-        if (!IPS_InstanceExists($this->InstanceID)) return;
+        if (!IPS_InstanceExists($this->InstanceID)) return $fallback;
         $previous = null;
         $previous = set_error_handler(static function (int $severity, string $message, string $file, int $line) use (&$previous): bool {
-            if ((error_reporting() & $severity) && str_contains($message, 'InstanceInterface is not available')) {
+            if ((error_reporting() & $severity) && (str_contains($message, 'InstanceInterface is not available')
+                || str_contains($message, 'InstanceInterface is not a PHP module'))) {
                 throw new LuxtronikInstanceUnavailable($message);
             }
             return $previous !== null ? (bool)$previous($severity, $message, $file, $line) : false;
         });
         try {
-            $callback();
+            return $callback();
         } catch (LuxtronikInstanceUnavailable $error) {
             IPS_LogMessage('Luxtronik ' . $this->InstanceID, $operation . ' abgebrochen: Instanzschnittstelle nicht verfügbar.');
+            return $fallback;
         } finally {
             restore_error_handler();
         }

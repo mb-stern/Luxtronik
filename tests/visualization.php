@@ -948,6 +948,40 @@ $tests['heater measurements sum W and kW independently of all three switch assoc
     check(invoke($module,'BuildVisualizationData')['heaterRodTotalPower']['value']===null,'Missing selected meter fabricated as zero');
 };
 
+$tests['both unavailable interface messages abort timer form graphic and configuration before warning cascades'] = static function (): void {
+    foreach(['InstanceInterface is not available','InstanceInterface is not a PHP module'] as $warning) {
+        $module=new class extends Luxtronik {
+            protected function GetBuffer(string $name): string {
+                if($this->interfaceWarning!==null) {
+                    ++$this->interfaceReads;
+                    trigger_error($this->interfaceWarning,E_USER_WARNING);
+                }
+                return parent::GetBuffer($name);
+            }
+        };
+        $module->buffers['VisualizationRegisteredVariables']='[12345]';
+        $module->interfaceWarning=$warning;
+        foreach(['Update','GetConfigurationForm','GetVisualizationTile','ApplyChanges','MessageSink'] as $method) {
+            $GLOBALS['testGlobalLogs']=[];$before=$module->interfaceReads;
+            $result=$method==='MessageSink'?$module->MessageSink(1,12345,VM_UPDATE,[]):$module->$method();
+            check($module->interfaceReads===$before+1,'Interface warning did not abort immediately: '.$method);
+            check(count($GLOBALS['testGlobalLogs'])===1 && $module->errors===[],'Warning cascade or unexpected error log: '.$method);
+            check($module->writes===0 && $module->updates===[],'Unavailable interface writes or publishes data: '.$method);
+            if($method==='GetConfigurationForm') check(isset(json_decode($result,true,512,JSON_THROW_ON_ERROR)['elements']),'Fallback form is not valid JSON');
+            if($method==='GetVisualizationTile') check(str_contains($result,'derzeit nicht verfügbar'),'Missing unavailable graphic hint');
+            try {trigger_error('Warning handler restored',E_USER_WARNING);throw new LogicException('Previous handler lost');}
+            catch(ErrorException $expected) {check($expected->getMessage()==='Warning handler restored','Wrong previous handler');}
+        }
+        $module->interfaceWarning=null;
+        check(isset(fields(json_decode($module->GetConfigurationForm(),true))['IDListe']),'Form does not recover after interface returns');
+        check(str_contains($module->GetVisualizationTile(),'SymconHeatPump.init('),'Graphic does not recover after interface returns');
+        unset($GLOBALS['testInstances'][$module->InstanceID]);$before=$module->interfaceReads;
+        json_decode($module->GetConfigurationForm(),true,512,JSON_THROW_ON_ERROR);
+        $module->GetVisualizationTile();
+        check($module->interfaceReads===$before,'Deleted instance still reads properties or buffers');
+    }
+};
+
 $tests['obsolete timer callbacks stop at the first unavailable interface and restore normal warning handling'] = static function (): void {
     $module=new Luxtronik();$GLOBALS['testGlobalLogs']=[];
     $module->interfaceWarning='InstanceInterface is not available';$before=$module->interfaceReads;

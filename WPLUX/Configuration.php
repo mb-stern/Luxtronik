@@ -176,7 +176,8 @@ trait LuxtronikConfiguration
         foreach($web['items'] as $item) foreach($item['items']??[] as $field) if(isset($field['download'])) $download=$field;
         if($download!==null) $download['visible']=$webSupport!==false;
         $inventoryStatus=$find($web['items'],'WebInventoryStatus');$inventoryStatus['visible']=$webSupport!==false;
-        $warmStatus=$find($modbus['items'],'SHIWarmWaterStatus');$warmStatus['visible']=$modbusSupport!==false;
+        // Keep the named update target for compatibility, without a permanent status banner.
+        $warmStatus=$find($modbus['items'],'SHIWarmWaterStatus');$warmStatus['visible']=false;
         $webError=$this->WebEEVCache()['error']??$this->WebInventory()['error']??'';
         $diagnostics=['type'=>'ExpansionPanel','caption'=>'Diagnose und erweiterte Einstellungen','items'=>[
             $inventoryStatus,$download,$warmStatus,

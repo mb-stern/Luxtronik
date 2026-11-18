@@ -218,6 +218,12 @@ trait LuxtronikVisualization
 
     public function GetVisualizationTile(): string
     {
+        return $this->RunWithInstanceInterface(fn() => $this->BuildVisualizationTile(), 'Grafik',
+            '<div>Die Modulinstanz ist derzeit nicht verfügbar. Bitte die Kachel erneut öffnen.</div>');
+    }
+
+    private function BuildVisualizationTile(): string
+    {
         $this->RegisterVariableMessages();
         if (!$this->ResourcesAvailable()) {
             return '<div style="padding:16px;font-family:sans-serif;color:#c62828;">'

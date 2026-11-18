@@ -249,6 +249,7 @@ Version 5.0 (in Vorbereitung; Änderungen seit der bisherigen Version)
 - **COP und JAZ:** interner COP automatisch ohne externe Leistungsquelle; ausgewählte externe Messung hat Vorrang. Elektrische Leistung und Energiezähler bleiben getrennt.
 - **Aktualisierung und Darstellung:** Sammelauswahl der Lesequelle, keine zusätzliche Modbus-Cachepause zwischen Aktualisierungen, verständliche SHI-Freigaben, volle Kachelfläche ohne reservierten Titelbereich, verständlicher Displayzugang und einheitliche Temperaturdarstellung. Die registerbedingte 100-W-Auflösung bleibt bestehen.
 - **Robustere Einrichtung:** neue Instanz ohne konfigurierte IP mit deaktivierter Abfrage und ohne Verbindungsfehler im Systemlog; lokale Prüfungen für Anlage, Protokolle, Steuerung und Darstellung. Gerätetests und die Prüfung im jeweiligen Symcon-System bleiben zusätzlich erforderlich.
+- **Schutz vor Warnungskaskaden:** Bei nicht verfügbarer Instanzschnittstelle werden Aktualisierung, Variablenmeldungen, Formular, Grafik und Konfiguration beim ersten Fehler abgebrochen. Beide Symcon-Meldungen „InstanceInterface is not available“ und „InstanceInterface is not a PHP module“ werden erkannt.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.
