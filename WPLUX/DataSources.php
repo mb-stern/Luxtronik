@@ -21,11 +21,6 @@ trait LuxtronikDataSources
             $rows[$id]=array_replace($rows[$id]??[],array_intersect_key($row,array_flip(['id','enabled','preferredSource'])));
             $rows[$id]['id']=$id;
         }
-        foreach($rows as $id=>&$row) {
-            $sources=$this->MeasurementSources((int)$id);
-            if($sources!==[] && !in_array($row['preferredSource']??'', $sources,true)) $row['preferredSource']=$sources[0];
-        }
-        unset($row);
         $ids=array_keys(self::DATA_POINT_CONFIG+$this->WebDefinitions()+$selections+$rows);
         $changed=0;
         foreach($ids as $id) {

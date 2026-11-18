@@ -27,7 +27,6 @@ trait LuxtronikConfiguration
             $id=(int)($row['id']??0);
             $sources=$this->MeasurementSources($id);
             if(in_array($Source,$sources,true)) $row['preferredSource']=$Source;
-            elseif($sources!==[] && !in_array($row['preferredSource']??'',$sources,true)) $row['preferredSource']=$sources[0];
         }
         unset($row);
         $this->UpdateFormField('IDListe','values',json_encode($rows,JSON_THROW_ON_ERROR));
@@ -36,21 +35,24 @@ trait LuxtronikConfiguration
 
     private function MeasurementEditorSources(int $id): array
     {
-        return array_values(array_filter($this->MeasurementSources($id),
-            fn($source)=>$source==='java' || $this->InterfaceSupport($source)===true));
+        return $this->MeasurementSources($id);
     }
 
-    /** The List editor is built per row so unsupported protocols cannot be selected. */
-    public function GetMeasurementRowForm(int $MeasurementID,bool $ShowSources): string
+    /** Always offer mapped alternatives per row; keep the legacy visibility argument for older forms. */
+    public function GetMeasurementRowForm(int $MeasurementID,bool $ShowSources=true): string
     {
         $items=[['type'=>'CheckBox','name'=>'enabled','caption'=>'Variable anlegen']];
-        if($ShowSources) {
-            $captions=['java'=>'Java','websocket'=>'WebSocket','modbus'=>'Modbus/SHI'];
-            $sources=$this->MeasurementEditorSources($MeasurementID);
-            if($sources!==[]) $items[]=['type'=>'Select','name'=>'preferredSource','caption'=>'Bevorzugte Quelle',
-                'options'=>array_map(static fn($source)=>['caption'=>$captions[$source],'value'=>$source],$sources)];
-            else $items[]=['type'=>'Label','caption'=>'Für diesen Messwert ist derzeit keine passende Lesequelle verfügbar.'];
+        $captions=['java'=>'Java','websocket'=>'WebSocket','modbus'=>'Modbus/SHI'];
+        $sources=$this->MeasurementEditorSources($MeasurementID);
+        $options=array_map(static fn($source)=>['caption'=>$captions[$source],'value'=>$source],$sources);
+        foreach($this->MeasurementRows() as $row) if((int)($row['id']??0)===$MeasurementID) {
+            $saved=$row['preferredSource']??'';
+            if(isset($captions[$saved]) && !in_array($saved,$sources,true))
+                $options[]=['caption'=>$captions[$saved].' (gespeicherte Auswahl)','value'=>$saved];
+            break;
         }
+        if($options!==[]) $items[]=['type'=>'Select','name'=>'preferredSource','caption'=>'Bevorzugte Quelle','options'=>$options];
+        else $items[]=['type'=>'Label','caption'=>'Für diesen Messwert ist derzeit keine passende Lesequelle verfügbar.'];
         return json_encode($items,JSON_THROW_ON_ERROR);
     }
 
@@ -95,6 +97,9 @@ trait LuxtronikConfiguration
         $sourceAllowed=static fn($option)=>isset($availableSources[$option['value']]);
         $source=$bulk['items'][0];$source['caption']='Messwerte bevorzugt lesen über';
         $source['options']=array_values(array_filter($source['options'],$sourceAllowed));
+        $savedBulkSource=$this->ReadPropertyString('MeasurementBulkSource');
+        if(!isset($availableSources[$savedBulkSource])) foreach($bulk['items'][0]['options'] as $option)
+            if($option['value']===$savedBulkSource) {$option['caption'].=' (gespeicherte Auswahl)';$source['options'][]=$option;break;}
         $bulkButton=$bulk['items'][1];$bulkButton['enabled']=$source['options']!==[];
         if($source['options']===[]) {
             $source['options']=[['caption'=>'Keine passende Quelle','value'=>'']];$source['enabled']=false;
@@ -109,10 +114,9 @@ trait LuxtronikConfiguration
             $password,
             ['type'=>'RowLayout','visible'=>$modbusSupport!==false,'items'=>[
                 $find($modbus['items'],'ModbusPort'),$find($modbus['items'],'ModbusUnitID'),$timeout]],
-            ['type'=>'Label','name'=>'WebSocketStatus','caption'=>$this->WebSocketStatusCaption(),'visible'=>$webSupport!==false],
-            ['type'=>'Label','caption'=>'Gewünschte Istwerte anhaken und „Übernehmen“ klicken. Das Modul ergänzt fehlende Messwerte automatisch aus verfügbaren Quellen.'],
+            ['type'=>'Label','name'=>'WebSocketStatus','caption'=>$this->WebSocketStatusCaption(),'visible'=>false],
             ['type'=>'Label','name'=>'MeasurementBulkResult','caption'=>''],
-            ['type'=>'CheckBox','name'=>'AdvancedSourceSelection','caption'=>'Quellen je Istwert einstellen',
+            ['type'=>'CheckBox','name'=>'AdvancedSourceSelection','caption'=>'Quellenübersicht und Sammelauswahl anzeigen',
                 'onChange'=>'WPLUX_ShowMeasurementSources($id, $AdvancedSourceSelection);'],
             ['type'=>'RowLayout','name'=>'MeasurementSourceChoice','visible'=>$this->ReadPropertyBoolean('AdvancedSourceSelection'),'items'=>[$source,$bulkButton]]]];
         $advancedSources=$this->ReadPropertyBoolean('AdvancedSourceSelection');
@@ -123,12 +127,18 @@ trait LuxtronikConfiguration
             if(isset($this->SHISelections()[$id])) return $modbusSupport!==false || ($webSupport!==false && isset($this->WebDefinitions()[$id]));
             return $webSupport!==false;
         }));
+        $needed=$this->HybridMeasurementIDs()+$this->GetVisualizationExtraPointIDs();
+        $sourceCaptions=['java'=>'Java','websocket'=>'WebSocket','modbus'=>'Modbus/SHI'];
         foreach($measurements['values'] as &$row) {
             $available=$this->MeasurementEditorSources((int)$row['id']);
             $sources=array_values(array_intersect(['java','modbus','websocket'],$available));
             $preferred=$saved[(int)$row['id']]['preferredSource']??$row['preferredSource'];
-            $row['preferredSource']=in_array($preferred,$available,true)||$available===[]?$preferred:$available[0];
+            $row['preferredSource']=$preferred;
             $row['interface']=implode(' + ',array_map(static fn($source)=>['java'=>'Java','websocket'=>'WebSocket','modbus'=>'Modbus'][$source],$sources));
+            $read=in_array($row['source'],['Java','WebSocket','Modbus/SHI'],true);
+            $row['readStatus']=$read?'Gelesen':($row['source']==='Instanz deaktiviert'?'Deaktiviert':
+                (!empty($row['enabled']) || isset($needed[(int)$row['id']])?'Keine aktuellen Daten':'Nicht abgefragt'));
+            if(!$read) $row['source']=$available!==[]?$sourceCaptions[in_array($preferred,$available,true)?$preferred:$available[0]]:'Nicht bestätigt';
         }
         unset($row);
 
@@ -136,11 +146,12 @@ trait LuxtronikConfiguration
             $name=$column['name'];
             if($name==='id') {$column['caption']='ID';unset($column['edit']);}
             if(in_array($name,['preferredSource','interface'],true)) $column['visible']=$advancedSources;
-            if($name==='preferredSource') $column['edit']['options']=array_values(array_filter($column['edit']['options'],$sourceAllowed));
-            if($name==='source') $column['caption']='Aktuelle Quelle';
+            if($name==='interface') $column['caption']='Mögliche Protokolle';
+            if($name==='source') {$column['caption']='Lesequelle';$column['width']='130px';}
             if($name==='name') $column['quickFilter']=true;
         }
         unset($column);
+        $measurements['columns'][]=['name'=>'readStatus','caption'=>'Datenstatus','width'=>'170px','save'=>false];
         $measurements['form']='return json_decode(WPLUX_GetMeasurementRowForm($id, (int)($IDListe[\'id\'] ?? 0), (bool)$AdvancedSourceSelection), true);';
         $write=$find($modbus['items'],'CommunicationMode');unset($write['value']);
         $write['caption']='Zusätzlicher SHI-Zugriff für Skripte';$write['visible']=$modbusSupport!==false;
@@ -177,7 +188,8 @@ trait LuxtronikConfiguration
             $write]];
         // Existing stable controls and the visualization form are kept intact, merely grouped.
         $active=array_shift($rest);
-        $form['elements']=[$active,$connectionPanel,$measurements,$control,$shi,...$rest,$diagnostics];
+        $idHelp=['type'=>'Label','name'=>'MeasurementIDHelp','caption'=>'ID-Kennung: Bisherige Java-IDs bleiben beim Quellenwechsel erhalten. Zusätzliche IDs: 1xxxxx = Modbus-Messwerte, 2xxxxx = Modbus-Freigaben, 3xxxxx = SHI-Steuerung, 4xxxxx = WebSocket-Zusatzwerte.'];
+        $form['elements']=[$active,$connectionPanel,$idHelp,$measurements,$control,$shi,...$rest,$diagnostics];
         return $form;
     }
 }

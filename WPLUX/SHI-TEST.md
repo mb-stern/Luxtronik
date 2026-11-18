@@ -12,7 +12,8 @@ Regler-/Symcon-Kombination benötigt weiterhin einen Gerätetest.
    **1** einstellen (sofern der Regler andere Werte benötigt, diese verwenden).
    Die Verbindung erfolgt direkt aus dem Modul zur Geräte-IP.
 3. Gewünschte Messvariablen in der gemeinsamen **Istwertliste** wählen.
-   „Aktuelle Quelle“ zeigt Java, WebSocket oder Modbus an. Alle zusätzlichen
+   „Lesequelle“ zeigt Java, WebSocket oder Modbus an; der getrennte Datenstatus
+   zeigt, ob ein Wert bereits gelesen wurde. Alle zusätzlichen
    lesbaren SHI-Punkte stehen in derselben Liste.
 4. Für externe Regelungen die gewünschten Einträge unter **Modbus / SHI – externe
    Regelung** anhaken und übernehmen. Die Variablen werden auch offline angelegt;
@@ -23,6 +24,19 @@ Instanzen werden weder verwendet noch gelöscht. Auch ein noch angehängtes Gate
 leitet keine Modbus-Anfragen mehr weiter. Der vorhandene Aktualisierungstimer
 bleibt der einzige Timer; der Modbus-Timeout unter Verbindung und Lesen ist die
 Antwortwartezeit der direkten Verbindung.
+
+## Review: frische Modulanlage
+
+- Lokal prüft `php tests/creation.php` Anlage, erstes und wiederholtes Übernehmen,
+  Formular und Kachel mit leerer Standardkonfiguration. Eine noch fehlende IP ist
+  kein Fehler im Systemlog; bis zur Konfiguration ist der Aktualisierungstimer aus.
+- Der lokale Test prüft außerdem das erste Übernehmen mit einem Java-Testregler.
+- Die tatsächliche Anlage im Symcon-Assistenten ist zusätzlich im Zielsystem
+  (insbesondere 9.1 RUST) zu prüfen. Dafür kann `tests/native-create.php` in der
+  Symcon-Skriptkonsole ausgeführt werden. Der Test legt **eine neue Testinstanz**
+  mit Standardwerten an und belässt sie zur Kontrolle von Formular und Systemlog.
+  Er verändert keine bestehenden Instanzen und sendet keine Befehle an die WP.
+  Ein bestandener lokaler Test ersetzt diesen nativen Review-Schritt nicht.
 
 ## Messwerte und Steuerungen
 

@@ -228,7 +228,7 @@ $tests['expired or disabled WebSocket readings disappear and the list identifies
     $rows=fields($form)['IDListe']['values'];
     $row=array_values(array_filter($rows,static fn($row)=>$row['id']===400001));
     check(count($row)===1 && $row[0]['interface']==='WebSocket','Source missing from list');
-    check($row[0]['source']==='Keine aktuellen Daten','An unmeasured device was labelled available');
+    check($row[0]['source']==='WebSocket' && $row[0]['readStatus']!=='Gelesen','Known protocol is hidden or an expired value is labelled read');
     check(str_contains(json_encode($form),'3.81'),'Firmware requirement missing from form');
 };
 
@@ -240,7 +240,7 @@ $tests['device availability distinguishes incomplete discovery from a failed por
     $form=json_decode($module->GetConfigurationForm(),true);
     $rows=fields($form)['IDListe']['values'];
     $row=array_values(array_filter($rows,static fn($row)=>$row['id']===400001))[0];
-    check($row['source']==='Keine aktuellen Daten','Partial scan claimed a field was unavailable');
+    check($row['source']==='WebSocket' && $row['readStatus']!=='Gelesen','Partial scan hides the mapped route or invents a current reading');
     $listener=stream_socket_server('tcp://127.0.0.1:0');
     $port=(int)substr(strrchr(stream_socket_get_name($listener,false),':'),1);
     fclose($listener);
@@ -252,7 +252,7 @@ $tests['device availability distinguishes incomplete discovery from a failed por
     $form=json_decode($module->GetConfigurationForm(),true);
     $rows=fields($form)['IDListe']['values'];
     $row=array_values(array_filter($rows,static fn($row)=>$row['id']===400001))[0];
-    check($row['source']==='Keine aktuellen Daten' && str_contains(json_encode($form,JSON_UNESCAPED_UNICODE),$message),'Connection error hidden from the configuration');
+    check($row['readStatus']!=='Gelesen' && str_contains(json_encode($form,JSON_UNESCAPED_UNICODE),$message),'Connection error hidden from the configuration');
 };
 
 $tests['targeted pages supplement a missing Java point and retain other Java readings'] = static function():void {
@@ -378,7 +378,7 @@ $tests['Java stays default and successful Java values request only the EEV page'
         $form=fields(json_decode($module->GetConfigurationForm(),true));
         check(!isset($form['ModbusWrites']) && $form['CommunicationMode']['type']==='Select' && !isset($form['CommunicationMode']['value']),'Write selection is not simplified');
         $rows=array_column($form['IDListe']['values'],null,'id');
-        check($rows[10]['source']==='Java' && $rows[400019]['source']==='Keine aktuellen Daten','Coverage labels imply unrequested reads');
+        check($rows[10]['source']==='Java' && $rows[400019]['source']==='WebSocket' && $rows[400019]['readStatus']!=='Gelesen','Known source hidden or coverage labels imply unrequested reads');
     },['expectPages'=>['Ausgänge'],'extra'=>[['name'=>'Temperaturen','id'=>'unused-temperatures','xml'=>'<Content><item><name>Vorlauf</name><value>99.0°C</value></item></Content>']]]);
 };
 

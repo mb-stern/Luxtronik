@@ -26,21 +26,31 @@ Die Formularanzeige selbst führt keine Netzwerkabfrage aus.
 Ein Verbindungsfehler bleibt „noch nicht bestätigt“ und beweist keine fehlende
 Unterstützung. Beim erkannten Firmwarewechsel werden nur Erkennungscaches erneuert.
 
-**Quellen je Istwert einstellen** blendet Quellenwahl und Einzelzuordnungen direkt
+**Quellenübersicht und Sammelauswahl anzeigen** blendet Quellenübersicht und Sammelauswahl direkt
 über der Istwertliste ein. Der Knopf **Für alle passenden Messwerte übernehmen**
 steht neben der Quellenwahl. Der Bearbeitungsdialog wird für jeden Istwert einzeln
-erzeugt und bietet nur zugeordnete Protokolle mit bestätigter Firmware- oder
-Schnittstellenunterstützung an. Java wird bei einem erfolgreich gelesenen kürzeren
+erzeugt und bietet alle zugeordneten Kommunikationswege an, auch wenn gerade
+kein aktueller Wert vorliegt oder die Firmware noch nicht ermittelt wurde. Die
+Quellenwahl ist in jedem Zeilendialog verfügbar, unabhängig von der ausgeblendeten
+Quellenübersicht. Bereits gespeicherte Auswahlen werden beim Laden nicht ersetzt;
+eine vorübergehend nicht verfügbare gespeicherte Quelle bleibt im Dialog erhalten. Java wird bei einem erfolgreich gelesenen kürzeren
 Datenrahmen für die darin fehlenden IDs nicht angeboten. Ein späterer
 Verbindungsfehler verwirft diese bekannte Zuordnung nicht. Einzeländerungen im
 Dialog werden mit dem normalen **Übernehmen** gespeichert; die Sammelauswahl
-ändert nur passende Messwerte. Bestehende Variablen und Auswahl-IDs bleiben erhalten.
+ändert nur passende Messwerte. Java bleibt der Standard für Java-Messwerte ohne
+Zuordnung zur gewählten Quelle. Die Quellenwahl betrifft ausschließlich das Lesen
+der Istwerte; Java-Steuerungen und die eigenständigen SHI-Schreibvorgaben werden
+dadurch nicht umgestellt. Bestehende Variablen und Auswahl-IDs bleiben erhalten.
 
 ## Eine gemeinsame Istwertliste
 
 Die Liste enthält Java-Messwerte, bekannte WebSocket-Ergänzungen und alle
 zusätzlichen lesbaren SHI-Register. **Aktiv** wählt die gewünschte Symcon-Variable;
-**Aktuelle Quelle** nennt die tatsächlich verwendete Schnittstelle. Zusätzliche
+**Lesequelle** nennt bei gelesenen Werten die tatsächlich verwendete Schnittstelle,
+ansonsten den bekannten vorgesehenen Kommunikationsweg. **Datenstatus** unterscheidet
+„Gelesen“, „Nicht abgefragt“ und „Keine aktuellen Daten“. Dadurch bleibt bei einem
+nicht ausgewählten SHI-Punkt „Modbus/SHI“ erkennbar, ohne einen gelesenen Wert
+vorzutäuschen. Zusätzliche
 Steuerungsregister stehen ausschließlich im SHI-Steuerungsbereich.
 
 Ein Messwert besitzt einen gemeinsamen Ident und eine gemeinsame Objekt-ID, soweit

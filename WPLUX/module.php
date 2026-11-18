@@ -152,6 +152,11 @@ class Luxtronik extends IPSModuleStrict
         return json_encode($data);
     }
 
+    private function DeviceAddressConfigured(): bool
+    {
+        return !in_array(trim($this->ReadPropertyString('IPAddress')),['','0.0.0.0','::'],true);
+    }
+
     public function ApplyChanges(): void
     {
          //Never delete this line!
@@ -188,10 +193,11 @@ class Luxtronik extends IPSModuleStrict
         $port = $this->ReadPropertyInteger('Port');
 
         // Überprüfe, ob die IP-Adresse nicht die Muster-IP ist
-        if ($ipAddress == '0.0.0.0') 
+        if (!$this->DeviceAddressConfigured())
         {
+            $this->SetTimerInterval('UpdateTimer', 0);
+            $this->SetStatus(104);
             $this->SendDebug("Konfiguration", "IP-Adresse ist nicht konfiguriert", 0);   
-            $this->LogMessage("IP-Adresse ist nicht konfiguriert", KL_ERROR);
         } 
         else 
         {
@@ -1272,7 +1278,7 @@ class Luxtronik extends IPSModuleStrict
 
     private function UpdateInstance(): void
     {
-        if (!$this->ReadPropertyBoolean('InstanceStatus')) {
+        if (!$this->ReadPropertyBoolean('InstanceStatus') || !$this->DeviceAddressConfigured()) {
             return;
         }
 
@@ -1359,6 +1365,7 @@ class Luxtronik extends IPSModuleStrict
     /** Zeitgrenze gilt für die gesamte Verbindung, auch bei langsamen Teilantworten. */
     private function Exchange(int $command, array $arguments): ?array
     {
+        if(!$this->DeviceAddressConfigured()) return null;
         $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
         if ($socket === false) {
             $this->LogMessage('Socket konnte nicht erstellt werden.', KL_ERROR);

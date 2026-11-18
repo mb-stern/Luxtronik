@@ -38,6 +38,16 @@ Die bisherigen Auswahl-IDs bleiben erhalten: 310002 bezeichnet Register 10002.
 
 Die vollständige Zuordnung steht im [Registerkatalog](SHI-REGISTER.md).
 
+## Kühlungswärmemenge: bisheriger Prüfstand
+
+Java-Istwert 153 ist im bestehenden Modul dem Schwimmbadzähler zugeordnet.
+Kühlungswärmemenge wird separat über SHI-Input-Register 10326 (Auswahl-ID 110326)
+beziehungsweise den zugeordneten WebSocket-Wert gelesen. Der in Fremdintegrationen
+genannte Java-Parameter 1135 gehört zu Kommando 3003 und konnte auf der Testanlage
+bereits nicht als nutzbare Alternative bestätigt werden. Er wird deshalb nicht
+erneut als bestätigte Java-Zuordnung übernommen. Die Reihenfolge der Zähler im
+Webinterface ist kein Nachweis für die Bedeutung des Java-Istwertindex 153.
+
 ## Zeitverhalten
 
 Die SHI-Anleitung nennt **15 Minuten ohne Modbus-Kommunikation** bis zum Rückfall
