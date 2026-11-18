@@ -338,6 +338,8 @@ trait LuxtronikVisualization
         width: 100%;
         height: 100%;
         box-sizing: border-box;
+        /* HTML-SDK >= 9.1 supplies the current top inset; older hosts leave it unset. */
+        padding-top: var(--margin-top, 0px);
         overflow: hidden;
     }
 

@@ -402,11 +402,15 @@ Boilerabzweig und Rücklaufanschluss liegen etwas tiefer innerhalb des
 Warmwasserspeichers. VL, Pumpenanzeige, Durchfluss und Rücklaufbeschriftungen
 sind passend dazu mit Abstand zueinander angeordnet.
 
-Die Grafik nutzt auch in eingebetteten HTML-SDK-Kacheln die volle verfügbare
-Fläche, ohne Platz für die Titelzeile zu reservieren. Ab Symcon 9.1 kann der
-Benutzer die Titelzeile in den visuellen Einstellungen ausblenden. Die neue
+Die Grafik nutzt auch in eingebetteten HTML-SDK-Kacheln die verfügbare Fläche.
+Ab Symcon 9.1 berücksichtigt sie den vom Host gelieferten oberen Abstand über
+die dokumentierte CSS-Variable `--margin-top`. Änderungen dieses Werts passen
+die Zeichenfläche automatisch an, ohne festen Titelabstand und ohne Neuladen.
+Die Titelzeile kann der Benutzer in den visuellen Einstellungen ausblenden.
+Fehlt die CSS-Variable, bleibt der zusätzliche Abstand null. Die neue
 Darstellungsart wird nur bei vorhandener SDK-Konstante verwendet; ältere
-Versionen behalten den bisherigen HTML-Typ 1.
+Versionen behalten den bisherigen HTML-Typ 1. Siehe
+[HTML-SDK: Stil](https://www.symcon.de/de/llms/developer/sdk-tools/sdk-php/html-sdk.md).
 Der Displayzugang trägt die zwei Zeilen **Regler / Display**. Die Standardanzeige
 der Raumtemperatur verwendet einen numerischen Wert mit einer Nachkommastelle und
 **°C**; der bestätigte Raum-Sollwert ist als **Soll-Innentemperatur** beschriftet.

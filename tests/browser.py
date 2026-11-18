@@ -801,7 +801,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 mixed.close()
             print(json.dumps({'optional_second_outlet':'PASS','series_return_buffer':'PASS','DHW_temperature_hold':'PASS'}))
 
-            # Embedded diagrams use the full tile even while the host title is shown.
+            # SDK top insets resize the content live; absent insets keep the full tile.
             Path(artifacts,'embedded-title.html').write_text('<style>body{margin:0}iframe{width:100vw;height:100vh;border:0}#host-title{position:absolute;top:8px;left:12px;font:24px Arial;z-index:5}</style><div id="host-title">Luxtronik</div><iframe src="configured.html"></iframe>')
             for width,height in [(1200,240),(390,400)]:
                 embedded=browser.new_page(viewport={'width':width,'height':height})
@@ -810,6 +810,11 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 assert frame.locator('#wp-root').evaluate('e=>getComputedStyle(e).paddingTop')=='0px'
                 bounds=frame.locator('#wp-root').bounding_box()
                 assert bounds=={'x':0,'y':0,'width':width,'height':height},bounds
+                for inset in [32,61,0]:
+                    frame.locator('html').evaluate('(e,n)=>e.style.setProperty("--margin-top",n+"px")',inset)
+                    card=frame.locator('#wp-card').bounding_box()
+                    assert card=={'x':0,'y':inset,'width':width,'height':height-inset},card
+                frame.locator('html').evaluate('e=>e.style.removeProperty("--margin-top")')
                 before=frame.locator('#wp-card').bounding_box()
                 embedded.locator('#host-title').evaluate('e=>e.style.display="none"')
                 assert frame.locator('#wp-card').bounding_box()==before
