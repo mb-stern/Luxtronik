@@ -338,8 +338,6 @@ trait LuxtronikVisualization
         width: 100%;
         height: 100%;
         box-sizing: border-box;
-        /* Legacy hosts use their SDK inset; known title visibility is applied below. */
-        padding-top: var(--margin-top, 0px);
         overflow: hidden;
     }
 
@@ -567,19 +565,9 @@ HTML;
 
     private function BuildCardConfig(): array
     {
-        $object = IPS_GetObject($this->InstanceID);
-        $titleHidden = $object['ObjectIsHiddenTitle'] ?? null;
-        if (!is_bool($titleHidden)) {
-            $titleHidden = null;
-            // Hiding object titles was introduced in 9.1. Older tiles always show them.
-            if (function_exists('IPS_GetKernelVersion')
-                && preg_match('/^\s*(\d+\.\d+)/', IPS_GetKernelVersion(), $version)
-                && version_compare($version[1], '9.1', '<')) $titleHidden = false;
-        }
         $config = [
             'instanceId'                 => $this->InstanceID,
             'title'                      => '',
-            'hostTitleHidden'            => $titleHidden,
             'fullConfigurationPreview'   => $this->ReadPropertyBoolean('FullConfigurationPreview'),
             'luxtronikWebInterfaceURL'    => $this->GetLuxtronikWebInterfaceURL(),
             'luxtronikWebSocketPassword' => $this->ReadPropertyString('WebSocketPassword'),
@@ -1669,21 +1657,6 @@ window.SymconHeatPump = {
         let embeddedSvg = payload.svg || '';
         let embeddedLocalization = payload.localization || {};
         let currentData = payload.data || {};
-
-        const applyHostTitleLayout = () => {
-            const root = document.getElementById('wp-root');
-            if (!root) return;
-            const hosted = window.parent !== window || typeof requestAction === 'function';
-            if (!hosted || currentConfig.hostTitleHidden === true) {
-                root.style.paddingTop = '0px';
-            } else if (currentConfig.hostTitleHidden === false) {
-                // Reserve one title line only while the native object title is shown.
-                // CSS keeps this responsive to the host's configured font size.
-                root.style.paddingTop = 'max(var(--margin-top, 0px), calc(var(--font-size, 32px) * 1.25 + 16px))';
-            } else {
-                root.style.removeProperty('padding-top');
-            }
-        };
 
         /*
          * Ansichts-Speicherung nach demselben Instanz-Prinzip wie im
@@ -4142,7 +4115,6 @@ window.SymconHeatPump = {
         });
 
         const applyCardData = () => {
-            applyHostTitleLayout();
             const card = document.getElementById('wp-card');
 
             if (!card) {
@@ -4612,7 +4584,6 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             foreach ([VM_UPDATE, VM_DELETE, VM_CHANGEPROFILEACTION] as $message) $this->RegisterMessage($id, $message);
         }
         foreach ([OM_CHILDADDED, OM_CHILDREMOVED, IM_CHANGESTATUS] as $message) $this->RegisterMessage($this->InstanceID, $message);
-        if (defined('OM_CHANGEHIDDENTITLE')) $this->RegisterMessage($this->InstanceID, constant('OM_CHANGEHIDDENTITLE'));
         $this->SetBuffer('VisualizationRegisteredVariables', json_encode($ids, JSON_THROW_ON_ERROR));
     }
 
@@ -4620,11 +4591,6 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     {
         if (IPS_GetKernelRunlevel() !== KR_READY) return;
         $this->RunWithInstanceInterface(function () use ($SenderID, $Message): void {
-            if ($SenderID === $this->InstanceID && defined('OM_CHANGEHIDDENTITLE')
-                && $Message === constant('OM_CHANGEHIDDENTITLE')) {
-                $this->RefreshVisualization();
-                return;
-            }
             $own = $SenderID === $this->InstanceID && in_array($Message, [OM_CHILDADDED, OM_CHILDREMOVED, IM_CHANGESTATUS], true);
             $ids = json_decode($this->GetBuffer('VisualizationRegisteredVariables'), true);
             if ($own || (is_array($ids) && in_array($SenderID, $ids, true) && in_array($Message, [VM_UPDATE, VM_DELETE, VM_CHANGEPROFILEACTION], true))) {

@@ -35,9 +35,8 @@ function IPS_GetVariableProfile(string $name): array { return $GLOBALS['testProf
 function IPS_InstanceExists(int $id): bool { return isset($GLOBALS['testInstances'][$id]); }
 function IPS_LogMessage(string $sender, string $message): bool { $GLOBALS['testGlobalLogs'][] = [$sender,$message]; return true; }
 function IPS_GetKernelRunlevel(): int { return KR_READY; }
-function IPS_GetKernelVersion(): string { return $GLOBALS['testKernelVersion'] ?? '9.1'; }
 function IPS_GetName(int $id): string { return $GLOBALS['testVariables'][$id]['name'] ?? ''; }
-function IPS_GetObject(int $id): array { return array_replace(['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '', 'ObjectPosition' => $GLOBALS['testVariables'][$id]['position'] ?? 0], $GLOBALS['testObjectInfo'][$id] ?? []); }
+function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '', 'ObjectPosition' => $GLOBALS['testVariables'][$id]['position'] ?? 0]; }
 function IPS_SetPosition(int $id, int $position): bool { $GLOBALS['testVariables'][$id]['position']=$position; return true; }
 function IPS_GetParent(int $id): int { return $GLOBALS['testVariables'][$id]['instance'] ?? 0; }
 function IPS_GetVariablePresentation(int $id): array { return $GLOBALS['testVariables'][$id]['presentation'] ?? []; }

@@ -402,24 +402,11 @@ Boilerabzweig und Rücklaufanschluss liegen etwas tiefer innerhalb des
 Warmwasserspeichers. VL, Pumpenanzeige, Durchfluss und Rücklaufbeschriftungen
 sind passend dazu mit Abstand zueinander angeordnet.
 
-Die Grafik liest ab Symcon 9.1 die tatsächliche Titeleinstellung der Instanz über
-`IPS_GetObject()` und `ObjectIsHiddenTitle`. Beim Ausblenden des Titels nutzt sie
-die volle Kachelfläche. Ein sichtbarer Titel erhält Platz für eine Zeile,
-abhängig von der Kachelschriftgröße (`--font-size`); ein größerer vom SDK
-gelieferter oberer Abstand (`--margin-top`) wird berücksichtigt. Damit funktioniert
-die Anpassung auch bei einem unverändert null bleibenden SDK-Abstand.
-Die native Nachricht `OM_CHANGEHIDDENTITLE` aktualisiert die Grafik beim Umschalten
-ohne Neuladen, zusätzliche Abfragen oder Änderungen der Titeleinstellung.
-Eine separat geöffnete Grafik ohne übergeordnete Kachel verwendet die volle Fläche.
-
-Vor Symcon 9.1 werden die neue Objekteigenschaft und Nachricht nicht vorausgesetzt.
-Eine erkannte Version unter 9.1 verwendet die stets sichtbare Titelzeile. Bei
-unbekannter Version und fehlender Objekteigenschaft gilt lediglich ein vorhandener
-SDK-Abstand.
-Die neue Darstellungsart wird weiterhin nur bei vorhandener SDK-Konstante
-verwendet, andernfalls HTML-Typ 1. Siehe
-[Objektinformationen](https://www.symcon.de/de/service/dokumentation/befehlsreferenz/objektverwaltung/ips-getobject/)
-und [HTML-SDK: Stil](https://www.symcon.de/de/llms/developer/sdk-tools/sdk-php/html-sdk.md).
+Die Grafik nutzt auch in eingebetteten HTML-SDK-Kacheln die volle verfügbare
+Fläche, ohne Platz für die Titelzeile zu reservieren. Ab Symcon 9.1 kann der
+Benutzer die Titelzeile in den visuellen Einstellungen ausblenden. Die neue
+Darstellungsart wird nur bei vorhandener SDK-Konstante verwendet; ältere
+Versionen behalten den bisherigen HTML-Typ 1.
 Der Displayzugang trägt die zwei Zeilen **Regler / Display**. Die Standardanzeige
 der Raumtemperatur verwendet einen numerischen Wert mit einer Nachkommastelle und
 **°C**; der bestätigte Raum-Sollwert ist als **Soll-Innentemperatur** beschriftet.
