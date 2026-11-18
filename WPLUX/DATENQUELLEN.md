@@ -71,10 +71,21 @@ Ausgewählte Einträge erzeugen nach **Übernehmen** eigene Steuervariablen, auc
 noch keine Verbindung besteht. Bedienbar sind sie erst mit gültiger Rückmeldung und
 passender Freigabe. Auswählen, Speichern und zyklisches Lesen schreiben keine Werte.
 
-**Beispiel:** „Offset Heizen“ anhaken und übernehmen. Deine Regelung kann über
-diese Variable beispielsweise **+1,0 K** vorgeben und damit die Rücklauf-Solltemperatur
-um 1 K anheben. Das Modul stellt den passenden SHI-Modus automatisch ein. Die Tabelle
-verwendet die Funktionsnamen ohne zusätzliches „SHI“ wie im Webinterface.
+Unter **Hinweise zu SHI** wird das Zusammenspiel der vier Heizvariablen erklärt:
+
+| Variable | Funktion |
+| --- | --- |
+| Modus Heizen | 0: kein Einfluss, 1: Sollwert, 2: Offset, 3: Level |
+| Sollwert Heizen | Direkte Rücklauf-Solltemperatur, beispielsweise 30 °C; wirkt bei Modus 1 |
+| Offset Heizen | Korrektur der berechneten Rücklauf-Solltemperatur: 28 °C + 1 K = 29 °C; wirkt bei Modus 2 |
+| Level Heizen | 0: kein Einfluss, 1: überhöht mit Zeitprogramm, 2: überhöht ohne Zeitprogramm, 3: reduziert; wirkt bei Modus 3 |
+
+Sollwert und Offset werden nicht zusammengerechnet. Für eine Temperaturkorrektur
+reicht die Auswahl von „Offset Heizen“. Beim Senden über **Schalten / RequestAction()**
+setzt das Modul den Modus automatisch auf 2; die Modusvariable muss dafür nicht
+zusätzlich angelegt werden. Ein später gesendeter direkter Sollwert aktiviert
+Modus 1, sodass der gespeicherte Offset nicht mehr wirkt. Die Tabelle verwendet
+die Funktionsnamen ohne zusätzliches „SHI“ wie im Webinterface.
 
 | SHI-Variable | Register | Bedeutung |
 | --- | --- | --- |

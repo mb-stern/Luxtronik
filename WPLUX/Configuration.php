@@ -118,9 +118,16 @@ trait LuxtronikConfiguration
         array_unshift($control['items'],['type'=>'Label','caption'=>'Diese bisherigen Regler-Einstellungen und Zeitprogramme werden über Java bedient. Die zusätzlichen SHI-Vorgaben stehen im eigenen Bereich.']);
         $shi=['type'=>'ExpansionPanel','caption'=>'Modbus / SHI – externe Regelung','visible'=>$modbusSupport!==false,'items'=>[
             $find($modbus['items'],'ModbusPort'),$find($modbus['items'],'ModbusUnitID'),
-            ['type'=>'Label','caption'=>'Beispiel: „Offset Heizen“ anhaken und übernehmen. Schreibst du danach +1,0 K in die Variable, erhöht der Regler die Rücklauf-Solltemperatur um 1 K. Den benötigten Modus stellt das Modul automatisch ein.'],
             $this->SHIControlForm(),
             ['type'=>'ExpansionPanel','caption'=>'Hinweise zu SHI','items'=>[
+                ['type'=>'Label','caption'=>'Die vier Heizvariablen gehören zusammen: „Modus Heizen“ bestimmt, welche der drei anderen Vorgaben wirkt.'],
+                ['type'=>'Label','caption'=>'Modus Heizen: 0 = kein Einfluss, 1 = Sollwert verwenden, 2 = Offset verwenden, 3 = Level verwenden.'],
+                ['type'=>'Label','caption'=>'Sollwert Heizen: Gibt die Rücklauf-Solltemperatur direkt vor, beispielsweise 30 °C. Wirkt bei Modus 1.'],
+                ['type'=>'Label','caption'=>'Offset Heizen: Verschiebt die vom Regler berechnete Rücklauf-Solltemperatur. Beispielsweise werden aus 28 °C mit +1,0 K dann 29 °C. Wirkt bei Modus 2.'],
+                ['type'=>'Label','caption'=>'Level Heizen: 0 = kein Einfluss, 1 = überhöht mit Zeitprogramm, 2 = überhöht ohne Zeitprogramm, 3 = reduziert. Wirkt bei Modus 3.'],
+                ['type'=>'Label','caption'=>'Sollwert und Offset werden nicht zusammengerechnet. Der Modus wählt die gewünschte Art der Beeinflussung aus.'],
+                ['type'=>'Label','caption'=>'Beispiel: Für deine Temperaturkorrektur reicht es, „Offset Heizen“ anzuhaken und zu übernehmen. Sendest du darüber per Schalten beziehungsweise RequestAction() eine Korrektur, setzt das Modul „Modus Heizen“ automatisch auf 2. Die Modusvariable musst du dafür nicht zusätzlich anlegen.'],
+                ['type'=>'Label','caption'=>'Sendest du später über „Sollwert Heizen“ einen direkten Sollwert, schaltet das Modul automatisch auf Modus 1 um. Der gespeicherte Offset wirkt dann nicht mehr.'],
                 ['type'=>'Label','caption'=>'SHI-Vorgaben sind externe Eingriffe zusätzlich zur normalen Java-Reglerkonfiguration. Ohne Modbus-Anfragen setzt der Regler sie laut Anleitung nach 15 Minuten zurück. Eine aktive Vorgabe wird über den zugehörigen SHI-Modus beendet, nicht durch Löschen ihrer Symcon-Variable.']]]]];
         $download=null;
         foreach($web['items'] as $item) foreach($item['items']??[] as $field) if(isset($field['download'])) $download=$field;
