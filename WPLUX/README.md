@@ -6,7 +6,7 @@ Luxtronik wird unter anderem von Alpha Innotec, Buderus, CTA, Elco, Nibe, Roth,
 Novelan und Wolf eingesetzt. Der verfügbare Funktionsumfang hängt von Gerät,
 Regler und Firmware ab.
 
-**Java bleibt die Standardanbindung.** Ab Version 5.0 können WebSocket und
+Java bleibt die Standardanbindung. Ab Version 5.0 können WebSocket und
 Modbus/Smart Home Interface (SHI) bestätigte Messwerte ergänzen oder als bevorzugte
 Lesequelle dienen. SHI bietet zusätzlich eigene Vorgaben für externe Regelungen,
 beispielsweise eine zeitweise Anhebung bei PV-Überschuss.
@@ -34,22 +34,22 @@ beispielsweise eine zeitweise Anhebung bei PV-Überschuss.
 
 ### 2. Voraussetzungen
 
-- IP-Symcon ab Version **8.1**.
+- IP-Symcon ab Version 8.1.
 - Luxtronik mit Netzwerkanschluss und vom Symcon-Server erreichbarer IP-Adresse.
-- Java-Port **8889**, bei älteren Geräten gegebenenfalls **8888**.
-- Für WebSocket: unterstützte Firmware, Port **8214** und Webinterface-Passwort (Standard **999999**).
-- Für Modbus/SHI: unterstützter Regler mit aktiviertem SHI; üblicherweise Port **502**, Geräteadresse **1**.
+- Java-Port 8889, bei älteren Geräten gegebenenfalls 8888.
+- Für WebSocket: unterstützte Firmware, Port 8214 und Webinterface-Passwort (Standard 999999).
+- Für Modbus/SHI: unterstützter Regler mit aktiviertem SHI; üblicherweise Port 502, Geräteadresse 1.
 
-Für die Firmware-Versionsreihe V3 gilt: WebSocket ab **3.81**, Modbus/SHI laut
-Hersteller ab **3.90.1**. Andere Versionsreihen werden gesondert über die
+Für die Firmware-Versionsreihe V3 gilt: WebSocket ab 3.81, Modbus/SHI laut
+Hersteller ab 3.90.1. Andere Versionsreihen werden gesondert über die
 Schnittstellen geprüft. Die Konfiguration zeigt erkannte Firmware und
 Schnittstellenstatus; sicher nicht unterstützte Bereiche werden ausgeblendet.
 Eine fehlende Verbindung allein gilt nicht als Nachweis fehlender Unterstützung.
 
 ### 3. Installation
 
-Das Modul über den Module Store installieren und unter **Instanz hinzufügen**
-eine **Luxtronik**-Instanz anlegen. Die Version 5.0 befindet sich auf dem
+Das Modul über den Module Store installieren und unter Instanz hinzufügen
+eine Luxtronik-Instanz anlegen. Die Version 5.0 befindet sich auf dem
 Entwicklungszweig `development`.
 
 Beim Upgrade bleiben bestehende Variablen, Idents, Objekt-IDs, Archive und
@@ -59,7 +59,7 @@ Systemlog; die zyklische Abfrage startet nach der Einrichtung.
 
 ### 4. Einrichtung und Datenquellen
 
-Unter **Modul aktiv → Verbindung und Lesen** stehen die Verbindungseinstellungen
+Unter Modul aktiv → Verbindung und Lesen stehen die Verbindungseinstellungen
 direkt im Formular:
 
 | Einstellung | Bedeutung |
@@ -73,10 +73,10 @@ direkt im Formular:
 
 Ein Symcon-Modbus-Gateway oder Client Socket wird nicht benötigt.
 
-In **Istwerte – gewünschte Variablen auswählen** die benötigten Variablen anhaken
-und **Übernehmen**. Über das Zahnrad lässt sich je Messwert eine bevorzugte,
-zugeordnete Quelle wählen. **Quellenübersicht und Sammelauswahl anzeigen** blendet
-die gemeinsame Quellenwahl ein. **Für alle passenden Messwerte übernehmen**
+In Istwerte – gewünschte Variablen auswählen die benötigten Variablen anhaken
+und Übernehmen. Über das Zahnrad lässt sich je Messwert eine bevorzugte,
+zugeordnete Quelle wählen. Quellenübersicht und Sammelauswahl anzeigen blendet
+die gemeinsame Quellenwahl ein. Für alle passenden Messwerte übernehmen
 ändert nur Werte mit einer passenden Zuordnung; die übrigen behalten ihre Quelle.
 Die Sammelauswahl betrifft ausschließlich das Lesen der Istwerte.
 
@@ -86,7 +86,7 @@ die bevorzugte Quelle verwendet. Gespeicherte Einstellungen bleiben dabei
 bestehen. Zusätzliche Werte ohne bestätigte Entsprechung stehen separat in der
 Liste. Nicht jeder Java-Wert ist über WebSocket oder Modbus verfügbar.
 
-Die Liste unterscheidet **Lesequelle** und **Datenstatus**. „Nicht abgefragt“
+Die Liste unterscheidet Lesequelle und Datenstatus. „Nicht abgefragt“
 bedeutet, dass der Wert bisher nicht benötigt wurde. Java liefert einen ganzen
 Datenrahmen; Modbus und WebSocket lesen gezielt benötigte Punkte.
 
@@ -100,22 +100,22 @@ Die ID ist die Auswahlkennung des Moduls, keine Symcon-Objekt-ID:
 | 3xxxxx | SHI-Steuerung |
 | 4xxxxx | WebSocket-Zusatzwerte |
 
-Beispielsweise bezeichnet **310002** die SHI-Steuervariable für das echte
-Holding-Register **10002**. Registerart und Adresse sind im
+Beispielsweise bezeichnet 310002 die SHI-Steuervariable für das echte
+Holding-Register 10002. Registerart und Adresse sind im
 [Registerkatalog](SHI-REGISTER.md) aufgeführt.
 
 #### SHI für externe Regelungen
 
-Unter **Modbus / SHI – externe Regelung** die gewünschten Vorgaben auswählen und
+Unter Modbus / SHI – externe Regelung die gewünschten Vorgaben auswählen und
 übernehmen. Dadurch werden eigene Steuervariablen angelegt, auch ohne bestehende
 Verbindung. Bedienbar sind sie mit aktueller Rückmeldung und Freigabe am Regler.
 
-SHI-Temperaturen, Offsets und Leistungsgrenzen sind in **0,1er-Schritten**
+SHI-Temperaturen, Offsets und Leistungsgrenzen sind in 0,1er-Schritten
 bedienbar, beispielsweise +0,5 K beim Heizungs-Offset. Vorhandene Modulprofile
 und Schieberegler mit ganzen Schritten werden ohne Neuanlage der Variablen
 korrigiert. Betriebsmodi, Levels und Schalter behalten ihre festgelegten Werte.
 
-Am Beispiel **310000 bis 310003**:
+Am Beispiel 310000 bis 310003:
 
 | Variable | Wirkung |
 | --- | --- |
@@ -124,7 +124,7 @@ Am Beispiel **310000 bis 310003**:
 | Offset Heizen (310002) | Korrektur des berechneten Rücklauf-Sollwerts bei Modus 2 |
 | Level Heizen (310003) | Kein Einfluss, überhöht mit/ohne Zeitprogramm oder reduziert bei Modus 3 |
 
-Wird **Offset Heizen** mit **+1,0 K** geschaltet, werden aus beispielsweise 28 °C
+Wird Offset Heizen mit +1,0 K geschaltet, werden aus beispielsweise 28 °C
 Rücklauf-Solltemperatur 29 °C. Den benötigten Modus 2 setzt das Modul automatisch;
 die Modusvariable muss dafür nicht zusätzlich angelegt werden. Ein direkter
 Sollwert schaltet auf Modus 1 um. Sollwert und Offset werden nicht addiert.
@@ -138,19 +138,19 @@ durch Rücklesen. Alte Vorgaben werden nach einem Neustart nicht erneut gesendet
 Die geschaltete SHI-Variable zeigt den Wunschwert nach der Prüfung von Freigabe
 und Wertebereich sofort. Die tatsächliche Übernahme wird getrennt durch
 Rücklesen bestätigt. Gerade die Warmwasserregister 10005–10008 können verzögert
-reagieren; das Modul wartet dafür pro Register bis zu **15 Sekunden** und
+reagieren; das Modul wartet dafür pro Register bis zu 15 Sekunden und
 wiederholt den Schreibbefehl nicht. Scheitert die Bestätigung, wird die Anzeige
 auf den vor dem Senden gelesenen Wert zurückgesetzt. Die Fehlermeldung nennt
 gesendeten und zurückgelesenen Wert.
 
-Die SHI-Register enthalten externe Vorgaben, etwa **Holding-Register 10006** für
+Die SHI-Register enthalten externe Vorgaben, etwa Holding-Register 10006 für
 Warmwasser. Den aktuell wirksamen Warmwasser-Sollwert liefert dagegen
-**Input-Register 10121**, entsprechend Java-Istwert 18. Ein gespeicherter
+Input-Register 10121, entsprechend Java-Istwert 18. Ein gespeicherter
 SHI-Sollwert allein bedeutet daher noch keine aktive Beeinflussung.
 
 Die SHI-Anleitung nennt einen Rückfall nach 15 Minuten ohne Modbus-Anfragen.
 Dieser Rückfall wird vom Regler gesteuert; lesende Modbus-Anfragen können die
-Kommunikation aufrechterhalten. Zum gezielten Beenden **Modus Heizen auf 0**
+Kommunikation aufrechterhalten. Zum gezielten Beenden Modus Heizen auf 0
 setzen. Weitere Hinweise stehen in der Konfiguration und im
 [Leitfaden für SHI](SHI-TEST.md).
 
@@ -158,7 +158,7 @@ Der Zeitraum beginnt somit nicht pauschal beim letzten Schreibbefehl. Ausgewähl
 SHI-Steuervariablen und zuletzt geschriebene Modusregister werden lesend abgefragt;
 auch diese Kommunikation kann den Rückfall verhindern. Es gibt keine separate
 Meldung „Sollwert gelöscht“. Das Modul übernimmt geänderte Registerwerte beim
-nächsten erfolgreichen Lesen. **Modus 0** bedeutet keinen Einfluss, auch wenn ein
+nächsten erfolgreichen Lesen. Modus 0 bedeutet keinen Einfluss, auch wenn ein
 numerischer Sollwert noch gespeichert ist. Ein fehlender Messwert oder eine
 unterbrochene Verbindung wird nicht als bestätigte Rücknahme ausgegeben.
 
@@ -181,7 +181,7 @@ getrennte Indexräume.
 
 #### Rückmeldungen der Steuerung
 
-Die oberen Kacheln **Warmwasser**, **Heizung** und **Kühlen** zeigen die
+Die oberen Kacheln Warmwasser, Heizung und Kühlen zeigen die
 eingestellten Betriebsarten, beispielsweise Automatik oder Aus. Sie zeigen
 keine momentan aktive Heiz- oder Warmwasseranforderung.
 
@@ -202,11 +202,11 @@ Ersatzquelle, etwa Modbus-Input-Register 10121.
 
 Beim Warmwasser bleiben Schreiben und Anzeige bewusst getrennt: Der normale
 Schreibbefehl setzt Java-Parameter 105; die Anzeige folgt dem wirksamen Sollwert
-aus ID 18. Dieser kann durch eine externe Vorgabe abweichen. **Heizkorrektur aus
-Java-Parameter 1** und **SHI-Offset Heizen aus Holding-Register 10002** sind
+aus ID 18. Dieser kann durch eine externe Vorgabe abweichen. Heizkorrektur aus
+Java-Parameter 1 und SHI-Offset Heizen aus Holding-Register 10002 sind
 eigenständige Vorgaben.
 
-Die Kachel **Heizkorrektur** verwendet die interne Rückmeldung von Parameter 1
+Die Kachel Heizkorrektur verwendet die interne Rückmeldung von Parameter 1
 direkt, auch wenn eine zugehörige Variable erst später angelegt wird. Der
 Schreibweg bleibt die normale Java-Heizkorrektur; SHI-Offset und Java-Korrektur
 werden nicht automatisch ineinander übertragen.
@@ -239,8 +239,8 @@ WPLUX.Cop   |  Float
 ### 6. Visualisierung
 
 Die Instanz in der Symcon-Kachelvisualisierung mit ihrer individuellen
-Darstellung verwenden. Unter **HTML-SDK / Visualisierung** den Wärmepumpentyp
-**Luft/Wasser** oder **Sole/Wasser** und die vorhandenen Komponenten auswählen.
+Darstellung verwenden. Unter HTML-SDK / Visualisierung den Wärmepumpentyp
+Luft/Wasser oder Sole/Wasser und die vorhandenen Komponenten auswählen.
 Die Grafik nutzt die internen Messwerte automatisch. Ab Symcon 9.1 ist eine
 maximierbare Darstellung möglich.
 
@@ -249,11 +249,11 @@ und -Austritt (20) am geschlossenen Gerätegehäuse im gleichen Stil. Lüfter,
 Lüfterdrehzahl und Abtau-Restzeit entfallen. Verdichter-Ansaugtemperatur und
 Sole-Eintritt bleiben getrennte Messungen. Fehlende Werte erscheinen als „—“.
 
-**Heizkreis 1 (Standard)** verwendet den normalen WP-Vorlauf. Bei zwei
+Heizkreis 1 (Standard) verwendet den normalen WP-Vorlauf. Bei zwei
 Heizkreisen werden die Mischkreis-Vorlauftemperaturen 1 und 2 verwendet, ohne
 Mischersymbole zu zeichnen. Der optionale Puffer ist ein Reihenpuffer im Rücklauf.
 
-**Regler / Display** öffnet das bedienbare Reglerdisplay über WebSocket. Alte
+Regler / Display öffnet das bedienbare Reglerdisplay über WebSocket. Alte
 XML- und neue JSON-Antworten werden unterstützt. Das Passwort kommt aus der
 Instanzkonfiguration; das Original-Webinterface lässt sich ebenfalls öffnen.
 
@@ -289,20 +289,20 @@ SHI-API-Zugriffe ohne Variablenauswahl steht unter Diagnose.
 
 Version 5.0 (in Vorbereitung; Änderungen seit der bisherigen Version)
 
-- **Abwärtskompatibler Ausbau der Datenquellen:** Java bleibt Standard; WebSocket und direkte Modbus-TCP-Abfragen ergänzen bestätigte Messwerte. Bestehende Variablen, Idents, Objekt-IDs und Archive bleiben erhalten.
-- **Gemeinsame Istwertliste:** bevorzugte Quelle je Messwert, Sammelauswahl für passende Zuordnungen, tatsächliche Lesequelle und eigener Datenstatus. Gespeicherte Einzelzuordnungen bleiben erhalten; die Quellenwahl betrifft nur das Lesen.
-- **Einfachere Konfiguration:** Verbindung und Lesen direkt unter „Modul aktiv“, gemeinsamer Abfragetakt, Firmware- und Schnittstellenerkennung. Sicher nicht unterstützte Protokolle werden ausgeblendet; keine Gateway- oder Client-Socket-Instanz erforderlich.
-- **Eigenständige SHI-Regelung:** 129 dokumentierte Punkte, darunter 41 Holding-Funktionen. Auswahl erzeugt eigene Steuervariablen; Modusabhängigkeiten werden beim Senden automatisch gesetzt, Freigaben und Grenzen geprüft und Schreibwerte zurückgelesen. Negative Offsets werden korrekt als vorzeichenbehaftete Werte verarbeitet. Bisherige Java-Steuerungen und Zeitprogramme bleiben erhalten.
-- **WebSocket für alte und neue Firmware:** XML und JSON, automatische Erfassung der Informationsseiten samt Untermenüs, Energiemonitor, EEV-Werte und vollständige Fehlerhistorie. Diagnoseberichte für WebSocket und Modbus können heruntergeladen werden.
-- **Neue HTML-SDK-Grafik:** Luft/Wasser oder Sole/Wasser im gleichen Stil; bei Sole mit Quellen-Eintritt, -Austritt und Pumpenzustand statt Lüfter und Abtau-Restzeit. Ein Standard-Heizkreis und optional ein zweiter Kreis, Reihenpuffer im Rücklauf, Warmwasser, Solarthermie mit wählbarem Speicherziel sowie Zirkulation.
-- **Bedienung in der Grafik:** Betriebsarten und Sollwerte, bis zu drei Raumtemperaturen und Heizstäbe, optionales Wettersymbol und bedienbares Reglerdisplay. Die Darstellung folgt dem Symcon-Design und ist ab 9.1 maximierbar.
-- **COP und JAZ:** interner COP automatisch ohne externe Leistungsquelle; ausgewählte externe Messung hat Vorrang. Elektrische Leistung und Energiezähler bleiben getrennt.
-- **Aktualisierung und Darstellung:** Sammelauswahl der Lesequelle, keine zusätzliche Modbus-Cachepause zwischen Aktualisierungen, verständliche SHI-Freigaben, volle Kachelfläche ohne reservierten Titelbereich, verständlicher Displayzugang und einheitliche Temperaturdarstellung. Die registerbedingte 100-W-Auflösung bleibt bestehen.
-- **Robustere Einrichtung:** neue Instanz ohne konfigurierte IP mit deaktivierter Abfrage und ohne Verbindungsfehler im Systemlog; lokale Prüfungen für Anlage, Protokolle, Steuerung und Darstellung. Gerätetests und die Prüfung im jeweiligen Symcon-System bleiben zusätzlich erforderlich.
-- **Schutz vor Warnungskaskaden:** Bei nicht verfügbarer Instanzschnittstelle werden Aktualisierung, Variablenmeldungen, Formular, Grafik und Konfiguration beim ersten Fehler abgebrochen. Beide Symcon-Meldungen „InstanceInterface is not available“ und „InstanceInterface is not a PHP module“ werden erkannt.
-- **Aktuelle Steuerrückmeldungen:** Betriebsarten über Java 3003 (Warmwasser 4, Heizung 3, Kühlen 108), Warmwasser Soll über 3004/ID 18 und Heizkorrektur über 3003/Parameter 1. Die Werte werden unabhängig von angelegten Variablen intern gelesen; der Java-Warmwasser-Schreibbefehl bleibt Parameter 105. SHI-Steuervariablen zeigen beim Schalten sofort den Wunschwert, während die Bestätigung getrennt erfolgt; bei Fehlern wird die Anzeige zurückgesetzt.
-- **SHI-Nachkommastellen:** Die 19 Vorgaben mit Zehntelauflösung erhalten eine ausdrückliche Schieberegler-Schrittweite von 0,1. Vorhandene Modulprofile und konvertierte Schieberegler mit ganzen Schritten werden auf derselben Variable korrigiert. Die Heizkorrektur-Kachel übernimmt den intern gelesenen Java-Parameter 1 direkt.
-- **SHI-Schreibablauf:** dokumentierte Modusabhängigkeiten vor der Vorgabe setzen und bestätigen; bei Fehlern selbst geänderte Modi nach Möglichkeit zurücknehmen. Verzögerte Rückmeldung der Warmwasserregister 10005–10008 bis zu 15 Sekunden je Register abwarten. Keine wiederholten Zielwertbefehle; eine fehlende Bestätigung nennt gesendeten und gelesenen Wert. Alle ausgewählten SHI-Steuervariablen werden aus ihren tatsächlichen Holding-Werten aktualisiert; wirksame Reglersollwerte bleiben eigene Istwerte.
+- Abwärtskompatibler Ausbau der Datenquellen: Java bleibt Standard; WebSocket und direkte Modbus-TCP-Abfragen ergänzen bestätigte Messwerte. Bestehende Variablen, Idents, Objekt-IDs und Archive bleiben erhalten.
+- Gemeinsame Istwertliste: bevorzugte Quelle je Messwert, Sammelauswahl für passende Zuordnungen, tatsächliche Lesequelle und eigener Datenstatus. Gespeicherte Einzelzuordnungen bleiben erhalten; die Quellenwahl betrifft nur das Lesen.
+- Einfachere Konfiguration: Verbindung und Lesen direkt unter „Modul aktiv“, gemeinsamer Abfragetakt, Firmware- und Schnittstellenerkennung. Sicher nicht unterstützte Protokolle werden ausgeblendet; keine Gateway- oder Client-Socket-Instanz erforderlich.
+- Eigenständige SHI-Regelung: 129 dokumentierte Punkte, darunter 41 Holding-Funktionen. Auswahl erzeugt eigene Steuervariablen; Modusabhängigkeiten werden beim Senden automatisch gesetzt, Freigaben und Grenzen geprüft und Schreibwerte zurückgelesen. Negative Offsets werden korrekt als vorzeichenbehaftete Werte verarbeitet. Bisherige Java-Steuerungen und Zeitprogramme bleiben erhalten.
+- WebSocket für alte und neue Firmware: XML und JSON, automatische Erfassung der Informationsseiten samt Untermenüs, Energiemonitor, EEV-Werte und vollständige Fehlerhistorie. Diagnoseberichte für WebSocket und Modbus können heruntergeladen werden.
+- Neue HTML-SDK-Grafik: Luft/Wasser oder Sole/Wasser im gleichen Stil; bei Sole mit Quellen-Eintritt, -Austritt und Pumpenzustand statt Lüfter und Abtau-Restzeit. Ein Standard-Heizkreis und optional ein zweiter Kreis, Reihenpuffer im Rücklauf, Warmwasser, Solarthermie mit wählbarem Speicherziel sowie Zirkulation.
+- Bedienung in der Grafik: Betriebsarten und Sollwerte, bis zu drei Raumtemperaturen und Heizstäbe, optionales Wettersymbol und bedienbares Reglerdisplay. Die Darstellung folgt dem Symcon-Design und ist ab 9.1 maximierbar.
+- COP und JAZ: interner COP automatisch ohne externe Leistungsquelle; ausgewählte externe Messung hat Vorrang. Elektrische Leistung und Energiezähler bleiben getrennt.
+- Aktualisierung und Darstellung: Sammelauswahl der Lesequelle, keine zusätzliche Modbus-Cachepause zwischen Aktualisierungen, verständliche SHI-Freigaben, volle Kachelfläche ohne reservierten Titelbereich, verständlicher Displayzugang und einheitliche Temperaturdarstellung. Die registerbedingte 100-W-Auflösung bleibt bestehen.
+- Robustere Einrichtung: neue Instanz ohne konfigurierte IP mit deaktivierter Abfrage und ohne Verbindungsfehler im Systemlog; lokale Prüfungen für Anlage, Protokolle, Steuerung und Darstellung. Gerätetests und die Prüfung im jeweiligen Symcon-System bleiben zusätzlich erforderlich.
+- Schutz vor Warnungskaskaden: Bei nicht verfügbarer Instanzschnittstelle werden Aktualisierung, Variablenmeldungen, Formular, Grafik und Konfiguration beim ersten Fehler abgebrochen. Beide Symcon-Meldungen „InstanceInterface is not available“ und „InstanceInterface is not a PHP module“ werden erkannt.
+- Aktuelle Steuerrückmeldungen: Betriebsarten über Java 3003 (Warmwasser 4, Heizung 3, Kühlen 108), Warmwasser Soll über 3004/ID 18 und Heizkorrektur über 3003/Parameter 1. Die Werte werden unabhängig von angelegten Variablen intern gelesen; der Java-Warmwasser-Schreibbefehl bleibt Parameter 105. SHI-Steuervariablen zeigen beim Schalten sofort den Wunschwert, während die Bestätigung getrennt erfolgt; bei Fehlern wird die Anzeige zurückgesetzt.
+- SHI-Nachkommastellen: Die 19 Vorgaben mit Zehntelauflösung erhalten eine ausdrückliche Schieberegler-Schrittweite von 0,1. Vorhandene Modulprofile und konvertierte Schieberegler mit ganzen Schritten werden auf derselben Variable korrigiert. Die Heizkorrektur-Kachel übernimmt den intern gelesenen Java-Parameter 1 direkt.
+- SHI-Schreibablauf: dokumentierte Modusabhängigkeiten vor der Vorgabe setzen und bestätigen; bei Fehlern selbst geänderte Modi nach Möglichkeit zurücknehmen. Verzögerte Rückmeldung der Warmwasserregister 10005–10008 bis zu 15 Sekunden je Register abwarten. Keine wiederholten Zielwertbefehle; eine fehlende Bestätigung nennt gesendeten und gelesenen Wert. Alle ausgewählten SHI-Steuervariablen werden aus ihren tatsächlichen Holding-Werten aktualisiert; wirksame Reglersollwerte bleiben eigene Istwerte.
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.

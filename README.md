@@ -4,29 +4,29 @@ Messwerte, Steuerung und Visualisierung für Wärmepumpen mit Luxtronik-Regler.
 Das Modul unterstützt verschiedene Hersteller, unter anderem Alpha Innotec,
 Buderus, CTA, Elco, Nibe, Roth, Novelan und Wolf.
 
-**Java bleibt Standard.** Version 5.0 ergänzt WebSocket und direkte
+Java bleibt Standard. Version 5.0 ergänzt WebSocket und direkte
 Modbus-TCP-/SHI-Anbindung mit einer gemeinsamen Istwertliste. Bestätigte
 Gegenstücke verwenden bestehende Variablen; die bisherigen Java-Steuerungen und
 Zeitprogramme bleiben erhalten. SHI-Vorgaben für externe Regelungen stehen als
 eigene Steuervariablen zur Verfügung.
 
-Die Betriebsarten und Heizkorrektur werden intern über Java-Befehl **3003**
-gelesen; **WW Soll** zeigt den wirksamen Sollwert aus **3004, ID 18**.
+Die Betriebsarten und Heizkorrektur werden intern über Java-Befehl 3003
+gelesen; WW Soll zeigt den wirksamen Sollwert aus 3004, ID 18.
 Diese Abfragen benötigen keine angelegten Symcon-Variablen. Die Heizkorrektur
 wird aus Parameter 1 gelesen. Details stehen in der
 [Moduldokumentation](WPLUX/README.md#rückmeldungen-der-steuerung).
 
-Die integrierte HTML-SDK-Grafik bietet **Luft/Wasser** und **Sole/Wasser** im
+Die integrierte HTML-SDK-Grafik bietet Luft/Wasser und Sole/Wasser im
 gleichen Stil, mit passenden Messwerten und optionalen Anlagenkomponenten.
 
 ## Einstieg
 
 1. Modul im Module Store installieren und eine Luxtronik-Instanz anlegen.
-2. Unter **Verbindung und Lesen** Geräte-IP, Java-Port und Aktualisierungsintervall eintragen.
+2. Unter Verbindung und Lesen Geräte-IP, Java-Port und Aktualisierungsintervall eintragen.
 3. Gewünschte Istwerte auswählen und übernehmen. Java ist voreingestellt; alternative Quellen lassen sich einzeln oder gesammelt zuweisen.
-4. Unter **HTML-SDK / Visualisierung** Wärmepumpentyp und Komponenten wählen.
+4. Unter HTML-SDK / Visualisierung Wärmepumpentyp und Komponenten wählen.
 
-Voraussetzung ist **IP-Symcon ab 8.1**. Java verwendet üblicherweise Port 8889
+Voraussetzung ist IP-Symcon ab 8.1. Java verwendet üblicherweise Port 8889
 (ältere Geräte 8888), WebSocket 8214, Modbus 502. Für die Firmware-Reihe V3 gilt:
 WebSocket ab 3.81, Modbus/SHI laut Hersteller ab 3.90.1 mit aktiviertem SHI.
 Andere Versionsreihen werden gesondert geprüft. Die Konfiguration zeigt die
@@ -44,7 +44,7 @@ erkannte Unterstützung. Ein Symcon-Modbus-Gateway wird nicht benötigt.
 
 ## Entwicklung und Tests
 
-Version 5.0 befindet sich auf **development**. Entwicklung, Commits und Pushes
+Version 5.0 befindet sich auf development. Entwicklung, Commits und Pushes
 erfolgen auf diesem Branch. Die offiziellen Symcon-Referenzen beginnen unter
 https://www.symcon.de/de/llms.txt.
 
