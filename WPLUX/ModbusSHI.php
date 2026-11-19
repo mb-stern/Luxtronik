@@ -90,50 +90,6 @@ trait LuxtronikModbusSHI
         return is_array($cache) && ($cache['source'] ?? '') === $this->VisualizationSourceKey() ? $cache : [];
     }
 
-    private function SHIDiagnosticState(string $source): array
-    {
-        $state = json_decode($this->GetBuffer('SHIDiagnostics'), true);
-        return ($state['source'] ?? '') === $source ? $state : ['source' => $source];
-    }
-
-    private function RecordSHIObservations(string $source, array $observations, ?string $error = null, bool $detectModeRelease = true): void
-    {
-        $firstReply = $observations['firstReplyAt'] ?? null;
-        if (($firstReply === null && $error === null) || $source !== $this->VisualizationSourceKey()) return;
-
-        $state = $this->SHIDiagnosticState($source);
-        $previousReply = $state['lastSuccessfulReadAt'] ?? null;
-        $previousFailure = $state['lastReadFailure']['at'] ?? 0;
-        if ($firstReply !== null) {
-            $state['lastSuccessfulReadAt'] = $observations['lastReplyAt'];
-            $seconds = $previousReply === null ? null : max(0.0, $firstReply - $previousReply);
-            // Keep long gaps even when no poll ran, e.g. while the instance was inactive.
-            if ($previousFailure > ($previousReply ?? 0) || ($seconds ?? 0) >= 600) {
-                $state['lastReadGap'] = ['previousReplyAt' => $previousReply, 'nextReplyAt' => $firstReply,
-                    'seconds' => $seconds === null ? null : round($seconds, 1)];
-                $message = $seconds === null ? 'Erste Modbus-Leseantwort nach einem Fehler.'
-                    : sprintf('Modbus-Leseantwort nach %.1f Sekunden seit der letzten erfolgreichen Antwort.', $seconds);
-                $this->SendDebug('SHI-Diagnose', $message, 0);
-            }
-        }
-        if ($error !== null) {
-            $state['lastReadFailure'] = ['at' => microtime(true), 'message' => $error];
-        }
-
-        foreach ($observations['modes'] ?? [] as $address => $reading) {
-            $previousMode = $state['modes'][$address] ?? null;
-            if ($detectModeRelease && $reading['mode'] === 0 && ($previousMode['mode'] ?? 0) > 0) {
-                $gap = $state['lastReadGap'] ?? null;
-                $state['lastModeReleases'][$address] = ['address' => $address, 'previousMode' => $previousMode['mode'],
-                    'lastActiveAt' => $previousMode['at'], 'observedAt' => $reading['at'],
-                    'readGap' => ($gap['nextReplyAt'] ?? 0) > $previousMode['at'] ? $gap : null];
-                $this->SendDebug('SHI-Diagnose', 'Holding-Register '.$address.': Modus '.$previousMode['mode'].' auf 0 gewechselt.', 0);
-            }
-            $state['modes'][$address] = $reading;
-        }
-        $this->SetBuffer('SHIDiagnostics', json_encode($state, JSON_THROW_ON_ERROR));
-    }
-
     private function PendingSHIWrite(): ?array
     {
         $pending=json_decode($this->GetBuffer('PendingSHIWrite'),true)??[];
@@ -154,7 +110,7 @@ trait LuxtronikModbusSHI
         }
     }
 
-    private function ReadSHIPoint(LuxtronikModbusClient $client, array $point, ?array &$observations = null): int|float|bool|null
+    private function ReadSHIPoint(LuxtronikModbusClient $client, array $point): int|float|bool|null
     {
         $words = match ($point['bank']) {
             'discrete'=>$client->readDiscreteInputs($point['address'],1),
@@ -162,17 +118,7 @@ trait LuxtronikModbusSHI
             default=>$client->readInputRegisters($point['address'],str_ends_with($point['datatype'],'32')?2:1)
         };
         $this->MarkInterfaceSupported('modbus');
-        $value = $this->DecodeModbusValue($words,$point['datatype'],(float)$point['factor']);
-        if ($observations !== null) {
-            $now = microtime(true);
-            $observations['firstReplyAt'] ??= $now;
-            $observations['lastReplyAt'] = $now;
-            if ($point['bank'] === 'holding' && str_starts_with($point['ident'], 'SHI_Modus_')
-                && is_int($value) && isset($point['options'][$value])) {
-                $observations['modes'][$point['address']] = ['mode' => $value, 'at' => $now];
-            }
-        }
-        return $value;
+        return $this->DecodeModbusValue($words,$point['datatype'],(float)$point['factor']);
     }
 
     private function JavaHasMeasurement(string $ident): bool
@@ -224,7 +170,6 @@ trait LuxtronikModbusSHI
         if(!IPS_SemaphoreEnter($lock,1)) return;
         $client=null;
         $queried=false;
-        $observations=[];
         $cache=['source'=>$source,'updatedAt'=>time(),'stale'=>false,'points'=>[],'requestedKeys'=>$keys,'supplement'=>true,'error'=>null];
         if($preferredOnly && empty($previous['stale'])) $cache['points']=$previous['points']??[];
         try {
@@ -235,7 +180,7 @@ trait LuxtronikModbusSHI
                         $cache['points'][$key]=$old;continue;
                     }
                     $queried=true;$client??=$this->NewSHIClient();
-                    try {$value=$this->ReadSHIPoint($client,$point,$observations);}
+                    try {$value=$this->ReadSHIPoint($client,$point);}
                     catch(LuxtronikModbusException $error) {
                         if(!in_array($error->getCode(),[1,2,3],true)) throw $error;
                         $value=null;
@@ -254,7 +199,6 @@ trait LuxtronikModbusSHI
             if(!$queried && $previous!==[]) $cache['updatedAt']=$previous['updatedAt'];
             $cache['nextAttempt']=$cache['error']!==null?microtime(true)+120:0;
             if($source!==$this->VisualizationSourceKey()) return;
-            $this->RecordSHIObservations($source, $observations, $cache['error']);
             $this->SetBuffer('SHICache',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
             if(!$preferredOnly) $this->PublishModbusSupplement();
         } finally {
@@ -279,8 +223,6 @@ trait LuxtronikModbusSHI
         $client=null;
         $source=$this->VisualizationSourceKey();
         $status=201;
-        $observations=[];
-        $pollError=null;
         try {
             try {
                 $client=$this->NewSHIClient();
@@ -289,7 +231,7 @@ trait LuxtronikModbusSHI
                 $unavailable=[];
                 foreach ($this->SHICatalog() as $key=>$point) {
                     try {
-                        $value=$this->ReadSHIPoint($client,$point,$observations);
+                        $value=$this->ReadSHIPoint($client,$point);
                     } catch (LuxtronikModbusException $error) {
                         if (!in_array($error->getCode(),[1,2,3],true)) throw $error;
                         $value=null;
@@ -309,10 +251,8 @@ trait LuxtronikModbusSHI
                 $status=$points===[]?203:($unavailable===[]?102:204);
             } catch (InvalidArgumentException $error) {
                 $status=202;
-                $pollError=$error->getMessage();
                 $this->LogMessage($error->getMessage(),KL_ERROR);
             } catch (RuntimeException $error) {
-                $pollError=$error->getMessage();
                 $cache=$this->SHICache();
                 if ($cache!==[]) {
                     $cache['stale']=true;
@@ -323,7 +263,6 @@ trait LuxtronikModbusSHI
                 $client?->close();
             }
             if ($source!==$this->VisualizationSourceKey() || !$this->ReadPropertyBoolean('InstanceStatus')) return;
-            $this->RecordSHIObservations($source, $observations, $pollError);
             $complete=$this->ReadSHIJavaSupplement();
             if ($source!==$this->VisualizationSourceKey() || !$this->ReadPropertyBoolean('InstanceStatus')) return;
             $this->PublishSHIValues();
@@ -539,7 +478,6 @@ trait LuxtronikModbusSHI
     public function GetSHIData(): string
     {
         $cache=$this->SHICache();
-        $diagnostics=$this->SHIDiagnosticState($this->VisualizationSourceKey());
         $pending=$this->PendingSHIWrite();
         $values=[];
         foreach ($this->SHICatalog() as $key=>$point) {
@@ -558,9 +496,6 @@ trait LuxtronikModbusSHI
         foreach(json_decode($this->ReadPropertyString('IDListe'),true)??[] as $row) if(isset($row['preferredSource']))
             $preferences[(int)$row['id']]=$this->MeasurementSourceOrder((int)$row['id']);
         return json_encode(['transport'=>'Modbus TCP (Direktverbindung)','gatewayID'=>0,'updatedAt'=>$cache['updatedAt']??null,'stale'=>$cache['stale']??true,'values'=>$values,
-            'connectionDiagnostics'=>['lastSuccessfulReadAt'=>$diagnostics['lastSuccessfulReadAt']??null,
-                'lastReadFailure'=>$diagnostics['lastReadFailure']??null,'lastReadGap'=>$diagnostics['lastReadGap']??null,
-                'lastModeReleases'=>array_values($diagnostics['lastModeReleases']??[])],
             'javaSupplementEnabled'=>true,'javaSupplement'=>$java,'measurementPriority'=>['Java','WebSocket','Modbus/SHI'],
             'measurementPreferences'=>$preferences,'javaOnlyWritesRemainAvailable'=>true,
             'nativeControlSource'=>'Java','shiControlsEnabled'=>$this->SHIWritingEnabled(),
@@ -668,9 +603,8 @@ trait LuxtronikModbusSHI
             }
             $this->ConfirmSHIWrite($client,$point['address'],$word);
             $confirmed=[];
-            $observations=[];
             foreach ([$point['address'],...array_keys($deps)] as $address) {
-                $value=$this->ReadSHIPoint($client,$catalog['holding:'.$address],$observations);
+                $value=$this->ReadSHIPoint($client,$catalog['holding:'.$address]);
                 $expected=$address===$point['address']?$this->DecodeModbusValue([$word],$point['datatype'],(float)$point['factor']):$deps[$address];
                 if ($value!==$expected) {
                     $definition=$catalog['holding:'.$address];
@@ -681,7 +615,6 @@ trait LuxtronikModbusSHI
                 $confirmed['holding:'.$address]=['value'=>$value,'changedAt'=>microtime(true)];
             }
             if($source!==$this->VisualizationSourceKey()) throw new RuntimeException('Die SHI-Geräteverbindung wurde während des Schreibens geändert.');
-            $this->RecordSHIObservations($source, $observations, detectModeRelease: false);
             $cache=$this->SHICache();
             $cache['source']=$this->VisualizationSourceKey();
             // Writing cannot make an earlier failed/full scan current again.

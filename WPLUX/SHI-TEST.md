@@ -130,15 +130,6 @@ und enthält auch nicht zugeordnete Felder; Zugangsdaten und LCD-Bilddaten fehle
 `GetSHIData()` nennt als Transport **Modbus TCP (Direktverbindung)**. Der zuvor
 zur Gateway-Fehlersuche ergänzte Abschnitt `connectionSetup` entfällt.
 
-Unter `connectionDiagnostics` stehen die letzte erfolgreiche Modbus-Leseantwort,
-der letzte Lesefehler und die letzte erkannte Leselücke. Das Modul hält eine Lücke
-ab zehn Minuten oder bei der ersten Antwort nach einem Lesefehler fest. Der Bericht
-merkt sich auch, wann ein zuvor aktiver Heiz-, Warmwasser- oder Mischkreismodus
-wieder als 0 („Kein Einfluss“) gelesen wurde. Wenn nach der letzten aktiven Rückmeldung
-eine Leselücke erkannt wurde, steht sie beim Moduswechsel dabei. Zeitangaben sind
-Unix-Zeitstempel. Die Dauer misst den Abstand zwischen den Leseantworten dieser
-Instanz. Für die Ursache des Rückfalls bleibt das EventLog des Reglers massgebend.
-
 ## Firmware-Erkennung prüfen
 
 - V3.79: WebSocket-/SHI-Bereiche verborgen.
