@@ -4325,7 +4325,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             } elseif (!filter_var($address, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
                 return '';
             }
-            $url = 'http://' . $address . '/Webserver/index.html';
+            $url = 'http://' . $address . '/';
         }
         $parts = parse_url($url);
         if ($parts === false || !in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
@@ -4635,6 +4635,8 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     {
         $items = [
             ['type' => 'Label', 'caption' => 'Komponenten auswählen; die Grafik erhält ihre internen Messwerte automatisch, unabhängig von der ID-Liste.'],
+            ['type' => 'ValidationTextBox', 'name' => 'LuxtronikWebInterfaceURL',
+                'caption' => 'Original-Webinterface (optional, leer = IP-Adresse)'],
             ['type'=>'Select','name'=>'VisualizationHeatPumpType','caption'=>'Wärmepumpentyp',
                 'options'=>[['caption'=>'Luft/Wasser','value'=>'A2W'],['caption'=>'Sole/Wasser','value'=>'G2W']]],
             $this->VariableSelect('Wettercode (OpenWeather, z. B. 10d; optional)', 'VisualizationWeatherCode'),

@@ -267,6 +267,11 @@ ursprüngliche WebSocket-Protokoll mit dem Regler. Aus einer HTTPS-Visualisierun
 bietet es das separat geöffnete Originalinterface an. Im SHI-Lesebetrieb und bei
 deaktivierter Instanz wird das Bedienfeld nicht angeboten.
 
+„Originalinterface öffnen“ verwendet standardmäßig die IP-Adresse des Reglers
+als Webadresse, etwa `http://192.168.178.59/`. Wenn ein älterer Regler den Pfad
+`/Webserver/index.html` benötigt, unter „HTML-SDK / Visualisierung“ im Feld
+„Original-Webinterface“ die vollständige URL mit diesem Pfad eintragen.
+
 XML-Nachrichten älterer Firmware und JSON-Nachrichten neuerer Firmware werden
 automatisch unterschieden. Bei JSON wird die LCD-Bitmap aus `Content.remote`
 gelesen; nachfolgende `Values.items` aktualisieren sie über ihre Displaykennung.
