@@ -286,19 +286,16 @@ SHI-API-Zugriffe ohne Variablenauswahl steht unter Diagnose.
 
 ### 8. Versionen
 
-Version 5.0 (in Vorbereitung; Änderungen seit der bisherigen Version)
+Version 5.0 (in Vorbereitung)
 
-- Java bleibt Standard. WebSocket und direkte Modbus-TCP-/SHI-Abfragen ergänzen zugeordnete Messwerte. Die bisherigen Java-Steuerungen bleiben verfügbar.
-- Neue Symcon-Variablendarstellungen. Das Modul erstellt und ändert keine klassischen Profile mehr. „Übernehmen“ stellt bestehende Standardzuordnungen um. Objekt-IDs, Namen, Datentypen, Werte, Archive und eigene Profilzuordnungen bleiben erhalten.
-- Gemeinsame Istwertliste mit Quellenwahl je Messwert, Sammelauswahl und Anzeige der tatsächlichen Quelle sowie des Datenstatus. Die Quellenwahl betrifft nur das Lesen; gespeicherte Einzelzuordnungen bleiben erhalten.
-- Einfachere Konfiguration: Verbindung und Lesen direkt unter „Modul aktiv“, gemeinsamer Abfragetakt und Firmware-/Schnittstellenerkennung. Sicher nicht unterstützte Bereiche werden ausgeblendet. Kein Modbus-Gateway oder Client Socket erforderlich.
-- WebSocket unterstützt XML und JSON sowie Informationsseiten mit Untermenüs, Energiemonitor, EEV-Werten und Fehlerhistorie. Diagnoseberichte für WebSocket und Modbus stehen zum Download bereit.
-- Eigenständige SHI-Regelung mit 129 dokumentierten Punkten und 41 Holding-Funktionen. Ausgewählte Vorgaben erzeugen eigene Steuervariablen. Modi werden beim Senden automatisch gesetzt, Freigaben und Grenzen geprüft. Die 19 Vorgaben mit Nachkommastellen erhalten 0,1er-Schritte.
-- SHI-Schreibwerte werden zurückgelesen. Warmwasser-Rückmeldungen dürfen bis zu 15 Sekunden je Register benötigen, ohne erneutes Senden. Wunschwerte erscheinen sofort; bei Fehlern wird die Anzeige zurückgesetzt und geänderte Modi werden nach Möglichkeit zurückgenommen. Lesen und Neustarts wiederholen keine alten Vorgaben.
-- Neue HTML-SDK-Grafik für Luft/Wasser und Sole/Wasser. Bei Sole stehen Quellen-Eintritt, -Austritt und Pumpenzustand statt Lüfter und Abtau-Restzeit. Optional: zweiter Heizkreis, Reihen-Rücklaufpuffer, Warmwasser, Solarthermie mit Speicherziel, Zirkulation, Raumtemperaturen und Heizstäbe. Bedienbare Betriebsarten, Sollwerte und Reglerdisplay; ab Symcon 9.1 maximierbar und Titel ausblendbar.
-- Steuerrückmeldungen werden unabhängig von angelegten Variablen intern gelesen: Betriebsarten und Heizkorrektur über Java 3003, Warmwasser-Soll über 3004/ID 18. Die Heizkorrektur-Kachel nutzt Parameter 1; Warmwasser wird weiterhin über Parameter 105 geschrieben.
-- COP nutzt ohne externe Leistungsquelle automatisch die interne Aufnahme aus ID 268. Externe Leistungsmessungen haben Vorrang; JAZ verwendet die konfigurierten Energiezähler.
-- Keine zusätzliche Modbus-Cachepause zwischen Aktualisierungen. Neue Instanzen ohne Geräte-IP fragen nicht ab und erzeugen keine Verbindungsfehler. Nicht verfügbare Instanzschnittstellen werden abgefangen, um Warnungskaskaden zu verhindern.
+- Umstellung von Variablenprofilen auf die neue Symcon-Variablendarstellung. Einheiten, Nachkommastellen und Schrittweiten stehen direkt an der Variable. Beim ersten „Übernehmen“ wird die neue Standarddarstellung auf die bestehenden Variablen angewendet.
+- WebSocket und direktes Modbus TCP/SHI ergänzen Java um zusätzliche Istwerte. In der gemeinsamen Istwertliste lässt sich die Lesequelle einzeln oder gesammelt wählen. Die Liste zeigt die tatsächlich verwendete Quelle und den Datenstatus.
+- Das vereinfachte Formular bündelt Verbindung und Lesen direkt unter „Modul aktiv“. Die Firmware- und Schnittstellenerkennung blendet verfügbare Optionen ein. Alle Lesequellen nutzen denselben Aktualisierungstakt.
+- WebSocket liest über XML und JSON auch Werte aus dem Energiemonitor, EEV-Werte und die Fehlerhistorie. Diagnoseberichte für WebSocket und Modbus lassen sich herunterladen.
+- SHI bietet eigene Steuervariablen für die externe Regelung. Beim Senden setzt das Modul den benötigten Modus, prüft Freigaben und Grenzen und liest den Wert zur Bestätigung zurück. Temperaturen, Offsets und Leistungsgrenzen lassen sich in 0,1er-Schritten einstellen.
+- Neue HTML-SDK-Grafik für Luft/Wasser- und Sole/Wasser-Wärmepumpen. Die Solevariante zeigt Quelleneintritt, Quellenaustritt und Pumpenzustand. Komponenten wie ein zweiter Heizkreis, Rücklaufpuffer, Solarthermie und Zirkulation lassen sich einblenden. Ab Symcon 9.1 lässt sich die Kachel maximieren und der Titel ausblenden.
+- Die Grafik liest Betriebsarten, Heizkorrektur und den wirksamen Warmwasser-Sollwert direkt aus dem Regler. Das integrierte Reglerdisplay erkennt XML und JSON. Der Link zum Original-Webinterface passt sich automatisch an die Firmware an.
+- Bei fehlender externer Leistungsquelle berechnet das Modul den COP automatisch mit der internen elektrischen Leistungsaufnahme (Java-ID 268).
 
 Version 4.7 (19.10.2026)
 - Socket-Abfragen und Prüfung der Steuerwerte verbessert.
