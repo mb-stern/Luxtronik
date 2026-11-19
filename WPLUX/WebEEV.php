@@ -622,12 +622,12 @@ trait LuxtronikWebEEV
         $this->UpdateFormField('WebSocketStatus','caption',$this->WebSocketStatusCaption());
     }
 
-    private function EnsureWebVariable(int $id,array $point): void
+    private function EnsureWebVariable(int $id,array $point,bool $setPosition=true): void
     {
         $native = isset($point['native']) ? self::DATA_POINT_CONFIG[$point['native']] : null;
         $this->RegisterLuxtronikVariable($native['type'] ?? $point['type'], $point['ident'], $point['label'],
             $native['profile'] ?? $point['profile'] ?? 'WPLUX.EEV.Percent', $point['native'] ?? $id, digits: $native['decimals'] ?? 1);
-        if(isset(self::WEB_ONLY_POINTS[$id])) IPS_SetPosition($this->GetIDForIdent($point['ident']),$id);
+        if($setPosition && isset(self::WEB_ONLY_POINTS[$id])) IPS_SetPosition($this->GetIDForIdent($point['ident']),$id);
     }
 
     private function SyncWebVariableSelection(): void

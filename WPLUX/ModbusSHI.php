@@ -431,7 +431,9 @@ trait LuxtronikModbusSHI
             $definition['Associations'][] = ['Value' => $value, 'Name' => $label];
         }
         $presentation = $this->BuildVariablePresentation($type, $definition, $adjustable);
-        $this->RegisterLuxtronikVariable($type, $ident, $this->SHIVariableLabel($point), $presentation, $point['selection']);
+        $formerProfile = 'WPLUX.SHI.'.strtoupper($point['bank'][0]).$point['address'];
+        $this->RegisterLuxtronikVariable($type, $ident, $this->SHIVariableLabel($point), $presentation,
+            $point['selection'], $adjustable, formerProfile: $formerProfile);
         if ($adjustable && $type === 'float') {
             $id = $this->GetIDForIdent($ident);
             if ($id !== false && IPS_GetVariable($id)['VariableType'] === VARIABLETYPE_FLOAT) {

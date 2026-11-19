@@ -79,7 +79,8 @@ trait LuxtronikVariablePresentation
         string|array $definition,
         int $position,
         bool $adjustable = false,
-        int $digits = 0
+        int $digits = 0,
+        string $formerProfile = ''
     ): bool {
         [$variableType, $register] = match ($type) {
             'bool' => [VARIABLETYPE_BOOLEAN, 'RegisterVariableBoolean'],
@@ -106,11 +107,32 @@ trait LuxtronikVariablePresentation
             ? $this->PresentationFromProfile($type, $definition, $adjustable, $digits)
             : $definition;
         if ($id !== false) {
-            if (array_intersect_key($current, $presentation) == $presentation) return false;
-            $name = IPS_GetName($id);
-            $position = IPS_GetObject($id)['ObjectPosition'];
+            if (array_intersect_key($current, $presentation) != $presentation) {
+                $this->$register($ident, IPS_GetName($id), $presentation, IPS_GetObject($id)['ObjectPosition']);
+            }
+            $this->MigrateFormerProfileOverride($id, $variable, $type,
+                is_string($definition) ? $definition : $formerProfile, $adjustable, $presentation);
+            return false;
         }
         return $this->$register($ident, $name, $presentation, $position);
+    }
+
+    private function MigrateFormerProfileOverride(int $id, array $variable, string $type, string $formerProfile,
+        bool $adjustable, array $presentation): void
+    {
+        $custom = $variable['VariableCustomPresentation'] ?? [];
+        if ($custom !== [] && ($custom['PRESENTATION'] ?? '') !== VARIABLE_PRESENTATION_LEGACY) return;
+        $profile = $custom['PROFILE'] ?? $variable['VariableCustomProfile'] ?? '';
+        if ($profile === '' || $profile !== $formerProfile) return;
+
+        $replacement = $presentation;
+        if (!in_array($profile, ['~UnixTimestamp', '~UnixTimestampTime', '~Switch'], true) && IPS_VariableProfileExists($profile)) {
+            $replacement = $this->BuildVariablePresentation($type, IPS_GetVariableProfile($profile), $adjustable);
+        }
+        // A duplicate of the module default can inherit future changes. Preserve any distinct options or formatting.
+        $default = IPS_GetVariable($id)['VariablePresentation'] ?? [];
+        $inheritsDefault = $replacement == $presentation && array_intersect_key($default, $presentation) == $presentation;
+        IPS_SetVariableCustomPresentation($id, $inheritsDefault ? [] : $replacement);
     }
 
     private function PresentationFromProfile(string $type, string $profile, bool $adjustable, int $digits): array
@@ -155,8 +177,17 @@ trait LuxtronikVariablePresentation
             $intervals = [];
             foreach ($associations as $association) {
                 $value = $type === 'int' ? (int) $association['Value'] : (float) $association['Value'];
-                $intervals[] = ['IntervalMinValue' => $value, 'IntervalMaxValue' => $value,
+                $interval = ['IntervalMinValue' => $value, 'IntervalMaxValue' => $value,
                     'ConstantActive' => true, 'ConstantValue' => $association['Name']];
+                if (!empty($association['Icon'])) {
+                    $interval['IconActive'] = true;
+                    $interval['IconValue'] = $association['Icon'];
+                }
+                if (($association['Color'] ?? -1) >= 0) {
+                    $interval['ColorActive'] = true;
+                    $interval['ColorValue'] = $association['Color'];
+                }
+                $intervals[] = $interval;
             }
             return ['PRESENTATION' => $valuePresentation, 'ICON' => $definition['Icon'] ?? '',
                 'INTERVALS_ACTIVE' => true, 'INTERVALS' => json_encode($intervals, JSON_THROW_ON_ERROR)];
@@ -210,17 +241,28 @@ trait LuxtronikVariablePresentation
     private function UpdateStoredMeasurementPresentations(): void
     {
         $web = $this->WebDefinitions();
-        foreach ($this->MeasurementRows() as $row) {
-            if (empty($row['enabled'])) continue;
-            $id = (int) ($row['id'] ?? 0);
-            if ($id > 0 && $id < self::MAX_RESPONSE_VALUES) {
+        $shi = $this->SHISelections();
+        $javaByIdent = [];
+        foreach (self::DATA_POINT_CONFIG as $id => $point) $javaByIdent[$point['name']] = $id;
+        $shiByIdent = array_column($shi, null, 'ident');
+        $webByIdent = [];
+        foreach ($web as $id => $point) $webByIdent[$point['ident']] = $id;
+
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $objectId) {
+            if (!IPS_VariableExists($objectId)) continue;
+            $ident = IPS_GetObject($objectId)['ObjectIdent'];
+            if (isset($javaByIdent[$ident])) {
+                $id = $javaByIdent[$ident];
+                $this->EnsureJavaMeasurementVariable($ident, $id, $this->GetDataPointConfig($id));
+            } elseif (isset($shiByIdent[$ident])) {
+                $this->EnsureSHIVariable($shiByIdent[$ident]);
+            } elseif (isset($webByIdent[$ident])) {
+                $id = $webByIdent[$ident];
+                $this->EnsureWebVariable($id, $web[$id], setPosition: false);
+            } elseif (preg_match('/^ID_(\d+)$/D', $ident, $match) && (int) $match[1] < self::MAX_RESPONSE_VALUES) {
+                $id = (int) $match[1];
                 $point = $this->GetDataPointConfig($id);
-                $ident = $point['name'];
-                if (@$this->GetIDForIdent($ident) !== false) {
-                    $this->EnsureJavaMeasurementVariable($ident, $id, $point);
-                }
-            } elseif (isset($web[$id]) && @$this->GetIDForIdent($web[$id]['ident']) !== false) {
-                $this->EnsureWebVariable($id, $web[$id]);
+                if ($point['name'] === $ident) $this->EnsureJavaMeasurementVariable($ident, $id, $point);
             }
         }
     }

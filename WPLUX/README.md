@@ -224,6 +224,9 @@ Betriebsarten, Schieberegler für Sollwerte und Uhrzeiten für Zeitprogramme.
 Beim Übernehmen der Konfiguration wechseln bestehende Standarddarstellungen auf
 denselben Variablen. Objekt-ID, Name, Datentyp, Wert und Archiv bleiben erhalten.
 Benutzerdefinierte Darstellungen und Profilzuordnungen behalten Vorrang.
+Eine zusätzliche Zuweisung des früheren Standardprofils wird ebenfalls auf
+die neue Darstellung umgestellt. Eigene Texte und Formatierungen aus diesem
+Profil werden übernommen.
 
 Einheit, Schrittweite und Nachkommastellen stehen in der Darstellung der
 Variablen. Änderungen daran kann das Modul direkt übernehmen. Vorhandene

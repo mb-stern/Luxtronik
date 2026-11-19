@@ -80,6 +80,35 @@ $tests['Apply upgrades variable defaults in place and builds native presentation
     check(IPS_GetVariablePresentation($module->GetIDForIdent('SHI_Modus_Heizen'))['PRESENTATION'] === VARIABLE_PRESENTATION_ENUMERATION
         && IPS_GetVariablePresentation($module->GetIDForIdent('SHI_Offset_Heizen'))['STEP_SIZE'] === 0.1, 'SHI modes or step lost');
 };
+$tests['retained Betriebszustand variables lose duplicate legacy profile overrides without losing their captions'] = static function():void {
+    ensureLegacyLuxtronikProfiles();
+    $profile = IPS_GetVariableProfile('WPLUX.BZ');
+    foreach ([false, true] as $adjusted) {
+        $module = new Luxtronik();
+        $module->properties['InstanceStatus'] = false;
+        $module->RegisterVariableInteger('Betriebszustand', 'Mein Zustand', 'WPLUX.BZ', 22);
+        $id = $module->GetIDForIdent('Betriebszustand');
+        $GLOBALS['testVariables'][$id]['value'] = 4;
+        if ($adjusted) $module->ApplyChanges(); // The default has already migrated, but an old override remains.
+        IPS_SetVariableCustomPresentation($id, ['PRESENTATION' => VARIABLE_PRESENTATION_LEGACY, 'PROFILE' => 'WPLUX.BZ']);
+        if ($adjusted) $GLOBALS['testProfiles']['WPLUX.BZ']['Associations'][4]['Name'] = 'Mein Abtau-Status';
+        $module->ApplyChanges();
+        $variable = IPS_GetVariable($id);
+        check($module->GetIDForIdent('Betriebszustand') === $id && IPS_GetName($id) === 'Mein Zustand'
+            && IPS_GetObject($id)['ObjectPosition'] === 22 && GetValue($id) === 4, 'Status object or data changed');
+        check($variable['VariableCustomProfile'] === '' && IPS_GetVariablePresentation($id)['PRESENTATION'] === VARIABLE_PRESENTATION_VALUE_PRESENTATION, 'Old profile still overrides the new status display');
+        check(GetValueFormatted($id) === ($adjusted ? 'Mein Abtau-Status' : 'Abtauen'), 'Status caption was lost');
+        check(($variable['VariableCustomPresentation'] !== []) === $adjusted, 'Exact duplicate was retained or an edited display was discarded');
+    }
+    $GLOBALS['testProfiles']['WPLUX.BZ'] = $profile;
+    $module = new Luxtronik();
+    $module->RegisterVariableInteger('Betriebszustand', 'Mein Zustand', 'WPLUX.BZ');
+    $id = $module->GetIDForIdent('Betriebszustand');
+    $custom = ['PRESENTATION' => VARIABLE_PRESENTATION_LEGACY, 'PROFILE' => 'Mein.Profil'];
+    IPS_SetVariableCustomPresentation($id, $custom);
+    $module->ApplyChanges();
+    check(IPS_GetVariablePresentation($id) === $custom, 'An unrelated custom profile was changed');
+};
 $failed=0;foreach($tests as $name=>$test) {
     try {$test();echo "PASS $name\n";} catch(Throwable $error) {++$failed;fwrite(STDERR,"FAIL $name: ".$error->getMessage()."\n");}
 }

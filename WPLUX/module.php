@@ -174,6 +174,7 @@ class Luxtronik extends IPSModuleStrict
                 : 1
         );
         $this->SyncWebVariableSelection();
+        $this->UpdateStoredMeasurementPresentations();
         $this->RefreshVisualization(true);
 
         $this->DisableSHIActions();
@@ -187,7 +188,6 @@ class Luxtronik extends IPSModuleStrict
 
         $this->SetStatus(102); // Instanz aktiv
 
-        $this->UpdateStoredMeasurementPresentations();
         $this->SyncSHIControlVariables();
         $this->SyncSHIReadVariables();
 

@@ -18,6 +18,7 @@ const VARIABLE_PRESENTATION_ENUMERATION = '{52D9E126-D7D2-2CBB-5E62-4CF7BA7C5D82
 const VARIABLE_PRESENTATION_VALUE_PRESENTATION = '{3319437D-7CDE-699D-750A-3C6A3841FA75}';
 const VARIABLE_PRESENTATION_DATE_TIME = '{497C4845-27FA-6E4F-AE37-5D951D3BDBF9}';
 const VARIABLE_PRESENTATION_SWITCH = '{60AE6B26-B3E2-BDB1-A3A1-BE232940664B}';
+const VARIABLE_PRESENTATION_LEGACY = '{4153A8D4-5C33-C65F-C1F3-7B61AAF99B1C}';
 
 $GLOBALS['testVariables'] = [];
 $GLOBALS['testNextID'] = 10000;
@@ -49,12 +50,18 @@ function IPS_SetName(int $id,string $name): bool { $GLOBALS['testVariables'][$id
 function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '', 'ObjectPosition' => $GLOBALS['testVariables'][$id]['position'] ?? 0]; }
 function IPS_SetPosition(int $id, int $position): bool { $GLOBALS['testVariables'][$id]['position']=$position; return true; }
 function IPS_GetParent(int $id): int { return $GLOBALS['testVariables'][$id]['instance'] ?? 0; }
+function IPS_GetChildrenIDs(int $id): array {
+    return array_keys(array_filter($GLOBALS['testVariables'], static fn(array $variable): bool => $variable['instance'] === $id));
+}
 function IPS_GetVariablePresentation(int $id): array {
     $v=$GLOBALS['testVariables'][$id];
-    return ($v['custom_presentation']??[]) ?: ($v['presentation']??$v['native_presentation']??[]);
+    if (!empty($v['custom_presentation'])) return $v['custom_presentation'];
+    if (!empty($v['custom_profile'])) return ['PRESENTATION'=>VARIABLE_PRESENTATION_LEGACY, 'PROFILE'=>$v['custom_profile']];
+    return $v['presentation']??$v['native_presentation']??[];
 }
 function IPS_SetVariableCustomPresentation(int $id,array $presentation): bool {
     $GLOBALS['testVariables'][$id]['custom_presentation']=$presentation;
+    $GLOBALS['testVariables'][$id]['custom_profile']=$presentation['PROFILE']??'';
     $GLOBALS['testPresentationChanges'][]=[$id,$presentation];return true;
 }
 function GetValueFormatted(int $id): string {
