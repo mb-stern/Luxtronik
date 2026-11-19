@@ -117,8 +117,8 @@ aussehen. Bei der Schrittweitenkorrektur wird der aktuelle Name beibehalten.
 Im SHI-Konfigurationsbereich stehen die Funktionsnamen ohne zusätzlichen SHI-Präfix.
 
 SHI-Temperaturen, Offsets und Leistungsgrenzen sind in 0,1er-Schritten
-bedienbar, beispielsweise +0,5 K beim Heizungs-Offset. Vorhandene Modulprofile
-und Schieberegler mit ganzen Schritten werden ohne Neuanlage der Variablen
+bedienbar, beispielsweise +0,5 K beim Heizungs-Offset. Beim Wechsel zur neuen
+Darstellung werden Schieberegler mit ganzen Schritten auf derselben Variable
 korrigiert. Betriebsmodi, Levels und Schalter behalten ihre festgelegten Werte.
 
 Am Beispiel 310000 bis 310003:
@@ -230,9 +230,9 @@ Profil werden übernommen.
 
 Einheit, Schrittweite und Nachkommastellen stehen in der Darstellung der
 Variablen. Änderungen daran kann das Modul direkt übernehmen. Vorhandene
-WPLUX-Profile bleiben für bestehende Verwendungen verfügbar. Eigene Skripte,
-die Darstellungsdaten über `VariableProfile` auslesen, verwenden für die neue
-Darstellung `IPS_GetVariablePresentation()`.
+WPLUX-Profile bleiben unverändert für bestehende Verwendungen verfügbar.
+Eigene Skripte, die Darstellungsdaten über `VariableProfile` auslesen, verwenden
+für die neue Darstellung `IPS_GetVariablePresentation()`.
 
 ### 6. Visualisierung
 

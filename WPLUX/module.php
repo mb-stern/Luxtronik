@@ -174,7 +174,7 @@ class Luxtronik extends IPSModuleStrict
                 : 1
         );
         $this->SyncWebVariableSelection();
-        $this->UpdateStoredMeasurementPresentations();
+        $this->UpdateStoredVariablePresentations();
         $this->RefreshVisualization(true);
 
         $this->DisableSHIActions();
@@ -230,7 +230,7 @@ class Luxtronik extends IPSModuleStrict
         // Steuervariablen erstellen und senden an die Funktion RequestAction
         if ($heizungVisible) 
         {
-            $this->RegisterLuxtronikVariable('int', 'Mode_Heizung', 'Modus Heizung', 'WPLUX.Wwhe', 0, adjustable: true);
+            $this->RegisterNativeControlVariable('Mode_Heizung', 'Modus Heizung', 0);
             $this->getParameter('Mode_Heizung');
             $Value = $this->GetValue('Mode_Heizung');
             $this->EnableAction('Mode_Heizung');
@@ -242,7 +242,7 @@ class Luxtronik extends IPSModuleStrict
 
         if ($warmwasserVisible) 
         {
-            $this->RegisterLuxtronikVariable('int', 'Mode_WW', 'Modus Warmwasser', 'WPLUX.Wwhe', 1, adjustable: true);
+            $this->RegisterNativeControlVariable('Mode_WW', 'Modus Warmwasser', 1);
             $this->getParameter('Mode_WW');
             $Value = $this->GetValue('Mode_WW');
             $this->EnableAction('Mode_WW');
@@ -254,7 +254,7 @@ class Luxtronik extends IPSModuleStrict
 
         if ($kuehlungVisible) 
         {
-            $this->RegisterLuxtronikVariable('int', 'Mode_Kuehlung', 'Modus Kühlung', 'WPLUX.Kue', 2, adjustable: true);
+            $this->RegisterNativeControlVariable('Mode_Kuehlung', 'Modus Kühlung', 2);
             $this->getParameter('Mode_Kuehlung');
             $Value = $this->GetValue('Mode_Kuehlung');   
             $this->EnableAction('Mode_Kuehlung');
@@ -266,7 +266,7 @@ class Luxtronik extends IPSModuleStrict
 
         if ($tempsetVisible) 
         {
-            $this->RegisterLuxtronikVariable('float', 'Anpassung_Temp', 'Temperaturkorrektur', 'WPLUX.Tset', 3, adjustable: true);
+            $this->RegisterNativeControlVariable('Anpassung_Temp', 'Temperaturkorrektur', 3);
             if (!$this->UsesModbusWrite('Anpassung_Temp')) $this->getParameter('Anpassung_Temp');
             $Value = $this->GetValue('Anpassung_Temp'); 
             $this->EnableAction('Anpassung_Temp');
@@ -278,7 +278,7 @@ class Luxtronik extends IPSModuleStrict
 
         if ($wwsetVisible) 
         {
-            $this->RegisterLuxtronikVariable('float', 'Anpassung_WW', 'Warmwasser Soll', 'WPLUX.Wset', 4, adjustable: true);
+            $this->RegisterNativeControlVariable('Anpassung_WW', 'Warmwasser Soll', 4);
             if (!$this->UsesModbusWrite('Anpassung_WW')) $this->getParameter('Anpassung_WW');
             $Value = $this->GetValue('Anpassung_WW'); 
             $this->EnableAction('Anpassung_WW');
@@ -290,7 +290,7 @@ class Luxtronik extends IPSModuleStrict
 
         if ($schwimmbadVisible) 
         {
-            $this->RegisterLuxtronikVariable('int', 'Mode_Schwimmbad', 'Modus Schwimmbad', 'WPLUX.Wwhe', 5, adjustable: true);
+            $this->RegisterNativeControlVariable('Mode_Schwimmbad', 'Modus Schwimmbad', 5);
             $this->getParameter('Mode_Schwimmbad');
             $this->EnableAction('Mode_Schwimmbad');
         } 
@@ -301,7 +301,7 @@ class Luxtronik extends IPSModuleStrict
 
         if ($rbesetVisible) 
         {
-            $this->RegisterLuxtronikVariable('float', 'Anpassung_RBE', 'Raumtemperatur Soll', 'WPLUX.Rset', 6, adjustable: true);
+            $this->RegisterNativeControlVariable('Anpassung_RBE', 'Raumtemperatur Soll', 6);
             if (!$this->UsesModbusWrite('Anpassung_RBE')) $this->getParameter('Anpassung_RBE');
             $Value = $this->GetValue('Anpassung_RBE'); 
             $this->EnableAction('Anpassung_RBE');
@@ -311,13 +311,13 @@ class Luxtronik extends IPSModuleStrict
             $this->UnregisterNativeNumericControl('Anpassung_RBE');
         }
 
-        $created = $this->RegisterLuxtronikVariable('float', 'copfaktor', 'COP-Faktor', 'WPLUX.Cop', 7);
+        $created = $this->RegisterNativeControlVariable('copfaktor', 'COP-Faktor', 7);
         if ($created) {
             $this->SetValueIfChanged('copfaktor', 0);
         }
 
         if ($jazVarId !== 0 && IPS_VariableExists($jazVarId)) {
-            $created = $this->RegisterLuxtronikVariable('float', 'jazfaktor', 'JAZ-Faktor', 'WPLUX.Cop', 8);
+            $created = $this->RegisterNativeControlVariable('jazfaktor', 'JAZ-Faktor', 8);
             if ($created) {
                 $this->SetValueIfChanged('jazfaktor', 0);
             }
@@ -385,7 +385,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterLuxtronikVariable('int', $id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->EnableAction($id);
                 // holt Wert von der Lux und schreibt intern per $this->SetValueIfChanged(...)
                 $this->getParameter($id);
@@ -462,7 +462,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterLuxtronikVariable('int', $id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);
@@ -547,7 +547,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterLuxtronikVariable('int', $id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);
@@ -660,7 +660,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterLuxtronikVariable('int', $id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);
@@ -777,7 +777,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterLuxtronikVariable('int', $id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);
@@ -933,7 +933,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterLuxtronikVariable('int', $id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);

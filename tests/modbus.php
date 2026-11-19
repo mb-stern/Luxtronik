@@ -257,7 +257,7 @@ $tests['all existing SHI names survive save and slider repair even when matching
     foreach($expected as $id=>$name) check(IPS_VariableExists($id) && IPS_GetName($id)===$name,'Saving replaced an object or renamed an existing SHI control');
 };
 
-$tests['all fractional SHI controls repair whole-number profiles on the same objects'] = static function():void {
+$tests['all fractional SHI controls replace whole-number profiles on the same objects'] = static function():void {
     $m=new Luxtronik();$catalog=invoke($m,'SHICatalog');$tested=0;
     foreach($catalog as $point) {
         if($point['bank']!=='holding' || $point['factor']>=1) continue;
@@ -265,8 +265,11 @@ $tests['all fractional SHI controls repair whole-number profiles on the same obj
         IPS_CreateVariableProfile($profile,VARIABLETYPE_FLOAT);
         IPS_SetVariableProfileValues($profile,(float)$point['min'],(float)$point['max'],1);
         IPS_SetVariableProfileDigits($profile,0);
+        IPS_SetVariableProfileText($profile,'',' '.$point['unit']);
+        $oldProfile=IPS_GetVariableProfile($profile);
         $value=max(0.5,$point['min']+0.5);
         $id=shiVariable($m,$point['ident'],$value,'Mein '.$point['ident'],$profile);
+        IPS_SetVariableCustomPresentation($id,['PRESENTATION'=>VARIABLE_PRESENTATION_LEGACY,'PROFILE'=>$profile]);
         $GLOBALS['testVariables'][$id]['custom_action']=91234;
         invoke($m,'EnsureSHIVariable',$point);
         $presentation=IPS_GetVariablePresentation($id);
@@ -274,7 +277,8 @@ $tests['all fractional SHI controls repair whole-number profiles on the same obj
             && $presentation['DIGITS']===1,'Fractional SHI control still offers whole steps: '.$point['ident']);
         check($presentation['MIN']===$point['min']*1.0 && $presentation['MAX']===$point['max']*1.0
             && $presentation['SUFFIX']===' '.$point['unit'],'SHI slider lost its documented range/unit');
-        check(IPS_GetVariableProfile($profile)['StepSize']===0.1 && IPS_GetVariableProfile($profile)['Digits']===1,'Legacy profile was not repaired');
+        check(IPS_GetVariable($id)['VariableProfile']==='' && IPS_GetVariable($id)['VariableCustomProfile']===''
+            && IPS_GetVariableProfile($profile)===$oldProfile,'Old profile remained assigned or was changed globally');
         check($m->GetIDForIdent($point['ident'])===$id && GetValue($id)===$value
             && IPS_GetName($id)==='Mein '.$point['ident'] && IPS_GetVariable($id)['VariableCustomAction']===91234,'Repair changed object identity, value, name or custom action');
         ++$tested;

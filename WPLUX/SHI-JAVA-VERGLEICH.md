@@ -30,10 +30,9 @@ Gesamt-Heizmodus 10065 auf 0 und Heizmodus 10000 auf 2. Freigabe DI 10000 wird z
 geprüft; alle geschriebenen Werte werden zurückgelesen.
 
 Auch +0,5 K und −0,5 K sind gültige SHI-Vorgaben. Das Modul setzt die Schrittweite
-für die SHI-Vorgaben mit Nachkommastellen ausdrücklich auf 0,1 und korrigiert
-bestehende Modulprofile bzw. Schieberegler mit ganzen Schritten auf denselben
-Variablen. Die normale Java-Heizkorrektur bleibt davon getrennt; ihre Kachel liest
-Parameter 1 aus dem internen Rückmeldespeicher.
+für die SHI-Vorgaben mit Nachkommastellen auf 0,1 und korrigiert Schieberegler
+mit ganzen Schritten direkt auf den vorhandenen Variablen. Die Kachel der
+normalen Java-Heizkorrektur liest Parameter 1 aus dem internen Rückmeldespeicher.
 
 Die bisherigen Auswahl-IDs bleiben erhalten: 310002 bezeichnet Register 10002.
 320002 ist kein zugeordneter Steuerpunkt. Es wird keine Registeradresse geraten.

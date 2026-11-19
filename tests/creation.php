@@ -109,6 +109,73 @@ $tests['retained Betriebszustand variables lose duplicate legacy profile overrid
     $module->ApplyChanges();
     check(IPS_GetVariablePresentation($id) === $custom, 'An unrelated custom profile was changed');
 };
+$tests['every catalog entry registers a native variable presentation'] = static function():void {
+    $java = (new ReflectionClass(Luxtronik::class))->getConstant('DATA_POINT_CONFIG');
+    $module = new Luxtronik();
+    $catalogs = ['java' => $java, 'modbus' => invoke($module, 'SHISelections'), 'websocket' => invoke($module, 'WebDefinitions')];
+    $types = [VARIABLE_PRESENTATION_VALUE_PRESENTATION, VARIABLE_PRESENTATION_ENUMERATION,
+        VARIABLE_PRESENTATION_SLIDER, VARIABLE_PRESENTATION_DATE_TIME, VARIABLE_PRESENTATION_SWITCH];
+    $profilesBefore = $GLOBALS['testProfiles'];
+    foreach ($catalogs as $source => $catalog) {
+        $module = new Luxtronik();
+        foreach ($catalog as $id => $point) {
+            $ident = $point['ident'] ?? $point['name'];
+            match ($source) {
+                'java' => invoke($module, 'EnsureJavaMeasurementVariable', $ident, $id, $point),
+                'modbus' => invoke($module, 'EnsureSHIVariable', $point),
+                'websocket' => invoke($module, 'EnsureWebVariable', $id, $point)
+            };
+            $variableId = $module->GetIDForIdent($ident);
+            check($variableId !== false, "Variable missing for $source $ident");
+            $variable = IPS_GetVariable($variableId);
+            check($variable['VariableProfile'] === '' && $variable['VariableCustomProfile'] === ''
+                && in_array($variable['VariablePresentation']['PRESENTATION'] ?? '', $types, true), "Legacy presentation for $source $ident");
+        }
+    }
+    check($GLOBALS['testProfiles'] === $profilesBefore, 'Catalog registration changed global profiles');
+};
+$tests['inactive instances migrate every retained Java control and schedule and alternate WebSocket profiles'] = static function():void {
+    $module = new Luxtronik();
+    $module->properties['InstanceStatus'] = false;
+    $controls = [
+        'Mode_Heizung' => 'WPLUX.Wwhe', 'Mode_WW' => 'WPLUX.Wwhe', 'Mode_Schwimmbad' => 'WPLUX.Wwhe',
+        'Mode_Kuehlung' => 'WPLUX.Kue', 'Anpassung_Temp' => 'WPLUX.SHI.H10002', 'Anpassung_WW' => 'WPLUX.SHI.H10006',
+        'Anpassung_RBE' => 'WPLUX.Wset', 'copfaktor' => 'WPLUX.Cop', 'jazfaktor' => 'WPLUX.Cop'
+    ];
+    $expected = [];
+    foreach ($controls as $ident => $profile) {
+        $mode = str_starts_with($ident, 'Mode_');
+        $method = $mode ? 'RegisterVariableInteger' : 'RegisterVariableFloat';
+        $module->$method($ident, 'Mein '.$ident, $profile, 22);
+        $presentation = $mode ? VARIABLE_PRESENTATION_ENUMERATION
+            : (str_starts_with($ident, 'Anpassung_') ? VARIABLE_PRESENTATION_SLIDER : VARIABLE_PRESENTATION_VALUE_PRESENTATION);
+        $expected[$ident] = [$module->GetIDForIdent($ident), $presentation];
+    }
+    foreach (array_merge(range(223, 282), range(406, 505)) as $index) {
+        $ident = 'set_'.$index;
+        $module->RegisterVariableInteger($ident, 'Mein '.$ident, '~UnixTimestampTime', 22);
+        $expected[$ident] = [$module->GetIDForIdent($ident), VARIABLE_PRESENTATION_DATE_TIME];
+    }
+    foreach (invoke($module, 'WebDefinitions') as $point) {
+        if (empty($point['sharedSHI'])) continue;
+        $ident = $point['ident'];
+        $method = $point['type'] === 'bool' ? 'RegisterVariableBoolean' : 'RegisterVariableFloat';
+        invoke($module, $method, $ident, 'Mein '.$ident, $point['profile'], 22);
+        $id = $module->GetIDForIdent($ident);
+        IPS_SetVariableCustomPresentation($id, ['PRESENTATION' => VARIABLE_PRESENTATION_LEGACY, 'PROFILE' => $point['profile']]);
+        $expected[$ident] = [$id, VARIABLE_PRESENTATION_VALUE_PRESENTATION];
+    }
+    $module->RegisterVariableInteger('set_300', 'Eigene Variable', 'Mein.Profil', 23);
+    $module->ApplyChanges();
+    foreach ($expected as $ident => [$id, $presentation]) {
+        check($module->GetIDForIdent($ident) === $id && IPS_GetName($id) === 'Mein '.$ident
+            && IPS_GetObject($id)['ObjectPosition'] === 22, 'Migration changed object metadata for '.$ident);
+        $variable = IPS_GetVariable($id);
+        check($variable['VariableProfile'] === '' && $variable['VariableCustomProfile'] === ''
+            && IPS_GetVariablePresentation($id)['PRESENTATION'] === $presentation, 'Inactive instance retained a legacy presentation for '.$ident);
+    }
+    check(IPS_GetVariable($module->GetIDForIdent('set_300'))['VariableProfile'] === 'Mein.Profil', 'Unrelated variable was migrated');
+};
 $failed=0;foreach($tests as $name=>$test) {
     try {$test();echo "PASS $name\n";} catch(Throwable $error) {++$failed;fwrite(STDERR,"FAIL $name: ".$error->getMessage()."\n");}
 }

@@ -80,7 +80,7 @@ trait LuxtronikVariablePresentation
         int $position,
         bool $adjustable = false,
         int $digits = 0,
-        string $formerProfile = ''
+        array $formerProfiles = []
     ): bool {
         [$variableType, $register] = match ($type) {
             'bool' => [VARIABLETYPE_BOOLEAN, 'RegisterVariableBoolean'],
@@ -88,6 +88,7 @@ trait LuxtronikVariablePresentation
             'float' => [VARIABLETYPE_FLOAT, 'RegisterVariableFloat'],
             default => [VARIABLETYPE_STRING, 'RegisterVariableString']
         };
+        if (is_string($definition)) $formerProfiles[] = $definition;
         $id = @$this->GetIDForIdent($ident);
         if ($id !== false) {
             $variable = IPS_GetVariable($id);
@@ -96,7 +97,7 @@ trait LuxtronikVariablePresentation
             $current = $variable['VariablePresentation'] ?? [];
             if (is_string($definition)) {
                 $legacy = $current['PROFILE'] ?? $variable['VariableProfile'] ?? '';
-                if ($legacy !== '' && $legacy !== $definition && !($ident === 'Anpassung_RBE' && $legacy === 'WPLUX.Wset')) {
+                if ($legacy !== '' && !in_array($legacy, $formerProfiles, true)) {
                     // Leave an independently assigned default profile in place.
                     return false;
                 }
@@ -110,20 +111,19 @@ trait LuxtronikVariablePresentation
             if (array_intersect_key($current, $presentation) != $presentation) {
                 $this->$register($ident, IPS_GetName($id), $presentation, IPS_GetObject($id)['ObjectPosition']);
             }
-            $this->MigrateFormerProfileOverride($id, $variable, $type,
-                is_string($definition) ? $definition : $formerProfile, $adjustable, $presentation);
+            $this->MigrateFormerProfileOverride($id, $variable, $type, $formerProfiles, $adjustable, $presentation);
             return false;
         }
         return $this->$register($ident, $name, $presentation, $position);
     }
 
-    private function MigrateFormerProfileOverride(int $id, array $variable, string $type, string $formerProfile,
+    private function MigrateFormerProfileOverride(int $id, array $variable, string $type, array $formerProfiles,
         bool $adjustable, array $presentation): void
     {
         $custom = $variable['VariableCustomPresentation'] ?? [];
         if ($custom !== [] && ($custom['PRESENTATION'] ?? '') !== VARIABLE_PRESENTATION_LEGACY) return;
         $profile = $custom['PROFILE'] ?? $variable['VariableCustomProfile'] ?? '';
-        if ($profile === '' || $profile !== $formerProfile) return;
+        if ($profile === '' || !in_array($profile, $formerProfiles, true)) return;
 
         $replacement = $presentation;
         if (!in_array($profile, ['~UnixTimestamp', '~UnixTimestampTime', '~Switch'], true) && IPS_VariableProfileExists($profile)) {
@@ -238,7 +238,36 @@ trait LuxtronikVariablePresentation
         return $presentation;
     }
 
-    private function UpdateStoredMeasurementPresentations(): void
+    private function RegisterNativeControlVariable(string $ident, string $name, int $position): bool
+    {
+        $definition = match ($ident) {
+            'Mode_Heizung', 'Mode_WW', 'Mode_Schwimmbad' => ['int', 'WPLUX.Wwhe', true],
+            'Mode_Kuehlung' => ['int', 'WPLUX.Kue', true],
+            'Anpassung_Temp' => ['float', 'WPLUX.Tset', true],
+            'Anpassung_WW' => ['float', 'WPLUX.Wset', true],
+            'Anpassung_RBE' => ['float', 'WPLUX.Rset', true],
+            'copfaktor', 'jazfaktor' => ['float', 'WPLUX.Cop', false],
+            default => null
+        };
+        if ($definition === null) {
+            if (!preg_match('/^set_(\d{3})$/D', $ident, $match)) return false;
+            $id = (int) $match[1];
+            // Heat and hot-water schedules occupy two separate ranges in the Java parameter list.
+            if (!(223 <= $id && $id <= 282) && !(406 <= $id && $id <= 505)) return false;
+            $definition = ['int', '~UnixTimestampTime', false];
+        }
+        [$type, $profile, $adjustable] = $definition;
+        // Some SHI betas installed the Modbus profile directly on the Java control.
+        $formerProfiles = match ($ident) {
+            'Anpassung_Temp' => ['WPLUX.SHI.H10002'],
+            'Anpassung_WW' => ['WPLUX.SHI.H10006'],
+            'Anpassung_RBE' => ['WPLUX.Wset', 'WPLUX.SHI.H10060'],
+            default => []
+        };
+        return $this->RegisterLuxtronikVariable($type, $ident, $name, $profile, $position, $adjustable, formerProfiles: $formerProfiles);
+    }
+
+    private function UpdateStoredVariablePresentations(): void
     {
         $web = $this->WebDefinitions();
         $shi = $this->SHISelections();
@@ -255,7 +284,9 @@ trait LuxtronikVariablePresentation
                 $id = $javaByIdent[$ident];
                 $this->EnsureJavaMeasurementVariable($ident, $id, $this->GetDataPointConfig($id));
             } elseif (isset($shiByIdent[$ident])) {
-                $this->EnsureSHIVariable($shiByIdent[$ident]);
+                $point = $shiByIdent[$ident];
+                $webPoint = $web[$point['selection']] ?? [];
+                $this->EnsureSHIVariable($point, !empty($webPoint['sharedSHI']) ? $webPoint['profile'] : '');
             } elseif (isset($webByIdent[$ident])) {
                 $id = $webByIdent[$ident];
                 $this->EnsureWebVariable($id, $web[$id], setPosition: false);
@@ -263,6 +294,8 @@ trait LuxtronikVariablePresentation
                 $id = (int) $match[1];
                 $point = $this->GetDataPointConfig($id);
                 if ($point['name'] === $ident) $this->EnsureJavaMeasurementVariable($ident, $id, $point);
+            } else {
+                $this->RegisterNativeControlVariable($ident, $ident, 0);
             }
         }
     }

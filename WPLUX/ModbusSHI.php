@@ -408,7 +408,7 @@ trait LuxtronikModbusSHI
         return $point['bank']==='holding'?'SHI: '.preg_replace('/^SHI[- :]+/u','',$point['label']):$point['label'];
     }
 
-    private function EnsureSHIVariable(array $point): void
+    private function EnsureSHIVariable(array $point, string $formerWebProfile = ''): void
     {
         $ident = $point['ident'];
         if ($point['legacy'] !== null) {
@@ -433,11 +433,11 @@ trait LuxtronikModbusSHI
         $presentation = $this->BuildVariablePresentation($type, $definition, $adjustable);
         $formerProfile = 'WPLUX.SHI.'.strtoupper($point['bank'][0]).$point['address'];
         $this->RegisterLuxtronikVariable($type, $ident, $this->SHIVariableLabel($point), $presentation,
-            $point['selection'], $adjustable, formerProfile: $formerProfile);
+            $point['selection'], $adjustable, formerProfiles: [$formerProfile, $formerWebProfile]);
         if ($adjustable && $type === 'float') {
             $id = $this->GetIDForIdent($ident);
             if ($id !== false && IPS_GetVariable($id)['VariableType'] === VARIABLETYPE_FLOAT) {
-                $this->RepairSHIFloatOverrides($point, $id, $definition['Digits']);
+                $this->RepairSHIFloatSliderOverride($id, (float) $point['factor'], $definition['Digits']);
             }
         }
     }
@@ -448,21 +448,9 @@ trait LuxtronikModbusSHI
         return max(0, (int) ceil(-log10($factor)));
     }
 
-    /** Keep profiles and sliders inherited from earlier SHI versions usable with fractional steps. */
-    private function RepairSHIFloatOverrides(array $point, int $id, int $digits): void
+    /** Keep sliders inherited from earlier SHI versions usable with fractional steps. */
+    private function RepairSHIFloatSliderOverride(int $id, float $step, int $digits): void
     {
-        $profile = 'WPLUX.SHI.H'.$point['address'];
-        $step = (float) $point['factor'];
-        if (IPS_VariableProfileExists($profile)) {
-            $definition = IPS_GetVariableProfile($profile);
-            if (($definition['ProfileType'] ?? null) === VARIABLETYPE_FLOAT) {
-                if ((float) ($definition['StepSize'] ?? 1) !== $step) {
-                    IPS_SetVariableProfileValues($profile, $definition['MinValue'] ?? $point['min'], $definition['MaxValue'] ?? $point['max'], $step);
-                }
-                if ((int) ($definition['Digits'] ?? 0) < $digits) IPS_SetVariableProfileDigits($profile, $digits);
-            }
-        }
-
         $custom = IPS_GetVariable($id)['VariableCustomPresentation'] ?? [];
         if (($custom['PRESENTATION'] ?? '') !== VARIABLE_PRESENTATION_SLIDER) return;
         $effective = IPS_GetVariablePresentation($id);
