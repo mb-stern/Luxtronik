@@ -14,10 +14,18 @@ const OM_CHILDADDED = 10412;
 const OM_CHILDREMOVED = 10413;
 const IM_CHANGESTATUS = 10505;
 const VARIABLE_PRESENTATION_SLIDER = '{6B9CAEEC-5958-C223-30F7-BD36569FC57A}';
+const VARIABLE_PRESENTATION_ENUMERATION = '{52D9E126-D7D2-2CBB-5E62-4CF7BA7C5D82}';
+const VARIABLE_PRESENTATION_VALUE_PRESENTATION = '{3319437D-7CDE-699D-750A-3C6A3841FA75}';
+const VARIABLE_PRESENTATION_DATE_TIME = '{497C4845-27FA-6E4F-AE37-5D951D3BDBF9}';
+const VARIABLE_PRESENTATION_SWITCH = '{60AE6B26-B3E2-BDB1-A3A1-BE232940664B}';
 
 $GLOBALS['testVariables'] = [];
 $GLOBALS['testNextID'] = 10000;
-$GLOBALS['testProfiles'] = [];
+$GLOBALS['testProfiles'] = [
+    '~Temperature'=>['Suffix'=>' °C','Digits'=>1], '~Temperature.Difference'=>['Suffix'=>' K','Digits'=>1],
+    '~Electricity'=>['Suffix'=>' kWh','Digits'=>1], '~Volt'=>['Suffix'=>' V','Digits'=>1],
+    '~Watt'=>['Suffix'=>' W','Digits'=>0], '~Valve.F'=>['Suffix'=>' %','Digits'=>1,'MinValue'=>0,'MaxValue'=>100]
+];
 
 function IPS_SemaphoreEnter(string $name, int $wait): bool {
     if (!empty($GLOBALS['testSemaphores'][$name])) return false;
@@ -54,6 +62,13 @@ function GetValueFormatted(int $id): string {
     $profile = $GLOBALS['testProfiles'][$variable['profile']] ?? [];
     if (isset($variable['formatted'])) return $variable['formatted'];
     $presentation = IPS_GetVariablePresentation($id);
+    if (!empty($presentation['INTERVALS_ACTIVE'])) {
+        foreach (json_decode($presentation['INTERVALS'],true) as $interval) {
+            if ($interval['ConstantActive'] && $variable['value'] >= $interval['IntervalMinValue'] && $variable['value'] <= $interval['IntervalMaxValue']) {
+                return $interval['ConstantValue'];
+            }
+        }
+    }
     $options = isset($presentation['OPTIONS']) ? json_decode($presentation['OPTIONS'],true) : ($profile['Associations'] ?? []);
     foreach (is_array($options) ? $options : [] as $option) {
         if ((string)$option['Value'] === (string)$variable['value']) return (string)($option['Caption'] ?? $option['Name']);
@@ -176,11 +191,11 @@ class IPSModuleStrict
     public function GetIDForIdent(string $ident): int|false { return IPS_GetObjectIDByIdent($ident, $this->InstanceID); }
     protected function GetValue(string $ident): mixed { return GetValue($this->GetIDForIdent($ident)); }
 
-    protected function RegisterVariableBoolean(string $ident, string $name, string $profile = '', int $position = 0): bool
+    protected function RegisterVariableBoolean(string $ident, string $name, string|array $profile = '', int $position = 0): bool
     {
         return $this->register($ident, VARIABLETYPE_BOOLEAN, false, $name, $profile, $position);
     }
-    public function RegisterVariableInteger(string $ident, string $name, string $profile = '', int $position = 0): bool
+    public function RegisterVariableInteger(string $ident, string $name, string|array $profile = '', int $position = 0): bool
     {
         return $this->register($ident, VARIABLETYPE_INTEGER, 0, $name, $profile, $position);
     }
@@ -188,7 +203,7 @@ class IPSModuleStrict
     {
         return $this->register($ident, VARIABLETYPE_FLOAT, 0.0, $name, $profile, $position);
     }
-    public function RegisterVariableString(string $ident, string $name, string $profile = '', int $position = 0): bool
+    public function RegisterVariableString(string $ident, string $name, string|array $profile = '', int $position = 0): bool
     {
         return $this->register($ident, VARIABLETYPE_STRING, '', $name, $profile, $position);
     }

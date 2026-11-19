@@ -624,24 +624,9 @@ trait LuxtronikWebEEV
 
     private function EnsureWebVariable(int $id,array $point): void
     {
-        if(@$this->GetIDForIdent($point['ident'])===false) {
-            if(isset($point['native'])) {
-                $native=self::DATA_POINT_CONFIG[$point['native']];
-                $method=match($native['type']) {'bool'=>'RegisterVariableBoolean','int'=>'RegisterVariableInteger','float'=>'RegisterVariableFloat',default=>'RegisterVariableString'};
-                $this->$method($point['ident'],$point['label'],$native['profile'],$point['native']);
-            } elseif(isset($point['profile'])) {
-                $method=match($point['type']) {'bool'=>'RegisterVariableBoolean','int'=>'RegisterVariableInteger','string'=>'RegisterVariableString',default=>'RegisterVariableFloat'};
-                $this->$method($point['ident'],$point['label'],$point['profile'],$id);
-            } else {
-                if(!IPS_VariableProfileExists('WPLUX.EEV.Percent')) {
-                    IPS_CreateVariableProfile('WPLUX.EEV.Percent',2);
-                    IPS_SetVariableProfileValues('WPLUX.EEV.Percent',0,100,0.1);
-                    IPS_SetVariableProfileDigits('WPLUX.EEV.Percent',1);
-                    IPS_SetVariableProfileText('WPLUX.EEV.Percent','',' %');
-                }
-                $this->RegisterVariableFloat($point['ident'],$point['label'],'WPLUX.EEV.Percent',$id);
-            }
-        }
+        $native = isset($point['native']) ? self::DATA_POINT_CONFIG[$point['native']] : null;
+        $this->RegisterLuxtronikVariable($native['type'] ?? $point['type'], $point['ident'], $point['label'],
+            $native['profile'] ?? $point['profile'] ?? 'WPLUX.EEV.Percent', $point['native'] ?? $id, digits: $native['decimals'] ?? 1);
         if(isset(self::WEB_ONLY_POINTS[$id])) IPS_SetPosition($this->GetIDForIdent($point['ident']),$id);
     }
 

@@ -335,7 +335,7 @@ $tests['Java with WebSocket supplementation retains the confirmed Java control w
     $values=array_fill(0,106,0);$values[105]=505;$values[18]=505;
     withServer([[pack('N*',3002,105,505),pack('N*',3002,105)],[pack('N*',3004,0),frame(3004,$values)]],static function(Luxtronik $module):void {
         $module->properties['CommunicationMode']='java';$module->properties['WWsetVisible']=true;
-        invoke($module,'CreateVariableProfiles');
+        ensureLegacyLuxtronikProfiles();
         $module->RegisterVariableFloat('Anpassung_WW','Existing target','WPLUX.Wset');$module->EnableAction('Anpassung_WW');
         $id=$module->GetIDForIdent('Anpassung_WW');
         $module->RequestAction('SetNumericControl',['function'=>'warmWaterSetpoint','value'=>50.5]);

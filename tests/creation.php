@@ -25,6 +25,61 @@ $tests['newly configured Java instance starts the shared timer and reads without
         json_decode($m->GetConfigurationForm(),true,512,JSON_THROW_ON_ERROR);
     });
 };
+$tests['Apply upgrades variable defaults in place and builds native presentations without global profiles'] = static function():void {
+    $module = new Luxtronik();
+    $module->properties['IDListe'] = json_encode(array_map(static fn($id) => ['id'=>$id, 'enabled'=>true], [15, 80, 203, 400001]));
+    $module->properties['SHIControlList'] = '[{"id":310000,"enabled":true},{"id":310002,"enabled":true}]';
+    $module->properties['HeizungVisible'] = true;
+    $module->properties['TempsetVisible'] = true;
+    $module->properties['HZ_TimerWeekVisible'] = 1;
+
+    $module->RegisterVariableFloat('Aussentemperatur', 'Mein Sensor', '~Temperature', 22);
+    $module->RegisterVariableInteger('Betriebszustand', 'Mein Betriebszustand', 'WPLUX.BZ', 23);
+    $oldTemperature = invoke($module, 'GetDataPointConfig', 203)['name'];
+    $module->RegisterVariableString($oldTemperature, 'Mein alter Wert', '', 24);
+    $module->RegisterVariableFloat('EEV_Heizen', 'Mein EEV', 'WPLUX.EEV.Percent', 400001);
+    $module->RegisterVariableInteger('Mode_Heizung', 'Meine Betriebsart', 'WPLUX.Wwhe', 26);
+    $module->RegisterVariableFloat('Anpassung_Temp', 'Meine Korrektur', 'WPLUX.Tset', 27);
+    $module->RegisterVariableInteger('set_223', 'Meine Zeit', '~UnixTimestampTime', 28);
+
+    $outside = $module->GetIDForIdent('Aussentemperatur');
+    $custom = ['PRESENTATION'=>VARIABLE_PRESENTATION_VALUE_PRESENTATION, 'SUFFIX'=>' Grad', 'DIGITS'=>2];
+    IPS_SetVariableCustomPresentation($outside, $custom);
+    $GLOBALS['testVariables'][$outside]['value'] = 11.75;
+    $status = $module->GetIDForIdent('Betriebszustand');
+    $GLOBALS['testVariables'][$status]['value'] = 4;
+    $oldId = $module->GetIDForIdent($oldTemperature);
+    $mode = $module->GetIDForIdent('Mode_Heizung');
+    $correction = $module->GetIDForIdent('Anpassung_Temp');
+    $timer = $module->GetIDForIdent('set_223');
+    $GLOBALS['testVariables'][$timer]['value'] = 32400;
+    $GLOBALS['testVariables'][$mode]['custom_action'] = 90001;
+    $eev = $module->GetIDForIdent('EEV_Heizen');
+    IPS_CreateVariableProfile('WPLUX.Tset', VARIABLETYPE_FLOAT);
+    IPS_SetVariableProfileValues('WPLUX.Tset', -5, 5, 1);
+    $profilesBefore = $GLOBALS['testProfiles'];
+
+    $module->ApplyChanges();
+    $module->ApplyChanges();
+
+    check($GLOBALS['testProfiles'] === $profilesBefore, 'Saving created a global variable profile');
+    check($module->GetIDForIdent('Aussentemperatur') === $outside && IPS_GetName($outside) === 'Mein Sensor'
+        && IPS_GetObject($outside)['ObjectPosition'] === 22 && GetValue($outside) === 11.75
+        && IPS_GetVariablePresentation($outside) === $custom, 'Migration changed object metadata, value or custom presentation');
+    check(IPS_GetVariable($outside)['VariablePresentation']['SUFFIX'] === ' °C', 'Temperature unit lost in new default');
+    check($module->GetIDForIdent($oldTemperature) === $oldId && IPS_GetVariable($oldId)['VariableType'] === VARIABLETYPE_STRING
+        && IPS_GetVariablePresentation($oldId)['PRESENTATION'] === VARIABLE_PRESENTATION_VALUE_PRESENTATION, 'Old string measurement was not converted in place');
+    check(GetValueFormatted($status) === 'Abtauen' && IPS_GetVariablePresentation($status)['PRESENTATION'] === VARIABLE_PRESENTATION_VALUE_PRESENTATION, 'Read-only status lost its caption');
+    check($module->GetIDForIdent('Mode_Heizung') === $mode && IPS_GetName($mode) === 'Meine Betriebsart'
+        && IPS_GetVariable($mode)['VariableCustomAction'] === 90001
+        && IPS_GetVariablePresentation($mode)['PRESENTATION'] === VARIABLE_PRESENTATION_ENUMERATION, 'Mode lost its object or action');
+    check(IPS_GetVariablePresentation($correction)['STEP_SIZE'] === 0.5 && IPS_GetName($correction) === 'Meine Korrektur', 'Native correction step or name changed');
+    check(IPS_GetVariablePresentation($timer) === ['PRESENTATION'=>VARIABLE_PRESENTATION_DATE_TIME, 'DATE'=>0, 'TIME'=>1]
+        && GetValue($timer) === 32400 && IPS_GetName($timer) === 'Meine Zeit', 'Schedule changed its time format or stored value');
+    check(IPS_GetVariablePresentation($eev)['SUFFIX'] === ' %' && IPS_GetName($eev) === 'Mein EEV', 'WebSocket measurement was not preserved');
+    check(IPS_GetVariablePresentation($module->GetIDForIdent('SHI_Modus_Heizen'))['PRESENTATION'] === VARIABLE_PRESENTATION_ENUMERATION
+        && IPS_GetVariablePresentation($module->GetIDForIdent('SHI_Offset_Heizen'))['STEP_SIZE'] === 0.1, 'SHI modes or step lost');
+};
 $failed=0;foreach($tests as $name=>$test) {
     try {$test();echo "PASS $name\n";} catch(Throwable $error) {++$failed;fwrite(STDERR,"FAIL $name: ".$error->getMessage()."\n");}
 }

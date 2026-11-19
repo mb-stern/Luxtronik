@@ -380,7 +380,8 @@ trait LuxtronikModbusSHI
             return $labels===[]?'Aus':implode(', ',$labels);
         }
         if (is_string($value)) return $value;
-        return ($point['factor']<1?number_format((float)$value,1,'.',''):(string)$value).($point['unit']!==''?' '.$point['unit']:'');
+        $formatted = $point['factor'] < 1 ? number_format((float) $value, $this->SHIDecimalPlaces((float) $point['factor']), '.', '') : (string) $value;
+        return $formatted.($point['unit'] !== '' ? ' '.$point['unit'] : '');
     }
 
     private function GetSHIVisualizationPoint(string $ident): ?array
@@ -409,74 +410,70 @@ trait LuxtronikModbusSHI
 
     private function EnsureSHIVariable(array $point): void
     {
-        $ident=$point['ident'];
-        $label=$this->SHIVariableLabel($point);
-        $existing=@$this->GetIDForIdent($ident);
-        if ($existing!==false) {
-            if($point['legacy']===null && $point['factor']<1 && IPS_GetVariable($existing)['VariableType']===VARIABLETYPE_FLOAT)
-                $this->EnsureSHIFloatPresentation($point,$existing);
+        $ident = $point['ident'];
+        if ($point['legacy'] !== null) {
+            $native = self::DATA_POINT_CONFIG[$point['legacy']];
+            $this->RegisterLuxtronikVariable($native['type'], $ident, $ident, $native['profile'], $point['legacy'], digits: $native['decimals']);
             return;
         }
-        if ($point['legacy']!==null) {
-            $native=self::DATA_POINT_CONFIG[$point['legacy']];
-            $method=match ($native['type']) {'bool'=>'RegisterVariableBoolean','int'=>'RegisterVariableInteger','float'=>'RegisterVariableFloat',default=>'RegisterVariableString'};
-            $this->$method($ident,$ident,$native['profile'],$point['legacy']);
-            return;
+
+        $type = $point['datatype'] === 'bool' ? 'bool' : ($point['factor'] < 1 ? 'float' : 'int');
+        $adjustable = $point['bank'] === 'holding';
+        $definition = [
+            'MinValue' => $point['min'] ?? 0,
+            'MaxValue' => $point['max'] ?? 0,
+            'StepSize' => $point['factor'],
+            'Digits' => $type === 'float' ? $this->SHIDecimalPlaces((float) $point['factor']) : 0,
+            'Suffix' => $point['unit'] === '' ? '' : ' '.$point['unit'],
+            'Associations' => []
+        ];
+        foreach ($point['options'] ?? [] as $value => $label) {
+            $definition['Associations'][] = ['Value' => $value, 'Name' => $label];
         }
-        $type=$point['datatype']==='bool'?0:($point['factor']<1?2:1);
-        $profile='WPLUX.SHI.'.strtoupper(substr($point['bank'],0,1)).$point['address'];
-        if (!IPS_VariableProfileExists($profile)) {
-            IPS_CreateVariableProfile($profile,$type);
-            IPS_SetVariableProfileDigits($profile,$type===2?1:0);
-            IPS_SetVariableProfileText($profile,'',$point['unit']!==''?' '.$point['unit']:'');
-            IPS_SetVariableProfileValues($profile,(float)($point['min']??0),(float)($point['max']??0),$type===2?0.1:1);
-            foreach ($point['options']??[] as $value=>$optionLabel) IPS_SetVariableProfileAssociation($profile,(float)$value,$optionLabel,'',-1);
+        $presentation = $this->BuildVariablePresentation($type, $definition, $adjustable);
+        $this->RegisterLuxtronikVariable($type, $ident, $this->SHIVariableLabel($point), $presentation, $point['selection']);
+        if ($adjustable && $type === 'float') {
+            $id = $this->GetIDForIdent($ident);
+            if ($id !== false && IPS_GetVariable($id)['VariableType'] === VARIABLETYPE_FLOAT) {
+                $this->RepairSHIFloatOverrides($point, $id, $definition['Digits']);
+            }
         }
-        $method=match ($type) {0=>'RegisterVariableBoolean',1=>'RegisterVariableInteger',default=>'RegisterVariableFloat'};
-        $this->$method($ident,$label,$profile,$point['selection']);
-        if($type===VARIABLETYPE_FLOAT) $this->EnsureSHIFloatPresentation($point,$this->GetIDForIdent($ident));
     }
 
-    /** Keep fractional SHI values editable on existing objects and modern Symcon sliders. */
-    private function EnsureSHIFloatPresentation(array $point,int $id): void
+    private function SHIDecimalPlaces(float $factor): int
     {
-        $profile='WPLUX.SHI.'.strtoupper(substr($point['bank'],0,1)).$point['address'];
-        $step=(float)$point['factor'];
-        $digits=(int)ceil(-log10($step));
-        if(IPS_VariableProfileExists($profile)) {
-            $definition=IPS_GetVariableProfile($profile);
-            if(($definition['ProfileType']??null)===VARIABLETYPE_FLOAT) {
-                if((float)($definition['StepSize']??1)!==$step)
-                    IPS_SetVariableProfileValues($profile,(float)($definition['MinValue']??$point['min']??0),
-                        (float)($definition['MaxValue']??$point['max']??0),$step);
-                if((int)($definition['Digits']??0)<$digits) IPS_SetVariableProfileDigits($profile,$digits);
+        // The register catalog uses decimal powers for fractional scaling.
+        return max(0, (int) ceil(-log10($factor)));
+    }
+
+    /** Keep profiles and sliders inherited from earlier SHI versions usable with fractional steps. */
+    private function RepairSHIFloatOverrides(array $point, int $id, int $digits): void
+    {
+        $profile = 'WPLUX.SHI.H'.$point['address'];
+        $step = (float) $point['factor'];
+        if (IPS_VariableProfileExists($profile)) {
+            $definition = IPS_GetVariableProfile($profile);
+            if (($definition['ProfileType'] ?? null) === VARIABLETYPE_FLOAT) {
+                if ((float) ($definition['StepSize'] ?? 1) !== $step) {
+                    IPS_SetVariableProfileValues($profile, $definition['MinValue'] ?? $point['min'], $definition['MaxValue'] ?? $point['max'], $step);
+                }
+                if ((int) ($definition['Digits'] ?? 0) < $digits) IPS_SetVariableProfileDigits($profile, $digits);
             }
         }
-        if($point['bank']!=='holding' || !defined('VARIABLE_PRESENTATION_SLIDER')) return;
-        $variable=IPS_GetVariable($id);
-        $default=$variable['VariablePresentation']??[];
-        $slider=constant('VARIABLE_PRESENTATION_SLIDER');
-        // Update the module's default only; keep names, IDs, actions and custom profiles.
-        if(($variable['VariableProfile']??'')===$profile || ($default['PROFILE']??'')===$profile
-            || ($default['PRESENTATION']??'')===$slider) {
-            $presentation=['PRESENTATION'=>$slider,'MIN'=>(float)$point['min'],'MAX'=>(float)$point['max'],
-                'STEP_SIZE'=>$step,'DIGITS'=>$digits,'SUFFIX'=>' '.$point['unit'],'PERCENTAGE'=>false];
-            if(array_intersect_key($default,$presentation)!=$presentation)
-                $this->RegisterVariableFloat($point['ident'],IPS_GetName($id),$presentation,$point['selection']);
+
+        $custom = IPS_GetVariable($id)['VariableCustomPresentation'] ?? [];
+        if (($custom['PRESENTATION'] ?? '') !== VARIABLE_PRESENTATION_SLIDER) return;
+        $effective = IPS_GetVariablePresentation($id);
+        $updated = $custom;
+        if ((float) ($effective['STEP_SIZE'] ?? 1) >= 1) $updated['STEP_SIZE'] = $step;
+        if ((int) ($effective['DIGITS'] ?? 0) < $digits) $updated['DIGITS'] = $digits;
+        if ($updated === $custom) return;
+        // Explicit parameters replace templates; retain their resolved bounds and style.
+        if (isset($custom['TEMPLATE'])) {
+            $updated = array_replace($effective, $updated);
+            unset($updated['TEMPLATE']);
         }
-        // A converted slider can override its default with the old whole-number step.
-        $custom=$variable['VariableCustomPresentation']??[];
-        if(($custom['PRESENTATION']??'')===$slider && function_exists('IPS_SetVariableCustomPresentation')) {
-            $effective=IPS_GetVariablePresentation($id);
-            $updated=$custom;
-            if((float)($effective['STEP_SIZE']??1)>=1) $updated['STEP_SIZE']=$step;
-            if((int)($effective['DIGITS']??0)<$digits) $updated['DIGITS']=$digits;
-            if($updated!==$custom) {
-                // Explicit parameters replace templates; retain their resolved bounds/style.
-                if(isset($custom['TEMPLATE'])) {$updated=array_replace($effective,$updated);unset($updated['TEMPLATE']);}
-                IPS_SetVariableCustomPresentation($id,$updated);
-            }
-        }
+        IPS_SetVariableCustomPresentation($id, $updated);
     }
 
     private function PublishSHIValues(): void

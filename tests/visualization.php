@@ -22,7 +22,7 @@ function configuredVisualization(): Luxtronik
 {
     $module = new Luxtronik();
     foreach (['HeizungVisible', 'WarmwasserVisible', 'KuehlungVisible', 'WWsetVisible', 'TempsetVisible'] as $property) $module->properties[$property] = true;
-    invoke($module, 'CreateVariableProfiles');
+    ensureLegacyLuxtronikProfiles();
     $reflection = new ReflectionClass($module);
     $map = $reflection->getConstant('LUXTRONIK_IDENT_MAP');
     $points = array_column($reflection->getConstant('DATA_POINT_CONFIG'), null, 'name');
@@ -40,8 +40,13 @@ function configuredVisualization(): Luxtronik
             'CoolingControlVariable' => 'WPLUX.Kue', 'WarmWaterSetpointVariable' => 'WPLUX.Wset',
             'HeatingTemperatureCorrectionVariable' => 'WPLUX.Tset', default => ''
         };
-        visualizationVariable($module, $ident, $value, $profile);
-        if (str_contains($property, 'ControlVariable') || in_array($property, ['WarmWaterSetpointVariable', 'HeatingTemperatureCorrectionVariable'], true)) $module->EnableAction($ident);
+        if (str_contains($property, 'ControlVariable') || in_array($property, ['WarmWaterSetpointVariable', 'HeatingTemperatureCorrectionVariable'], true)) {
+            invoke($module, 'RegisterLuxtronikVariable', is_int($value) ? 'int' : 'float', $ident, $ident, $profile, 0, true);
+            $GLOBALS['testVariables'][$module->GetIDForIdent($ident)]['value'] = $value;
+            $module->EnableAction($ident);
+        } else {
+            visualizationVariable($module, $ident, $value, $profile);
+        }
     }
     // Populate optional fields without a separate instance picker or import.
     $base = json_decode(file_get_contents(__DIR__ . '/fixtures/pre-visualization-properties.json'), true);
@@ -173,7 +178,7 @@ $tests['live messages refresh only registered variables and update removed/recre
 $tests['graphic actions use native Luxtronik write/read-back and preserve variable IDs'] = static function (): void {
     $values = array_fill(0, 106, 0); $values[105] = 505; $values[18] = 505;
     withServer([[pack('N*', 3002, 105, 505), pack('N*', 3002, 105)], [pack('N*', 3004, 0), frame(3004, $values)]], static function (Luxtronik $module): void {
-        invoke($module, 'CreateVariableProfiles');
+        ensureLegacyLuxtronikProfiles();
         $id = visualizationVariable($module, 'Anpassung_WW', 45.0, 'WPLUX.Wset');
         $module->properties['WWsetVisible'] = true;
         $module->EnableAction('Anpassung_WW');
@@ -191,10 +196,13 @@ $tests['existing mode actions remain the only native path for heating hotwater a
     }
     withServer($exchanges, static function (Luxtronik $module) use ($cases): void {
         foreach (['HeizungVisible', 'WarmwasserVisible', 'KuehlungVisible', 'SchwimmbadVisible'] as $property) $module->properties[$property] = true;
-        invoke($module, 'CreateVariableProfiles');
         foreach ($cases as [$function, $ident, $parameter, $value]) {
-            $id = visualizationVariable($module, $ident, 0, $ident === 'Mode_Kuehlung' ? 'WPLUX.Kue' : 'WPLUX.Wwhe');
+            invoke($module, 'RegisterLuxtronikVariable', 'int', $ident, $ident,
+                $ident === 'Mode_Kuehlung' ? 'WPLUX.Kue' : 'WPLUX.Wwhe', 0, true);
+            $id = $module->GetIDForIdent($ident);
             $module->EnableAction($ident);
+            $control = invoke($module, 'BuildControlData')[$function];
+            check($control['configured'] && in_array($value, array_column($control['options'], 'value'), true), 'Modern mode options unavailable in the tile');
             $module->RequestAction('SetControlMode', ['function' => $function, 'value' => $value]);
             check($module->GetIDForIdent($ident) === $id && GetValue($id) === $value, 'Mode did not use native write/read-back');
         }
@@ -202,7 +210,7 @@ $tests['existing mode actions remain the only native path for heating hotwater a
 };
 $tests['enabling an existing native action refreshes controls without reopening the tile'] = static function (): void {
     $module = new Luxtronik();
-    invoke($module, 'CreateVariableProfiles');
+    ensureLegacyLuxtronikProfiles();
     $id = visualizationVariable($module, 'Mode_WW', 0, 'WPLUX.Wwhe');
     $module->properties['WarmwasserVisible'] = true;
     $module->GetVisualizationTile();
@@ -217,7 +225,7 @@ $tests['enabling an existing native action refreshes controls without reopening 
 };
 $tests['graphic rejects forged, foreign, disabled and SHI write actions'] = static function (): void {
     withoutConnection(static function (Luxtronik $module): void {
-        invoke($module, 'CreateVariableProfiles');
+        ensureLegacyLuxtronikProfiles();
         visualizationVariable($module, 'Anpassung_WW', 45.0, 'WPLUX.Wset');
         $module->properties['WWsetVisible'] = true;
         $module->EnableAction('Anpassung_WW');
@@ -251,7 +259,7 @@ $tests['original web interface uses the device root or a previously configured U
 };
 $tests['integer legacy setpoints reject fractions instead of silently truncating them'] = static function (): void {
     withoutConnection(static function (Luxtronik $module): void {
-        invoke($module, 'CreateVariableProfiles');
+        ensureLegacyLuxtronikProfiles();
         visualizationVariable($module, 'Anpassung_WW', 45, 'WPLUX.Wset');
         $module->properties['WWsetVisible'] = true;
         $module->EnableAction('Anpassung_WW');
@@ -418,7 +426,7 @@ $tests['empty ID list supplies the whole graphic internally without creating mea
     foreach ([10=>250, 11=>245, 12=>270, 15=>4294967261, 17=>485, 18=>500, 21=>249, 22=>200, 40=>1, 41=>0, 80=>5, 254=>607, 257=>6500, 268=>1500] as $id=>$value) $values[$id]=$value;
     $updated=$values; $updated[10]=251;
     withServer(controllerCycles([[pack('N*',3004,0),frame(3004,$values)], [pack('N*',3004,0),frame(3004,$updated)]]), static function (Luxtronik $module): void {
-        invoke($module,'CreateVariableProfiles');
+        ensureLegacyLuxtronikProfiles();
         $module->Update();
         $payload=visualizationPayload($module);
         check($module->properties['IDListe']==='[]','Automatic readings changed saved selections');
@@ -867,7 +875,7 @@ $tests['SHI measurements and native Java graphic controls retain independent sem
     $module->properties['TempsetVisible']=true;
     $module->properties['RBEsetVisible']=true;
     $module->properties['IDListe']='[]';
-    invoke($module,'CreateVariableProfiles');
+    ensureLegacyLuxtronikProfiles();
     foreach (['Anpassung_WW'=>50.0,'Anpassung_Temp'=>-1.5,'Anpassung_RBE'=>21.5] as $ident=>$value) {
         visualizationVariable($module,$ident,$value,match ($ident) {'Anpassung_WW'=>'WPLUX.Wset','Anpassung_RBE'=>'WPLUX.Rset',default=>'WPLUX.Tset'});
         $module->EnableAction($ident);
@@ -1134,7 +1142,7 @@ $tests['top controls follow all seven native configuration switches including re
 $tests['room setpoint uses native Java readback with room limits and supports the old DHW profile'] = static function (): void {
     $values = array_fill(0, 1149, 0); $values[1148] = 215;
     withServer([[pack('N*',3002,1148,215),pack('N*',3002,1148)], [pack('N*',3003,0),frame(3003,$values)]], static function (Luxtronik $module): void {
-        invoke($module, 'CreateVariableProfiles');
+        ensureLegacyLuxtronikProfiles();
         $module->properties['RBEsetVisible'] = true;
         $id = visualizationVariable($module, 'Anpassung_RBE', 20.0, 'WPLUX.Wset');
         $module->EnableAction('Anpassung_RBE');

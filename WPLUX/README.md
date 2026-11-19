@@ -17,14 +17,14 @@ beispielsweise eine zeitweise Anhebung bei PV-Überschuss.
 2. [Voraussetzungen](#2-voraussetzungen)
 3. [Installation](#3-installation)
 4. [Einrichtung und Datenquellen](#4-einrichtung-und-datenquellen)
-5. [Variablen und Profile](#5-variablen-und-profile)
+5. [Variablen und Darstellung](#5-variablen-und-darstellung)
 6. [Visualisierung](#6-visualisierung)
 7. [PHP-Befehle](#7-php-befehle)
 8. [Versionen](#8-versionen)
 
 ### 1. Funktionsumfang
 
-- Ausgewählte Mess- und Statuswerte als Symcon-Variablen; benötigte Profile werden angelegt.
+- Ausgewählte Mess- und Statuswerte als Symcon-Variablen mit nativer Variablendarstellung.
 - Bestehende Java-Steuerung für Betriebsarten, Heizkorrektur, Warmwasser und Raum-Sollwert sowie die Zeitprogramme des Reglers.
 - Gemeinsame Istwertliste mit Quellenwahl je Messwert und Sammelauswahl für passende Werte.
 - WebSocket-Ergänzungen aus den Informationsseiten des Webinterfaces, einschließlich Energiemonitor und Fehlerhistorie.
@@ -172,7 +172,7 @@ unterbrochene Verbindung wird nicht als bestätigte Rücknahme ausgegeben.
 [Java und SHI im Vergleich](SHI-JAVA-VERGLEICH.md) ·
 [WebSocket und Diagnose](WEBSOCKET.md)
 
-### 5. Variablen und Profile
+### 5. Variablen und Darstellung
 
 Die Auswahl bestimmt, welche Messwertvariablen im Objektbaum angelegt werden.
 Grafik und Berechnungen können benötigte Messwerte auch intern verwenden, ohne
@@ -217,30 +217,19 @@ direkt, auch wenn eine zugehörige Variable erst später angelegt wird. Der
 Schreibweg bleibt die normale Java-Heizkorrektur; SHI-Offset und Java-Korrektur
 werden nicht automatisch ineinander übertragen.
 
-#### Profile
+#### Darstellung in Symcon
 
-Name   | Typ
------- | ------- 
-WPLUX.Imp   |  Integer   
-WPLUX.Typ   |  Integer   
-WPLUX.Biv   |  Integer   
-WPLUX.BZ    |  Integer 
-WPLUX.Comf  |  Bool 
-WPLUX.Men1  |  Integer
-WPLUX.Men2  |  Integer
-WPLUX.Men3  |  Integer
-WPLUX.Akt   |  Bool
-WPLUX.Pres  |  Float
-WPLUX.Fan   |  Integer
-WPLUX.lh    |  Integer
-WPLUX.Wwhe  |  Integer
-WPLUX.Kue	|  Integer
-WPLUX.Tset	|  Float
-WPLUX.Wset	|  Float
-WPLUX.Std   |  Integer
-WPLUX.Ver   |  Integer
-WPLUX.kW    |  Float
-WPLUX.Cop   |  Float
+Das Modul verwendet Wertanzeigen für Mess- und Statuswerte, Aufzählungen für
+Betriebsarten, Schieberegler für Sollwerte und Uhrzeiten für Zeitprogramme.
+Beim Übernehmen der Konfiguration wechseln bestehende Standarddarstellungen auf
+denselben Variablen. Objekt-ID, Name, Datentyp, Wert und Archiv bleiben erhalten.
+Benutzerdefinierte Darstellungen und Profilzuordnungen behalten Vorrang.
+
+Einheit, Schrittweite und Nachkommastellen stehen in der Darstellung der
+Variablen. Änderungen daran kann das Modul direkt übernehmen. Vorhandene
+WPLUX-Profile bleiben für bestehende Verwendungen verfügbar. Eigene Skripte,
+die Darstellungsdaten über `VariableProfile` auslesen, verwenden für die neue
+Darstellung `IPS_GetVariablePresentation()`.
 
 ### 6. Visualisierung
 
@@ -296,10 +285,11 @@ SHI-API-Zugriffe ohne Variablenauswahl steht unter Diagnose.
 Version 5.0 (in Vorbereitung; Änderungen seit der bisherigen Version)
 
 - Java bleibt Standard. WebSocket und direkte Modbus-TCP-/SHI-Abfragen ergänzen zugeordnete Messwerte. Bestehende Variablen, Objekt-IDs, Namen, Profile, Archive und Java-Steuerungen bleiben erhalten.
+- Native Symcon-Darstellungen für Werte, Betriebsarten, Sollwerte und Zeitprogramme. Bestehende Modulvariablen behalten ihre IDs, Namen, Datentypen und Archive.
 - Gemeinsame Istwertliste mit Quellenwahl je Messwert, Sammelauswahl und Anzeige der tatsächlichen Quelle sowie des Datenstatus. Die Quellenwahl betrifft nur das Lesen; gespeicherte Einzelzuordnungen bleiben erhalten.
 - Einfachere Konfiguration: Verbindung und Lesen direkt unter „Modul aktiv“, gemeinsamer Abfragetakt und Firmware-/Schnittstellenerkennung. Sicher nicht unterstützte Bereiche werden ausgeblendet. Kein Modbus-Gateway oder Client Socket erforderlich.
 - WebSocket unterstützt XML und JSON sowie Informationsseiten mit Untermenüs, Energiemonitor, EEV-Werten und Fehlerhistorie. Diagnoseberichte für WebSocket und Modbus stehen zum Download bereit.
-- Eigenständige SHI-Regelung mit 129 dokumentierten Punkten und 41 Holding-Funktionen. Ausgewählte Vorgaben erzeugen eigene Steuervariablen. Modi werden beim Senden automatisch gesetzt, Freigaben und Grenzen geprüft. Die 19 Vorgaben mit Nachkommastellen erhalten 0,1er-Schritte; bestehende Modulprofile und Schieberegler werden korrigiert.
+- Eigenständige SHI-Regelung mit 129 dokumentierten Punkten und 41 Holding-Funktionen. Ausgewählte Vorgaben erzeugen eigene Steuervariablen. Modi werden beim Senden automatisch gesetzt, Freigaben und Grenzen geprüft. Die 19 Vorgaben mit Nachkommastellen erhalten 0,1er-Schritte.
 - SHI-Schreibwerte werden zurückgelesen. Warmwasser-Rückmeldungen dürfen bis zu 15 Sekunden je Register benötigen, ohne erneutes Senden. Wunschwerte erscheinen sofort; bei Fehlern wird die Anzeige zurückgesetzt und geänderte Modi werden nach Möglichkeit zurückgenommen. Lesen und Neustarts wiederholen keine alten Vorgaben.
 - Neue HTML-SDK-Grafik für Luft/Wasser und Sole/Wasser. Bei Sole stehen Quellen-Eintritt, -Austritt und Pumpenzustand statt Lüfter und Abtau-Restzeit. Optional: zweiter Heizkreis, Reihen-Rücklaufpuffer, Warmwasser, Solarthermie mit Speicherziel, Zirkulation, Raumtemperaturen und Heizstäbe. Bedienbare Betriebsarten, Sollwerte und Reglerdisplay; ab Symcon 9.1 maximierbar und Titel ausblendbar.
 - Steuerrückmeldungen werden unabhängig von angelegten Variablen intern gelesen: Betriebsarten und Heizkorrektur über Java 3003, Warmwasser-Soll über 3004/ID 18. Die Heizkorrektur-Kachel nutzt Parameter 1; Warmwasser wird weiterhin über Parameter 105 geschrieben.

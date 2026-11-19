@@ -1021,25 +1021,13 @@ HTML;
         }
 
         $currentValue = GetValue($variableId);
-        $profileName = $this->GetVariableProfileName($variableId);
         $options = [];
         $offValues = [];
 
-        if ($profileName !== '' && IPS_VariableProfileExists($profileName)) {
-            $profile = IPS_GetVariableProfile($profileName);
-
-            foreach (($profile['Associations'] ?? []) as $association) {
-                $associationValue = $association['Value'];
-                $associationName = (string) $association['Name'];
-
-                $options[] = [
-                    'value' => $associationValue,
-                    'name'  => $associationName
-                ];
-
-                if (preg_match('/(^|\s)(aus|off|disabled|deaktiviert)(\s|$)/iu', trim($associationName)) === 1) {
-                    $offValues[] = $associationValue;
-                }
+        foreach ($this->VisualizationAssociations($variableId) as $option) {
+            $options[] = ['value' => $option['value'], 'name' => $option['name']];
+            if (preg_match('/(^|\s)(aus|off|disabled|deaktiviert)(\s|$)/iu', trim($option['name'])) === 1) {
+                $offValues[] = $option['value'];
             }
         }
 
@@ -1089,7 +1077,14 @@ HTML;
 
         $profileName = $this->GetVariableProfileName($variableId);
         // Older instances assigned the DHW range (30–65 °C) to the room setpoint.
-        if ($profileName !== '' && IPS_VariableProfileExists($profileName)
+        $presentation = $this->VisualizationPresentation($variableId);
+        if (($presentation['PRESENTATION'] ?? '') === VARIABLE_PRESENTATION_SLIDER) {
+            if (isset($presentation['MIN'], $presentation['MAX']) && $presentation['MAX'] > $presentation['MIN']) {
+                $min = (float) $presentation['MIN'];
+                $max = (float) $presentation['MAX'];
+            }
+            if (($presentation['STEP_SIZE'] ?? 0) > 0) $step = (float) $presentation['STEP_SIZE'];
+        } elseif ($profileName !== '' && IPS_VariableProfileExists($profileName)
             && !($property === 'RoomTemperatureSetpointVariable' && $profileName === 'WPLUX.Wset')) {
             $profile = IPS_GetVariableProfile($profileName);
 
@@ -1119,30 +1114,13 @@ HTML;
         ];
     }
 
-    private function GetProfileAssociationValues(int $variableId): array
-    {
-        $profileName = $this->GetVariableProfileName($variableId);
-        if ($profileName === '' || !IPS_VariableProfileExists($profileName)) {
-            return [];
-        }
-
-        $profile = IPS_GetVariableProfile($profileName);
-
-        return array_map(
-            static fn(array $association): mixed => $association['Value'],
-            $profile['Associations'] ?? []
-        );
-    }
-
     private function GetVariableProfileName(int $variableId): string
     {
         $presentation = $this->VisualizationPresentation($variableId);
         if (!empty($presentation['PROFILE'])) return (string)$presentation['PROFILE'];
         $variable = IPS_GetVariable($variableId);
 
-        return $variable['VariableCustomProfile'] !== ''
-            ? (string) $variable['VariableCustomProfile']
-            : (string) $variable['VariableProfile'];
+        return (string) (($variable['VariableCustomProfile'] ?? '') ?: ($variable['VariableProfile'] ?? ''));
     }
 
     private function ValueInList(mixed $value, array $values): bool
@@ -4569,7 +4547,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             throw new InvalidArgumentException('Der Steuerwert muss eine endliche Zahl sein.');
         }
         if ($action === 'SetControlMode') {
-            $allowed = $this->GetProfileAssociationValues($id);
+            $allowed = array_column($this->VisualizationAssociations($id), 'value');
             if (floor((float)$newValue) !== (float)$newValue || ($allowed !== [] && !$this->ValueInList($newValue, $allowed))) {
                 throw new InvalidArgumentException('Ungültige Betriebsart.');
             }
@@ -4752,7 +4730,7 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
         $entry = $points[$ident];
         $definition = $this->GetDataPointConfig($entry['id']);
         $profileName = $definition['profile'];
-        $profile = $profileName !== '' && IPS_VariableProfileExists($profileName) ? IPS_GetVariableProfile($profileName) : [];
+        $profile = $this->VariablePresentationDefinition($profileName);
         $unit = trim((string)($profile['Suffix'] ?? match ($profileName) {
             '~Temperature' => ' °C', '~Watt' => ' W', 'WPLUX.kW' => ' kW', 'WPLUX.lh' => ' l/h', 'WPLUX.Ver' => ' rpm', default => ''
         }));

@@ -23,6 +23,14 @@ function invoke(Luxtronik $module, string $method, mixed ...$arguments): mixed
     return (new ReflectionMethod($module, $method))->invoke($module, ...$arguments);
 }
 
+function ensureLegacyLuxtronikProfiles(): void
+{
+    $module = new Luxtronik();
+    foreach ((new ReflectionClass(Luxtronik::class))->getConstant('PROFILE_DEFAULTS') as $name => $definition) {
+        $GLOBALS['testProfiles'][$name] ??= invoke($module, 'VariablePresentationDefinition', $name);
+    }
+}
+
 function frame(int $command, array $values): string
 {
     return pack('N*', ...($command === 3004 ? [$command, 0, count($values)] : [$command, count($values)]))
@@ -345,7 +353,7 @@ $tests['Java parameter 1 reaches the correction tile independently of optional m
         $module->properties['IDListe']='[]';$module->Update();$module->Update();
         check($module->GetIDForIdent('Anpassung_Temp')===false,'Reading parameter 1 creates a control');
         check(invoke($module,'InternalControlReading','Anpassung_Temp')['value']===0.5,'Raw parameter 1 value 5 not read as 0.5');
-        invoke($module,'CreateVariableProfiles');$module->properties['TempsetVisible']=true;
+        ensureLegacyLuxtronikProfiles();$module->properties['TempsetVisible']=true;
         $module->RegisterVariableFloat('Anpassung_Temp','Meine Heizkorrektur','WPLUX.Tset');$module->EnableAction('Anpassung_Temp');
         $control=invoke($module,'BuildControlData')['heatingTemperatureCorrection'];
         check($control['configured'] && $control['currentValue']===0.5 && $control['step']===0.5,'Tile depends on the newly created variable default instead of internally read parameter 1');
