@@ -1381,15 +1381,14 @@ class Luxtronik extends IPSModuleStrict
     private function Exchange(int $command, array $arguments): ?array
     {
         if(!$this->DeviceAddressConfigured()) return null;
-        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-        if ($socket === false) {
-            $this->LogMessage('Socket konnte nicht erstellt werden.', KL_ERROR);
-            return null;
-        }
-
+        $socket = null;
         try {
+            $socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+            if ($socket === false) {
+                throw new RuntimeException('Socket konnte nicht erstellt werden.');
+            }
             $deadline = microtime(true) + self::SOCKET_TIMEOUT;
-            if (!socket_set_nonblock($socket)) {
+            if (!@socket_set_nonblock($socket)) {
                 throw new RuntimeException('Socket konnte nicht auf nichtblockierend gestellt werden.');
             }
             $ip = $this->ReadPropertyString('IPAddress');
@@ -1400,7 +1399,10 @@ class Luxtronik extends IPSModuleStrict
                     throw new RuntimeException('Verbindung fehlgeschlagen: ' . socket_strerror($error));
                 }
                 $this->WaitForSocket($socket, false, $deadline);
-                $error = socket_get_option($socket, SOL_SOCKET, SO_ERROR);
+                $error = @socket_get_option($socket, SOL_SOCKET, SO_ERROR);
+                if ($error === false) {
+                    throw new RuntimeException('Verbindungsstatus konnte nicht gelesen werden.');
+                }
                 if ($error !== 0) {
                     throw new RuntimeException('Verbindung fehlgeschlagen: ' . socket_strerror((int)$error));
                 }
@@ -1434,10 +1436,14 @@ class Luxtronik extends IPSModuleStrict
         } catch (RuntimeException | ValueError $error) {
             $message = "Kommando $command: " . $error->getMessage();
             $this->SendDebug('Socketverbindung', $message, 0);
-            $this->LogMessage($message, KL_ERROR);
+            if (!in_array($command, [3003, 3004], true)) {
+                $this->LogMessage($message, KL_ERROR);
+            }
             return null;
         } finally {
-            socket_close($socket);
+            if ($socket instanceof Socket) {
+                socket_close($socket);
+            }
         }
     }
 

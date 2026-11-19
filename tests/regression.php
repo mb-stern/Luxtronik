@@ -247,7 +247,9 @@ $tests['truncated frames, wrong commands and excessive counts preserve existing 
             $module->properties['IDListe'] = '[{"id":276,"enabled":true}]';
             $module->Update();
             check(GetValue($id) === 'previous' && $module->writes === 0, 'Corrupt reply changed value');
-            check(count($module->errors) === 1, 'Failure not reported');
+            $debug = array_column($module->debugMessages, 1, 0);
+            check($module->errors === [] && str_starts_with($debug['Socketverbindung'] ?? '', 'Kommando 3004: '),
+                'Invalid measurement reply must be reported only in debug');
         });
     }
 };
@@ -263,7 +265,9 @@ $tests['silent connections time out and leave existing values intact'] = static 
         // The independent parameter read follows the measurement timeout; this
         // single-threaded peer finishes its 5.5 s silence before answering it.
         check($elapsed >= 4.5 && $elapsed < 6.0, 'Measurement timeout plus independent control read exceeded its bound');
-        check(count($module->errors) === 1 && str_contains($module->errors[0], 'Zeitüberschreitung'), 'Timeout missing');
+        $debug = array_column($module->debugMessages, 1, 0);
+        check($module->errors === [] && ($debug['Socketverbindung'] ?? '') === 'Kommando 3004: Zeitüberschreitung bei der Socket-Abfrage.',
+            'Measurement timeout must be reported only in debug');
         check($module->writes === 0 && GetValue($id) === 'previous', 'Timeout changed variables');
     });
 };
@@ -275,7 +279,8 @@ $tests['failed write acknowledgements do not trigger read-back'] = static functi
             $GLOBALS['testVariables'][$id]['value'] = 45.0;
             $module->RequestAction('Anpassung_WW', 50.5);
             check(GetValue($id) === 45.0 && $module->writes === 0, 'Failed write changed value');
-            check(count($module->errors) === 1, 'Unexpected read-back after failed write');
+            check(count($module->errors) === 1 && str_starts_with($module->errors[0], 'Kommando 3002: '),
+                'Failed write must still appear in the error log');
         });
     }
 };
@@ -290,7 +295,9 @@ $tests['partial control replies do not apply even fully received individual valu
         $GLOBALS['testVariables'][$id]['value'] = -1.5;
         invoke($module, 'RefreshControlValues');
         check(GetValue($id) === -1.5 && $module->writes === 0, 'Partial control reply applied');
-        check(count($module->errors) === 1, 'Partial control reply not reported');
+        $debug = array_column($module->debugMessages, 1, 0);
+        check($module->errors === [] && str_starts_with($debug['Socketverbindung'] ?? '', 'Kommando 3003: '),
+            'Partial control reply must be reported only in debug');
     });
 };
 $tests['3003 control refresh and missing timer indices are safe'] = static function (): void {
