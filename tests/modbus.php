@@ -1135,6 +1135,9 @@ $tests['polling never replays SHI demands and controller fallback updates existi
         file_put_contents($externalRegisters,json_encode(['holding'=>[10000=>0]]));
         invoke($m,'UpdateModbusSupplement');
         check(GetValue($mode)===0 && GetValue($offset)===1.5,'Controller mode reset ignored or unsent offset invented');
+        $release=json_decode($m->GetSHIData(),true)['connectionDiagnostics']['lastModeReleases'][0];
+        check($release['address']===10000 && $release['previousMode']===2 && $release['readGap']===null,
+            'Mode release during normal polling was missed or incorrectly linked to an outage');
         file_put_contents($externalRegisters,json_encode(['holding'=>[10002=>0]]));
         invoke($m,'UpdateModbusSupplement');
         check(GetValue($offset)===0.0,'Controller offset reset not reflected in existing variable');
@@ -1142,6 +1145,64 @@ $tests['polling never replays SHI demands and controller fallback updates existi
     },['discrete'=>[10000=>1],'holding'=>[10000=>0,10002=>0,10065=>0]]);
     $writes=array_values(array_filter($requests,static fn($r)=>$r['function']===16));
     check(array_column($writes,'address')===[10000,10002],'Polling resent or reset SHI commands');
+};
+
+$tests['SHI diagnostics retain real read failures and match a mode release across poll stages'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m,string $externalRegisters):void {
+        $m->properties['SHIControlList']='[{"id":310000,"enabled":true}]';
+        $m->properties['IDListe']='[{"id":15,"enabled":true,"preferredSource":"modbus"}]';
+        invoke($m,'UpdateModbusSupplement');
+        $state=json_decode($m->buffers['SHIDiagnostics'],true);
+        check($state['modes'][10000]['mode']===2 && $state['lastSuccessfulReadAt']>=microtime(true)-5,
+            'Successful poll did not record its actual reply and active mode');
+
+        file_put_contents($externalRegisters,json_encode(['input'=>[10108=>['exception'=>4]]]));
+        invoke($m,'UpdateModbusSupplement',true);
+        $report=json_decode($m->GetSHIData(),true)['connectionDiagnostics'];
+        check($report['lastSuccessfulReadAt']===$state['lastSuccessfulReadAt'] && $report['lastReadFailure']['message']==='SHI-Ausnahmeantwort: 4',
+            'Failed read advanced the last successful reply or lost the failure');
+        check($report['lastModeReleases']===[],'Read failure was reported as a mode release');
+
+        // Simulate elapsed time without waiting for the real watchdog or retry delay.
+        $state=json_decode($m->buffers['SHIDiagnostics'],true);
+        $state['lastSuccessfulReadAt']-=901;
+        $state['modes'][10000]['at']-=901;
+        $m->buffers['SHIDiagnostics']=json_encode($state);
+        $cache=json_decode($m->buffers['SHICache'],true);
+        $cache['nextAttempt']=0;
+        $m->buffers['SHICache']=json_encode($cache);
+        file_put_contents($externalRegisters,json_encode(['input'=>[10108=>123], 'holding'=>[10000=>0]]));
+        $cycle=microtime(true);
+        invoke($m,'UpdateModbusSupplement',true,$cycle);
+        invoke($m,'UpdateModbusSupplement',false,$cycle);
+        $report=json_decode($m->GetSHIData(),true)['connectionDiagnostics'];
+        $release=$report['lastModeReleases'][0];
+        check($report['lastReadGap']['seconds']>=900 && $release['readGap']===$report['lastReadGap'],
+            'Mode read lost the communication gap already recorded by the preferred-source poll');
+        check($release['address']===10000 && $release['previousMode']===2 && $release['observedAt']>=$report['lastReadGap']['nextReplyAt'],
+            'Mode release and its detection time are inconsistent');
+
+        invoke($m,'UpdateModbusSupplement');
+        $report=json_decode($m->GetSHIData(),true)['connectionDiagnostics'];
+        check($report['lastModeReleases']===[$release],'Later neutral reads overwrote the release time');
+        $m->properties['ModbusUnitID']=2;
+        $otherDevice=json_decode($m->GetSHIData(),true)['connectionDiagnostics'];
+        check($otherDevice['lastSuccessfulReadAt']===null && $otherDevice['lastModeReleases']===[],
+            'Diagnostics leaked from the previous Modbus connection');
+    },['input'=>[10108=>123], 'discrete'=>[10000=>1], 'holding'=>[10000=>2]]);
+    check(!in_array(16,array_column($requests,'function'),true),'Diagnostics caused a Modbus write');
+};
+
+$tests['an explicitly confirmed neutral SHI mode is not diagnosed as a release on the next poll'] = static function():void {
+    $requests=withSHI(static function(Luxtronik $m):void {
+        $m->properties['SHIControlList']='[{"id":310000,"enabled":true}]';
+        invoke($m,'UpdateModbusSupplement');
+        $m->RequestAction('SHI_Modus_Heizen',0);
+        invoke($m,'UpdateModbusSupplement');
+        $report=json_decode($m->GetSHIData(),true)['connectionDiagnostics'];
+        check($report['lastModeReleases']===[],'A user command was reported as a mode release');
+    },['discrete'=>[10000=>1], 'holding'=>[10000=>2]]);
+    check(count(array_filter($requests,static fn($request)=>$request['function']===16))===1,'Modbus diagnostics resent an explicit command');
 };
 
 $tests['direct TCP reads and writes ignore an old attached gateway and preserve measurement objects'] = static function():void {
