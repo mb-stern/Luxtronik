@@ -41,7 +41,7 @@ trait LuxtronikFirmware
         $changed=$previous!==null && ($previous['major']!==$version['major'] || $previous['minor']!==$version['minor']
             || ($previous['patchKnown'] && $version['patchKnown'] && $previous['patch']!==$version['patch']));
         if($changed) {
-            unset($info['websocket'],$info['modbus'],$info['probeAfter'],$info['probeError']);
+            unset($info['websocket'],$info['modbus'],$info['probeAfter'],$info['probeError'],$info['webFormat']);
             // A firmware change invalidates discovery, never user objects or selections.
             foreach(['WebInventory','WebEEVCache','SHICache'] as $buffer) $this->SetBuffer($buffer,'');
         } elseif($previous!==null && ((!$version['patchKnown'] && $previous['patchKnown'])
@@ -58,6 +58,16 @@ trait LuxtronikFirmware
     {
         foreach($snapshot['groups']??[] as $group) if($this->WebFieldKey($group['name'])===$this->WebFieldKey('Anlagenstatus'))
             foreach($group['fields'] as $field) if($this->WebFieldKey($field['name'])===$this->WebFieldKey('Softwarestand')) $this->RememberFirmwareString($field['raw']);
+    }
+
+    private function RememberWebInterfaceFormat(array $snapshot): void
+    {
+        $format = $snapshot['format'] ?? null;
+        if (!in_array($format, ['xml', 'json'], true)) return;
+        $info = $this->FirmwareInfo();
+        if (($info['webFormat'] ?? null) === $format) return;
+        $info['webFormat'] = $format;
+        $this->SetBuffer('FirmwareInfo', json_encode($info, JSON_THROW_ON_ERROR));
     }
 
     /** True = supported, false = outside documented V3 requirements, null = not determined. */

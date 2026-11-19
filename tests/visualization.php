@@ -236,7 +236,7 @@ $tests['graphic rejects forged, foreign, disabled and SHI write actions'] = stat
         }
     });
 };
-$tests['original web interface uses the device root or an explicit legacy URL'] = static function (): void {
+$tests['original web interface uses the device root or a previously configured URL'] = static function (): void {
     $module = new Luxtronik();
     $module->properties['IPAddress'] = '192.0.2.59';
     check(invoke($module, 'BuildCardConfig')['luxtronikWebInterfaceURL'] === 'http://192.0.2.59/', 'Device root is not the default URL');
@@ -245,8 +245,9 @@ $tests['original web interface uses the device root or an explicit legacy URL'] 
     $legacy = 'http://192.0.2.59/Webserver/index.html';
     $module->properties['LuxtronikWebInterfaceURL'] = $legacy;
     $form = fields(json_decode($module->GetConfigurationForm(), true));
-    check(isset($form['LuxtronikWebInterfaceURL']), 'Legacy URL cannot be set in the form');
+    check(!isset($form['LuxtronikWebInterfaceURL']), 'Automatic selection added a manual configuration field');
     check(invoke($module, 'BuildCardConfig')['luxtronikWebInterfaceURL'] === $legacy, 'Explicit legacy URL was replaced');
+    check(invoke($module, 'BuildCardConfig')['luxtronikWebInterfacePaths'] === null, 'Browser can overwrite an explicit URL');
 };
 $tests['integer legacy setpoints reject fractions instead of silently truncating them'] = static function (): void {
     withoutConnection(static function (Luxtronik $module): void {

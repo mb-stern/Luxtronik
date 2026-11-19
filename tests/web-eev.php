@@ -134,6 +134,32 @@ $tests['captured JSON navigation reads informational JSON without mistaking fals
             ['id'=>'text','name'=>'A&B <HUP>','value'=>'<not-markup>']
         ]],JSON_THROW_ON_ERROR),'expectPages'=>['Ausgänge']]);
 };
+$tests['original web link follows XML to JSON firmware updates at the same address'] = static function():void {
+    $module = new WebEEVTestModule();
+    $module->properties['IPAddress'] = '127.0.0.1';
+    invoke($module, 'RememberFirmwareString', '3.89.0');
+    withEEVPeer(static function (int $port) use ($module): void {
+        $module->webTestPort = $port;
+        invoke($module, 'UpdateWebEEV', microtime(true));
+    });
+    check(invoke($module, 'GetLuxtronikWebInterfaceURL') === 'http://127.0.0.1/Webserver/index.html', 'XML navigation did not select the legacy web path');
+
+    invoke($module, 'RememberFirmwareString', '3.92.3');
+    $navigation = json_encode(['type' => 'Navigation', 'items' => [
+        ['name' => 'Informationen', 'id' => 'info', 'items' => [['name' => 'Ausgänge', 'id' => 'out']]],
+        ['name' => 'Fernsteuerung', 'id' => 'remote', 'readOnly' => false],
+    ]], JSON_THROW_ON_ERROR);
+    withEEVPeer(static function (int $port) use ($module): void {
+        $module->webTestPort = $port;
+        invoke($module, 'UpdateWebEEV', microtime(true));
+    }, ['navigation' => $navigation, 'outputID' => 'out', 'expectPages' => ['Ausgänge']]);
+    check(invoke($module, 'FirmwareInfo')['webFormat'] === 'json', 'Firmware update did not remember the new navigation format');
+    check(invoke($module, 'GetLuxtronikWebInterfaceURL') === 'http://127.0.0.1/', 'New firmware retained the legacy web path');
+
+    $module->properties['IPAddress'] = '192.0.2.59';
+    check(!isset(invoke($module, 'FirmwareInfo')['webFormat']), 'Previous device format carried over to a new address');
+};
+
 $tests['malformed or excessive JSON menu structures are rejected before further GETs'] = static function():void {
     $deep=['items'=>[]];
     for($level=0;$level<35;++$level) $deep=['items'=>[$deep]];

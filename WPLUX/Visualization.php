@@ -8,6 +8,8 @@
  */
 trait LuxtronikVisualization
 {
+    private const WEB_INTERFACE_PATHS = ['xml' => '/Webserver/index.html', 'json' => '/'];
+
     private const LUXTRONIK_IDENT_MAP = [
         'OperatingStatusVariable' => ['Betriebszustand'],
         'HeatingControlVariable' => ['Mode_Heizung'],
@@ -576,6 +578,7 @@ HTML;
             'title'                      => '',
             'fullConfigurationPreview'   => $this->ReadPropertyBoolean('FullConfigurationPreview'),
             'luxtronikWebInterfaceURL'    => $this->GetLuxtronikWebInterfaceURL(),
+            'luxtronikWebInterfacePaths'  => trim($this->ReadPropertyString('LuxtronikWebInterfaceURL')) === '' ? self::WEB_INTERFACE_PATHS : null,
             'luxtronikWebSocketPassword' => $this->ReadPropertyString('WebSocketPassword'),
             'heatingPumpType'            => $this->ReadPropertyString('VisualizationHeatPumpType') === 'G2W' ? 'G2W' : 'A2W',
             'sourceInletTemperature'     => $this->DataKey('SourceInletTemperature', 'sourceInletTemperature'),
@@ -2512,6 +2515,7 @@ window.SymconHeatPump = {
 
 
         const luxtronikDialog = document.getElementById('wp-luxtronik-dialog');
+        const luxtronikExternal = document.getElementById('wp-luxtronik-external');
         const luxtronikCanvas = document.getElementById('wp-luxtronik-display');
         const luxtronikHelp = document.getElementById('wp-luxtronik-help');
         const luxtronikControls = document.getElementById('wp-luxtronik-controls');
@@ -2528,6 +2532,7 @@ window.SymconHeatPump = {
         let luxtronikDisplayID = '';
         let luxtronikReady = false;
         let luxtronikPressed = false;
+        let luxtronikWebPath = '';
         const getLuxtronikWebURL = () => {
             try {
                 const url = new URL(currentConfig.luxtronikWebInterfaceURL || '');
@@ -2535,6 +2540,13 @@ window.SymconHeatPump = {
             } catch (_) {
                 return '';
             }
+        };
+        const updateLuxtronikExternalLink = () => {
+            const address = getLuxtronikWebURL();
+            if (!address) { luxtronikExternal.removeAttribute('href'); return; }
+            const url = new URL(address);
+            if (currentConfig.luxtronikWebInterfacePaths && luxtronikWebPath) url.pathname = luxtronikWebPath;
+            luxtronikExternal.href = url.href;
         };
         const sendLuxtronikMove = (direction) => {
             if (luxtronikReady && luxtronikSocket && luxtronikSocket.readyState === WebSocket.OPEN) {
@@ -2687,6 +2699,9 @@ window.SymconHeatPump = {
             const root = parseLuxtronikDocument(text).documentElement;
             const type = root.localName.toLowerCase();
             if (type === 'navigation') {
+                const format = text.trimStart().startsWith('{') ? 'json' : 'xml';
+                luxtronikWebPath = currentConfig.luxtronikWebInterfacePaths?.[format] || '';
+                updateLuxtronikExternalLink();
                 const menus = luxtronikElements(root, 'item').filter(item =>
                     ['fernsteuerung', 'fernbedienung', 'remotecontrol', 'remotedisplay'].includes(
                         luxtronikChildText(item, 'name').toLowerCase().replace(/[\s_-]+/g, '')))
@@ -2733,7 +2748,7 @@ window.SymconHeatPump = {
             const address = getLuxtronikWebURL();
             if (!address || !luxtronikDialog.open) return;
             const url = new URL(address);
-            document.getElementById('wp-luxtronik-external').href = address;
+            updateLuxtronikExternalLink();
             // The uploaded Lux.js uses unencrypted ws on 8214, including for HTTPS web URLs.
             const pageProtocol = window.location.protocol === 'about:'
                 ? new URL(document.baseURI).protocol : window.location.protocol;
@@ -4198,8 +4213,14 @@ window.SymconHeatPump = {
             if (data.config) {
                 const previousDeviceURL = getLuxtronikWebURL();
                 currentConfig = data.config;
-                // A disabled or changed device revokes an open panel too.
-                if (previousDeviceURL !== getLuxtronikWebURL()) closeLuxtronikWebInterface();
+                const deviceURL = getLuxtronikWebURL();
+                if (previousDeviceURL !== deviceURL) {
+                    const sameController = previousDeviceURL && deviceURL
+                        && new URL(previousDeviceURL).origin === new URL(deviceURL).origin;
+                    luxtronikWebPath = '';
+                    if (!sameController) closeLuxtronikWebInterface();
+                }
+                updateLuxtronikExternalLink();
             }
 
             if (data.data) {
@@ -4325,7 +4346,8 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
             } elseif (!filter_var($address, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
                 return '';
             }
-            $url = 'http://' . $address . '/';
+            $format = $this->FirmwareInfo()['webFormat'] ?? 'json';
+            $url = 'http://' . $address . (self::WEB_INTERFACE_PATHS[$format] ?? '/');
         }
         $parts = parse_url($url);
         if ($parts === false || !in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
@@ -4635,8 +4657,6 @@ SYMC0N_HEATPUMP_JAVASCRIPT;
     {
         $items = [
             ['type' => 'Label', 'caption' => 'Komponenten auswählen; die Grafik erhält ihre internen Messwerte automatisch, unabhängig von der ID-Liste.'],
-            ['type' => 'ValidationTextBox', 'name' => 'LuxtronikWebInterfaceURL',
-                'caption' => 'Original-Webinterface (optional, leer = IP-Adresse)'],
             ['type'=>'Select','name'=>'VisualizationHeatPumpType','caption'=>'Wärmepumpentyp',
                 'options'=>[['caption'=>'Luft/Wasser','value'=>'A2W'],['caption'=>'Sole/Wasser','value'=>'G2W']]],
             $this->VariableSelect('Wettercode (OpenWeather, z. B. 10d; optional)', 'VisualizationWeatherCode'),

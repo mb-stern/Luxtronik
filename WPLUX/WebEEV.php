@@ -106,7 +106,7 @@ final class LuxtronikWebEEVClient
             foreach($menus as $menu) $visit($menu);
             foreach($requestedPages??[] as $page) if(!isset($seenNames[$this->key($page)]))
                 $errors[]=['name'=>$page,'error'=>'Benötigte Informationsseite nicht geliefert.'];
-            $this->snapshot=['navigation'=>$navigationItems,'count'=>array_sum(array_column($groups,'count')),'groups'=>$groups,'errors'=>$errors,'complete'=>$errors===[],
+            $this->snapshot+=['count'=>array_sum(array_column($groups,'count')),'groups'=>$groups,'errors'=>$errors,'complete'=>$errors===[],
                 'fullScan'=>$requestedPages===null,'requestedPages'=>$requestedPages];
             if ($outputs===null) {
                 if ($groups!==[]) return [];
@@ -212,7 +212,10 @@ final class LuxtronikWebEEVClient
             if(trim($text)==='') continue;
             if(str_starts_with(ltrim($text),'{')) {
                 $document=$this->jsonDocument($text);
-                if(strcasecmp($document->documentElement->localName,$expected)===0) return $document;
+                if(strcasecmp($document->documentElement->localName,$expected)===0) {
+                    if ($expected==='Navigation') $this->snapshot['format']='json';
+                    return $document;
+                }
                 continue;
             }
             if (stripos($text,'<!DOCTYPE')!==false || stripos($text,'<!ENTITY')!==false) throw new RuntimeException('Unzulässiger XML-Dokumenttyp.');
@@ -225,7 +228,10 @@ final class LuxtronikWebEEVClient
                 libxml_use_internal_errors($previous);
             }
             if (!$valid || $document->documentElement===null) throw new RuntimeException('Ungültige EEV-XML-Antwort.');
-            if (strcasecmp($document->documentElement->localName,$expected)===0) return $document;
+            if (strcasecmp($document->documentElement->localName,$expected)===0) {
+                if ($expected==='Navigation') $this->snapshot['format']='xml';
+                return $document;
+            }
         }
         throw new RuntimeException('EEV-Menüantwort fehlt.');
     }
@@ -574,6 +580,9 @@ trait LuxtronikWebEEV
                     $this->SetBuffer('WebInventory',json_encode($inventory,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
                 }
             }
+            if (isset($client) && $source===$this->WebEEVSourceKey()) {
+                $this->RememberWebInterfaceFormat($client->snapshot());
+            }
             $cache['queriedAt']=microtime(true);
             $cache['nextAttempt']=microtime(true)+($cache['error']!==null?120:5);
             if ($source!==$this->WebEEVSourceKey()) return;
@@ -686,6 +695,9 @@ trait LuxtronikWebEEV
             if(isset($client)) $report['navigation']=$client->snapshot()['navigation']??[];
         } finally {
             if($entered) IPS_SemaphoreLeave($lock);
+        }
+        if (isset($client) && $source===$this->WebEEVSourceKey()) {
+            $this->RememberWebInterfaceFormat($client->snapshot());
         }
         $this->UpdateFormField('WebInventoryStatus','caption',isset($report['count'])?'Bestandsabfrage am '.date('d.m.Y H:i:s').($report['ok']?' abgeschlossen.':' teilweise verfügbar; Details im Bericht.'):'Bestandsabfrage: '.($report['error']??'fehlgeschlagen'));
         return json_encode($report,JSON_THROW_ON_ERROR|JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_PRESERVE_ZERO_FRACTION);

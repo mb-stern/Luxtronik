@@ -305,6 +305,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 web_payload=json.loads(json.dumps(payload))
                 web_url=f'http://127.0.0.1:{server.server_port}/luxtronik-test.html'
                 web_payload['config']['luxtronikWebInterfaceURL']=web_url
+                web_payload['config']['luxtronikWebInterfacePaths']=None
                 web_payload['config']['luxtronikWebSocketPassword']='123456'
                 page.evaluate('(p)=>window.handleMessage({type:"update",config:p.config})',web_payload)
                 assert page.locator('#gSettings').is_visible()
@@ -1244,7 +1245,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 peer.alternate_remote=alternate;peer.remote_locked=locked
                 remote_page.route_web_socket(re.compile(r'^ws://127\.0\.0\.1:8214/$'),peer.connect)
                 remote_page.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
-                remote_page.evaluate('(url)=>window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:url}})',web_url)
+                remote_page.evaluate('window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:"http://127.0.0.1/",luxtronikWebInterfacePaths:{xml:"/Webserver/index.html",json:"/"}}})')
                 remote_page.locator('#gSettings').dispatch_event('click')
                 if locked:
                     remote_page.wait_for_function('document.querySelector("#wp-luxtronik-help").textContent.includes("nicht zur Bedienung freigegeben")')
@@ -1258,6 +1259,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                     remote_page.wait_for_function('document.querySelector("#wp-luxtronik-display").getContext("2d").getImageData(0,0,1,1).data[0]===0')
                     if alternate:
                         assert [c for c in peer.commands if c.startswith('GET;')]==['GET;legacy','GET;remote-1']
+                assert remote_page.locator('#wp-luxtronik-external').get_attribute('href')=='http://127.0.0.1/Webserver/index.html'
                 assert not any(c.startswith('MOVE;') for c in peer.commands)
                 remote_page.close()
             print(json.dumps({'luxtronik':'PASS','menu_and_xml_variants':'PASS','advertised_fallback':'PASS','locked_fallback':'PASS'}))
@@ -1267,7 +1269,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                 peer=LuxtronikFixture();peer.json_display=True;peer.remote_locked=locked
                 remote_page.route_web_socket(re.compile(r'^ws://127\.0\.0\.1:8214/$'),peer.connect)
                 remote_page.goto(f'http://127.0.0.1:{server.server_port}/configured.html')
-                remote_page.evaluate('(url)=>window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:url}})',web_url)
+                remote_page.evaluate('window.handleMessage({type:"update",config:{luxtronikWebInterfaceURL:"http://127.0.0.1/Webserver/index.html",luxtronikWebInterfacePaths:{xml:"/Webserver/index.html",json:"/"}}})')
                 remote_page.locator('#gSettings').dispatch_event('click')
                 if locked:
                     remote_page.wait_for_function('document.querySelector("#wp-luxtronik-help").textContent.includes("nicht zur Bedienung freigegeben")')
@@ -1283,6 +1285,7 @@ with tempfile.TemporaryDirectory(prefix="wp-browser-") as artifacts:
                         {'id':'0xc5b080','name':'Fernsteuerung','readOnly':True}]}))
                     remote_page.wait_for_function('document.querySelector("#wp-luxtronik-controls").disabled')
                     assert 'nicht zur Bedienung freigegeben' in remote_page.locator('#wp-luxtronik-help').text_content()
+                assert remote_page.locator('#wp-luxtronik-external').get_attribute('href')=='http://127.0.0.1/'
                 assert not any(c.startswith('MOVE;') for c in peer.commands)
                 remote_page.close()
             print(json.dumps({'luxtronik_json':'PASS','captured_navigation':'PASS','remote_bitmap':'PASS','values':'PASS','boolean_lock':'PASS'}))
