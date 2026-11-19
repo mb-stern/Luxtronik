@@ -221,6 +221,7 @@ werden nicht automatisch ineinander übertragen.
 
 Das Modul verwendet Wertanzeigen für Mess- und Statuswerte, Aufzählungen für
 Betriebsarten, Schieberegler für Sollwerte und Uhrzeiten für Zeitprogramme.
+Es erstellt und ändert keine klassischen Variablenprofile mehr.
 Beim Übernehmen der Konfiguration wechseln bestehende Standarddarstellungen auf
 denselben Variablen. Objekt-ID, Name, Datentyp, Wert und Archiv bleiben erhalten.
 Benutzerdefinierte Darstellungen und Profilzuordnungen behalten Vorrang.
@@ -287,8 +288,8 @@ SHI-API-Zugriffe ohne Variablenauswahl steht unter Diagnose.
 
 Version 5.0 (in Vorbereitung; Änderungen seit der bisherigen Version)
 
-- Java bleibt Standard. WebSocket und direkte Modbus-TCP-/SHI-Abfragen ergänzen zugeordnete Messwerte. Bestehende Variablen, Objekt-IDs, Namen, Profile, Archive und Java-Steuerungen bleiben erhalten.
-- Native Symcon-Darstellungen für Werte, Betriebsarten, Sollwerte und Zeitprogramme. Bestehende Modulvariablen behalten ihre IDs, Namen, Datentypen und Archive.
+- Java bleibt Standard. WebSocket und direkte Modbus-TCP-/SHI-Abfragen ergänzen zugeordnete Messwerte. Die bisherigen Java-Steuerungen bleiben verfügbar.
+- Neue Symcon-Variablendarstellungen. Das Modul erstellt und ändert keine klassischen Profile mehr. „Übernehmen“ stellt bestehende Standardzuordnungen um. Objekt-IDs, Namen, Datentypen, Werte, Archive und eigene Profilzuordnungen bleiben erhalten.
 - Gemeinsame Istwertliste mit Quellenwahl je Messwert, Sammelauswahl und Anzeige der tatsächlichen Quelle sowie des Datenstatus. Die Quellenwahl betrifft nur das Lesen; gespeicherte Einzelzuordnungen bleiben erhalten.
 - Einfachere Konfiguration: Verbindung und Lesen direkt unter „Modul aktiv“, gemeinsamer Abfragetakt und Firmware-/Schnittstellenerkennung. Sicher nicht unterstützte Bereiche werden ausgeblendet. Kein Modbus-Gateway oder Client Socket erforderlich.
 - WebSocket unterstützt XML und JSON sowie Informationsseiten mit Untermenüs, Energiemonitor, EEV-Werten und Fehlerhistorie. Diagnoseberichte für WebSocket und Modbus stehen zum Download bereit.

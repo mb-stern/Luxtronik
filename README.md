@@ -10,6 +10,11 @@ Gegenstücke verwenden bestehende Variablen; die bisherigen Java-Steuerungen und
 Zeitprogramme bleiben erhalten. SHI-Vorgaben für externe Regelungen stehen als
 eigene Steuervariablen zur Verfügung.
 
+Version 5.0 verwendet die neuen Symcon-Variablendarstellungen. Beim Übernehmen
+der Instanzkonfiguration werden bestehende Standardzuordnungen umgestellt.
+Objekt-IDs, eigene Namen und Archivdaten bleiben erhalten.
+[Darstellung in Symcon](WPLUX/README.md#darstellung-in-symcon)
+
 Die Betriebsarten und Heizkorrektur werden intern über Java-Befehl 3003
 gelesen; WW Soll zeigt den wirksamen Sollwert aus 3004, ID 18.
 Diese Abfragen benötigen keine angelegten Symcon-Variablen. Die Heizkorrektur
