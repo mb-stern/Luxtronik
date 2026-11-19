@@ -299,7 +299,7 @@ Die interaktive Anlagengrafik zeigt die Wärmepumpe mit ihren aktuellen Messwert
 Weitere Neuerungen
 
 - Umstellung von Variablenprofilen auf die neue Symcon-Variablendarstellung. Einheiten, Nachkommastellen und Schrittweiten stehen direkt an der Variable. Beim ersten „Übernehmen“ wird die neue Standarddarstellung auf die bestehenden Variablen angewendet.
-- WebSocket und direktes Modbus TCP/SHI ergänzen Java um zusätzliche Istwerte. In der gemeinsamen Istwertliste lässt sich die Lesequelle einzeln oder gesammelt wählen. Die Liste zeigt die tatsächlich verwendete Quelle und den Datenstatus.
+- WebSocket und direktes Modbus TCP/SHI ergänzen Java um zusätzliche Istwerte. Modbus bündelt benachbarte Register in Blockabfragen. In der gemeinsamen Istwertliste lässt sich die Lesequelle einzeln oder gesammelt wählen. Die Liste zeigt die verwendete Quelle und den Datenstatus.
 - Das vereinfachte Formular bündelt Verbindung und Lesen direkt unter „Modul aktiv“. Die Firmware- und Schnittstellenerkennung blendet verfügbare Optionen ein. Alle Lesequellen nutzen denselben Aktualisierungstakt.
 - WebSocket liest über XML und JSON auch Werte aus dem Energiemonitor, EEV-Werte und die Fehlerhistorie. Diagnoseberichte für WebSocket und Modbus lassen sich herunterladen.
 - SHI bietet eigene Steuervariablen für die externe Regelung. Beim Senden setzt das Modul den benötigten Modus, prüft Freigaben und Grenzen und liest den Wert zur Bestätigung zurück. Temperaturen, Offsets und Leistungsgrenzen lassen sich in 0,1er-Schritten einstellen.

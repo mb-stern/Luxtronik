@@ -179,7 +179,10 @@ Wärmepumpe. Unter **Verbindung und Lesen** stehen Modbus-Port (normalerweise
 **502**), Geräteadresse / Unit-ID (normalerweise **1**) und Modbus-Antwortwartezeit
 (in Millisekunden). Zeitangaben aus dem Webinterface werden standardmäßig mit der
 Symcon-Zeitzone ausgewertet.
-Der gemeinsame Aktualisierungszyklus liest alle benötigten Werte.
+Der gemeinsame Aktualisierungszyklus liest benachbarte, benötigte Modbus-Register
+desselben Registertyps zusammen. Lehnt der Regler einen Block ab, fragt das Modul
+die betroffenen Register einzeln ab. Das Rücklesen einer SHI-Vorgabe bestätigt
+die geschriebenen Register gezielt.
 
 Es werden kein Symcon-Modbus-Gateway, kein Client Socket und keine zusätzlichen
 Timer oder Adressinstanzen benötigt. Bereits angelegte Gateways und Client Sockets

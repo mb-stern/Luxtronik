@@ -31,10 +31,12 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
 {
     $catalog=json_decode(file_get_contents(__DIR__.'/fixtures/shi-registers.json'),true,512,JSON_THROW_ON_ERROR);
     $model=[];
+    $widths=[];
     foreach ($catalog as $p) {
         $raw=$p['bank']==='holding'?(int)round(($p['min']??0)/$p['factor']):0;
         if ($p['bank']==='holding' && ($p['min']??0)<0) $raw=0;
         $model[$p['bank']][$p['address']]=$raw & 0xffff;
+        $widths[$p['bank']][$p['address']]=str_ends_with($p['datatype'],'32')?2:1;
     }
     foreach (['input','discrete','holding'] as $bank) foreach ($options[$bank]??[] as $a=>$v) $model[$bank][$a]=$v;
     $folder=sys_get_temp_dir().'/shi-peer-'.bin2hex(random_bytes(6));mkdir($folder);
@@ -52,7 +54,7 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
                 }
                 return $result;
             };
-            $requestCount=0;$pendingWrites=[];
+            $faultMatches=0;$pendingWrites=[];
             while (!file_exists($folder.'/done')) {
                 $r=[$listener];$w=[];$e=[];
                 if (!stream_select($r,$w,$e,0,100000)) continue;
@@ -65,13 +67,14 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
                     check($h['t']===$lastTransaction+1,'Bad transaction sequence');$lastTransaction=$h['t'];
                     $pdu=$read($connection,$h['length']-1);check(strlen($pdu)===$h['length']-1,'Truncated request');
                     $f=ord($pdu[0]);check(in_array($f,[2,3,4,16],true),'Unapproved Modbus function');
-                    ++$requestCount;
                     $a=unpack('n',substr($pdu,1,2))[1];$count=unpack('n',substr($pdu,3,2))[1];
                     $words=$f===16?array_values(unpack('n*',substr($pdu,6))):[];
                     file_put_contents($folder.'/requests',json_encode(['function'=>$f,'address'=>$a,'count'=>$count,'words'=>$words])."\n",FILE_APPEND);
                     $bank=[2=>'discrete',3=>'holding',4=>'input',16=>'holding'][$f];
                     $fault=$options['fault']??[];
-                    if (($fault['function']??null)===$f && ($fault['address']??null)===$a && $requestCount>=($fault['after']??0)) {
+                    $faultAddress=$fault['address']??0;
+                    $matchesFault=($fault['function']??null)===$f && $faultAddress>=$a && $faultAddress<$a+$count;
+                    if ($matchesFault && ++$faultMatches>($fault['skip']??0)) {
                         if (($fault['kind']??'')==='silent') {usleep(650000);break;}
                         if (($fault['kind']??'')==='truncate') {fwrite($connection,pack('nnnC',$h['t'],0,5,$h['unit'])."\4\2\0");break;}
                         if (($fault['kind']??'')==='identity') {fwrite($connection,pack('nnnCC',$h['t']+1,0,3,$h['unit'],$f|0x80)."\2");continue;}
@@ -86,9 +89,7 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
                     foreach($pendingWrites as $pendingAddress=>$pending) if(microtime(true)>=$pending['due']) {
                         $model['holding'][$pendingAddress]=$pending['word'];unset($pendingWrites[$pendingAddress]);
                     }
-                    $raw=$model[$bank][$a]??null;
-                    if ($raw===null || (is_array($raw) && isset($raw['exception']))) $reply=pack('CC',$f|0x80,is_array($raw)?$raw['exception']:2);
-                    elseif ($f===16) {
+                    if ($f===16) {
                         check(strlen($pdu)===6+2*$count && ord($pdu[5])===2*$count,'Bad write frame');
                         // Only fixture-documented holdings may be written.
                         check($count===1 && isset($model['holding'][$a]),'Write outside documented register set');
@@ -104,13 +105,28 @@ function withSHI(callable $test,array $options=[],?Luxtronik $existing=null): ar
                             else $model['holding'][$a]=$words[0];
                         }
                         $reply=pack('Cnn',16,$a,$count);
-                    } elseif ($f===2) {
-                        check($count===1,'Unexpected discrete range');$reply=pack('CCC',2,1,$raw?1:0);
                     } else {
-                        $expectedCount=1;
-                        foreach ($catalog as $p) if ($p['bank']===$bank && $p['address']===$a && str_ends_with($p['datatype'],'32')) $expectedCount=2;
-                        check($count===$expectedCount,'Wrong register word count at '.$a);
-                        $reply=pack('CC', $f,2*$count).($count===2?pack('nn',($raw>>16)&0xffff,$raw&0xffff):pack('n',$raw&0xffff));
+                        $data='';$exception=null;$bits=[];
+                        for ($offset=0;$offset<$count;) {
+                            $address=$a+$offset;
+                            $raw=$model[$bank][$address]??null;
+                            if ($raw===null || is_array($raw)) {
+                                $exception=$raw['exception']??2;
+                                break;
+                            }
+                            $width=$widths[$bank][$address]??1;
+                            check($offset+$width<=$count,'Read truncated a wide input at '.$address);
+                            if ($f===2) {
+                                $byte=intdiv($offset,8);
+                                $bits[$byte]=($bits[$byte]??0)|(($raw?1:0)<<($offset%8));
+                            } else {
+                                if ($width===2) $data.=pack('n',($raw>>16)&0xffff);
+                                $data.=pack('n',$raw&0xffff);
+                            }
+                            $offset+=$width;
+                        }
+                        if ($f===2) $data=pack('C*',...$bits);
+                        $reply=$exception===null?pack('CC',$f,strlen($data)).$data:pack('CC',$f|0x80,$exception);
                     }
                     $frame=pack('nnnC',$h['t'],0,strlen($reply)+1,$h['unit']).$reply;
                     if (!empty($options['fragment'])) {
@@ -171,14 +187,52 @@ $tests['interface column identifies Java Modbus and shared values without renami
         check($rows[15]['name']==='Aussentemperatur' && array_column($form['SHIControlList']['values'],null,'id')[310006]['name']==='Sollwert Warmwasser','Name changed or MB suffix survives');
     }
 };
-$tests['full fragmented scan reads all 129 points without writes or measurement objects'] = static function ():void {
+$tests['full fragmented scan reads 129 points in 32 requests without creating objects'] = static function ():void {
     $requests=withSHI(static function(Luxtronik $m):void {
         shiRawUpdate($m);check($m->status===102 && $m->errors===[],'Full scan failed');
         $snapshot=json_decode($m->GetSHIData(),true);check(count($snapshot['values'])===129 && !$snapshot['stale'],'Incomplete cache');
         check(count(array_filter($snapshot['values'],fn($p)=>$p['available']))===129,'Values unavailable');
         check(array_filter($GLOBALS['testVariables'],fn($v)=>$v['instance']===$m->InstanceID)===[],'Unselected objects created');
     },['fragment'=>true]);
-    check(count($requests)===129 && array_unique(array_column($requests,'function'))===[0=>4,76=>2,88=>3],'Wrong polling functions or count');
+    check(count($requests)===32 && array_count_values(array_column($requests,'function'))===[4=>18,2=>1,3=>13],
+        'Wrong block polling functions or count');
+    check(in_array(['function'=>4,'address'=>10310,'count'=>20,'words'=>[]],$requests,true),'Wide energy counters were split');
+};
+$tests['cyclic block polling groups adjacent selected controls, permissions and wide inputs'] = static function ():void {
+    $requests=withSHI(static function(Luxtronik $m):void {
+        $m->properties['SHIControlList']='[{"id":310000,"enabled":true},{"id":310001,"enabled":true},{"id":310002,"enabled":true},'
+            .'{"id":310005,"enabled":true},{"id":310006,"enabled":true}]';
+        $m->properties['IDListe']='[{"id":110310,"enabled":true},{"id":110312,"enabled":true},{"id":110316,"enabled":true}]';
+        $m->buffers['JavaAvailability']=json_encode(['source'=>invoke($m,'VisualizationSourceKey'),'count'=>276]);
+        invoke($m,'UpdateModbusSupplement');
+        check(GetValue($m->GetIDForIdent('SHI_Modus_Heizen'))===2 && GetValue($m->GetIDForIdent('SHI_Sollwert_Heizen'))===35.0
+            && GetValue($m->GetIDForIdent('SHI_Offset_Heizen'))===-1.5 && $m->actions['SHI_Offset_Heizen'], 'Holding offset or permission decoded incorrectly');
+        check(GetValue($m->GetIDForIdent('SHI_Sollwert_Warmwasser'))===40.0 && !$m->actions['SHI_Sollwert_Warmwasser'], 'Discrete bits crossed between controls');
+        $energy=invoke($m,'GetSHIVisualizationPoint','SHI_Elektrische_Energie_Gesamt');
+        check($energy['value']===7456.5,'Wide selected input lost its high word or scaling');
+    },['input'=>[10310=>74565], 'holding'=>[10000=>2,10001=>350,10002=>65521,10006=>400], 'discrete'=>[10000=>1,10001=>0]]);
+    $ranges=array_map(static fn(array $request): array=>[$request['function'],$request['address'],$request['count']],$requests);
+    sort($ranges);
+    check($ranges===[[2,10000,2],[3,10000,3],[3,10005,2],[4,10310,4],[4,10316,2]],
+        'Cyclic polling ranges differ from the selection: '.json_encode($ranges));
+};
+$tests['rejected blocks fall back to individual reads and are retried after firmware changes'] = static function ():void {
+    $requests=withSHI(static function(Luxtronik $m,string $externalRegisters):void {
+        invoke($m,'RememberFirmwareString','V3.92.3');
+        $m->properties['SHIControlList']='[{"id":310000,"enabled":true},{"id":310001,"enabled":true},{"id":310002,"enabled":true}]';
+        invoke($m,'UpdateModbusSupplement');
+        check(GetValue($m->GetIDForIdent('SHI_Offset_Heizen'))===-1.5 && !$m->actions['SHI_Sollwert_Heizen'],
+            'Rejected block discarded valid neighbours or exposed an unread field');
+        file_put_contents($externalRegisters,json_encode(['holding'=>[10001=>350]]));
+        invoke($m,'UpdateModbusSupplement');
+        check(GetValue($m->GetIDForIdent('SHI_Sollwert_Heizen'))===35.0,'Individual read failed after the field became available');
+        invoke($m,'RememberFirmwareString','V3.92.4');
+        invoke($m,'UpdateModbusSupplement');
+    },['holding'=>[10000=>2,10001=>['exception'=>2],10002=>65521], 'discrete'=>[10000=>1]]);
+    $holdings=array_values(array_filter($requests,static fn(array $request):bool=>$request['function']===3));
+    check(array_column($holdings,'address')===[10000,10000,10001,10002,10000,10001,10002,10000]
+        && array_column($holdings,'count')===[3,1,1,1,1,1,1,3], 'Failed block was retested during normal polling or not retried after firmware update');
+    check(!in_array(16,array_column($requests,'function'),true),'Block fallback sent a write');
 };
 $tests['signed temperatures energy counters unsigned hours and native units are decoded once'] = static function ():void {
     withSHI(static function(Luxtronik $m):void {
@@ -568,7 +622,7 @@ $tests['hybrid reads one Java frame for missing measurements while zero Modbus v
             $snapshot=json_decode($m->GetSHIData(),true);$java=array_column($snapshot['javaSupplement'],null,'ident');
             check($java['Flow_Rate']['source']==='Java' && !isset($java['Aussentemperatur']),'Supplement snapshot claims Modbus values');
         },['javaSupplement'=>true],$m);
-        check(count($requests)===129 && array_filter($requests,fn($r)=>$r['function']===16)===[],'Hybrid scan wrote data');
+        check(count($requests)===32 && array_filter($requests,fn($r)=>$r['function']===16)===[],'Hybrid scan missed blocks or wrote data');
     });
 };
 $tests['unsupported or unavailable Modbus measurements use their exact Java ID without reinterpreting SHI-only fields'] = static function ():void {
@@ -617,7 +671,7 @@ $tests['a failed Modbus scan discards staged readings and uses Java measurements
             check(json_decode($m->GetSHIData(),true)['stale'],'Modbus error hidden');
             // Java-only modes remain routed through Java; malformed modes are still rejected.
             shiThrows(fn()=>$m->RequestAction('Mode_WW',99));
-        },['javaSupplement'=>true,'input'=>[10108=>20],'discrete'=>[10001=>1],'fault'=>['function'=>4,'address'=>10120,'kind'=>'truncate','after'=>130]],$m);
+        },['javaSupplement'=>true,'input'=>[10108=>20],'discrete'=>[10001=>1],'fault'=>['function'=>4,'address'=>10120,'kind'=>'truncate','skip'=>1]],$m);
     });
 };
 $tests['Java supplementation is optional source-bound and does not introduce Java writes or control reads'] = static function ():void {

@@ -43,7 +43,7 @@ trait LuxtronikFirmware
         if($changed) {
             unset($info['websocket'],$info['modbus'],$info['probeAfter'],$info['probeError'],$info['webFormat']);
             // A firmware change invalidates discovery, never user objects or selections.
-            foreach(['WebInventory','WebEEVCache','SHICache'] as $buffer) $this->SetBuffer($buffer,'');
+            foreach(['WebInventory','WebEEVCache','SHICache','SHIRejectedBlocks'] as $buffer) $this->SetBuffer($buffer,'');
         } elseif($previous!==null && ((!$version['patchKnown'] && $previous['patchKnown'])
             || ($version['patchKnown']===$previous['patchKnown'] && strlen($previous['text'])>strlen($version['text'])))) {
             // Java has only ten characters; retain a fuller web version of the same release.

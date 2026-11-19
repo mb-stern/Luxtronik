@@ -156,23 +156,105 @@ trait LuxtronikModbusSHI
 
     private function ReadSHIPoint(LuxtronikModbusClient $client, array $point, ?array &$observations = null): int|float|bool|null
     {
-        $words = match ($point['bank']) {
-            'discrete'=>$client->readDiscreteInputs($point['address'],1),
-            'holding'=>$client->readHoldingRegisters($point['address'],1),
-            default=>$client->readInputRegisters($point['address'],str_ends_with($point['datatype'],'32')?2:1)
+        $words = $this->ReadSHIWords($client, $point['bank'], $point['address'], $this->SHIPointWidth($point), $observations);
+        return $this->DecodeSHIReading($point, $words, $observations);
+    }
+
+    private function SHIPointWidth(array $point): int
+    {
+        return $point['bank'] === 'input' && str_ends_with($point['datatype'], '32') ? 2 : 1;
+    }
+
+    private function ReadSHIWords(LuxtronikModbusClient $client, string $bank, int $address, int $count, ?array &$observations): array
+    {
+        $words = match ($bank) {
+            'discrete' => $client->readDiscreteInputs($address, $count),
+            'holding' => $client->readHoldingRegisters($address, $count),
+            default => $client->readInputRegisters($address, $count)
         };
-        $this->MarkInterfaceSupported('modbus');
-        $value = $this->DecodeModbusValue($words,$point['datatype'],(float)$point['factor']);
         if ($observations !== null) {
             $now = microtime(true);
             $observations['firstReplyAt'] ??= $now;
             $observations['lastReplyAt'] = $now;
-            if ($point['bank'] === 'holding' && str_starts_with($point['ident'], 'SHI_Modus_')
-                && is_int($value) && isset($point['options'][$value])) {
-                $observations['modes'][$point['address']] = ['mode' => $value, 'at' => $now];
-            }
+        }
+        $this->MarkInterfaceSupported('modbus');
+        return $words;
+    }
+
+    private function DecodeSHIReading(array $point, array $words, ?array &$observations): int|float|bool|null
+    {
+        $value = $this->DecodeModbusValue($words, $point['datatype'], (float) $point['factor']);
+        if ($observations !== null && $point['bank'] === 'holding' && str_starts_with($point['ident'], 'SHI_Modus_')
+            && is_int($value) && isset($point['options'][$value])) {
+            $observations['modes'][$point['address']] = ['mode' => $value, 'at' => $observations['lastReplyAt']];
         }
         return $value;
+    }
+
+    /** Within each bank, group adjacent selected fields and keep both words of wide inputs together. */
+    private function SHIReadBlocks(array $points): array
+    {
+        $banks = [];
+        foreach ($points as $key => $point) $banks[$point['bank']][$key] = $point;
+        $blocks = [];
+        foreach ($banks as $bank => $fields) {
+            uasort($fields, static fn(array $left, array $right): int => $left['address'] <=> $right['address']);
+            foreach ($fields as $key => $point) {
+                $address = $point['address'];
+                $width = $this->SHIPointWidth($point);
+                $index = array_key_last($blocks);
+                $last = $blocks[$index] ?? null;
+                if ($last !== null && $last['bank'] === $bank && $last['address'] + $last['count'] === $address
+                    && $last['count'] + $width <= 40) {
+                    $blocks[$index]['count'] += $width;
+                    $blocks[$index]['fields'][$key] = $point;
+                } else {
+                    $blocks[] = ['bank' => $bank, 'address' => $address, 'count' => $width, 'fields' => [$key => $point]];
+                }
+            }
+        }
+        return $blocks;
+    }
+
+    private function ReadSHIPoints(LuxtronikModbusClient $client, array $points, string $source, array &$observations): Generator
+    {
+        $cache = json_decode($this->GetBuffer('SHIRejectedBlocks'), true);
+        $rejected = ($cache['source'] ?? '') === $source ? ($cache['blocks'] ?? []) : [];
+        foreach ($this->SHIReadBlocks($points) as $block) {
+            $bank = $block['bank'];
+            $address = $block['address'];
+            $count = $block['count'];
+            $id = "$bank:$address:$count";
+            if (count($block['fields']) > 1 && !isset($rejected[$id])) {
+                try {
+                    $words = $this->ReadSHIWords($client, $bank, $address, $count, $observations);
+                } catch (LuxtronikModbusException $error) {
+                    if (!in_array($error->getCode(), [1, 2, 3], true)) throw $error;
+                    $rejected[$id] = true;
+                    $this->SetBuffer('SHIRejectedBlocks', json_encode(['source' => $source,
+                        'blocks' => array_slice($rejected, -128, preserve_keys: true)], JSON_THROW_ON_ERROR));
+                    $this->SendDebug('SHI', 'Blockabfrage '.$id.' abgelehnt, lese Register einzeln.', 0);
+                    $words = null;
+                }
+                if ($words !== null) {
+                    foreach ($block['fields'] as $key => $point) {
+                        $slice = array_slice($words, $point['address'] - $address, $this->SHIPointWidth($point));
+                        yield $key => $this->DecodeSHIReading($point, $slice, $observations);
+                    }
+                    continue;
+                }
+            }
+            foreach ($block['fields'] as $key => $point) {
+                try {
+                    $value = $this->ReadSHIPoint($client, $point, $observations);
+                } catch (LuxtronikModbusException $error) {
+                    if (!in_array($error->getCode(), [1, 2, 3], true)) throw $error;
+                    $this->SendDebug('SHI', $key.': '.$error->getMessage(), 0);
+                    $value = null;
+                }
+                yield $key => $value;
+            }
+        }
     }
 
     private function JavaHasMeasurement(string $ident): bool
@@ -223,7 +305,7 @@ trait LuxtronikModbusSHI
         $lock='WPLUX.SHI.'.$this->InstanceID;
         if(!IPS_SemaphoreEnter($lock,1)) return;
         $client=null;
-        $queried=false;
+        $toRead=[];
         $observations=[];
         $cache=['source'=>$source,'updatedAt'=>time(),'stale'=>false,'points'=>[],'requestedKeys'=>$keys,'supplement'=>true,'error'=>null];
         if($preferredOnly && empty($previous['stale'])) $cache['points']=$previous['points']??[];
@@ -234,15 +316,17 @@ trait LuxtronikModbusSHI
                     if(empty($previous['stale']) && $old!==null && ($old['readAt']??0)>=$cycleStarted) {
                         $cache['points'][$key]=$old;continue;
                     }
-                    $queried=true;$client??=$this->NewSHIClient();
-                    try {$value=$this->ReadSHIPoint($client,$point,$observations);}
-                    catch(LuxtronikModbusException $error) {
-                        if(!in_array($error->getCode(),[1,2,3],true)) throw $error;
-                        $value=null;
+                    $toRead[$key]=$point;
+                }
+                if ($toRead!==[]) {
+                    $client=$this->NewSHIClient();
+                    foreach ($this->ReadSHIPoints($client,$toRead,$source,$observations) as $key=>$value) {
+                        if($value===null) continue;
+                        $old=$previous['points'][$key]??null;
+                        $readAt=$observations['lastReplyAt'];
+                        $cache['points'][$key]=['value'=>$value,'readAt'=>$readAt,
+                            'changedAt'=>$old!==null && $old['value']!==$value?$readAt:($old['changedAt']??0)];
                     }
-                    if($value===null) continue;
-                    $cache['points'][$key]=['value'=>$value,'readAt'=>microtime(true),
-                        'changedAt'=>$old!==null && $old['value']!==$value?microtime(true):($old['changedAt']??0)];
                 }
             } catch(Throwable $error) {
                 if($error instanceof LuxtronikInstanceUnavailable) throw $error;
@@ -251,7 +335,7 @@ trait LuxtronikModbusSHI
                 $cache['error']=$error->getMessage();
                 $this->SendDebug('Modbus-Ergänzung',$cache['error'],0);
             }
-            if(!$queried && $previous!==[]) $cache['updatedAt']=$previous['updatedAt'];
+            if($toRead===[] && $previous!==[]) $cache['updatedAt']=$previous['updatedAt'];
             $cache['nextAttempt']=$cache['error']!==null?microtime(true)+120:0;
             if($source!==$this->VisualizationSourceKey()) return;
             $this->RecordSHIObservations($source, $observations, $cache['error']);
@@ -287,21 +371,14 @@ trait LuxtronikModbusSHI
                 $previous=$this->SHICache()['points']??[];
                 $points=[];
                 $unavailable=[];
-                foreach ($this->SHICatalog() as $key=>$point) {
-                    try {
-                        $value=$this->ReadSHIPoint($client,$point,$observations);
-                    } catch (LuxtronikModbusException $error) {
-                        if (!in_array($error->getCode(),[1,2,3],true)) throw $error;
-                        $value=null;
-                        $this->SendDebug('SHI',$key.': '.$error->getMessage(),0);
-                    }
+                foreach ($this->ReadSHIPoints($client, $this->SHICatalog(), $source, $observations) as $key=>$value) {
                     if ($value===null) {
                         $unavailable[]=$key;
                         $this->SendDebug('SHI',$key.': nicht verfügbar',0);
                         continue;
                     }
                     $old=$previous[$key]??null;
-                    $points[$key]=['value'=>$value,'changedAt'=>$old!==null && $old['value']!==$value?microtime(true):($old['changedAt']??0)];
+                    $points[$key]=['value'=>$value,'changedAt'=>$old!==null && $old['value']!==$value?$observations['lastReplyAt']:($old['changedAt']??0)];
                 }
                 if ($source!==$this->VisualizationSourceKey()) return;
                 $this->SetBuffer('SHICache',json_encode(['source'=>$source,'updatedAt'=>time(),
