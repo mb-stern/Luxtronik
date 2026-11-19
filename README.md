@@ -4,6 +4,11 @@ Messwerte, Steuerung und Visualisierung für Wärmepumpen mit Luxtronik-Regler.
 Das Modul unterstützt verschiedene Hersteller, unter anderem Alpha Innotec,
 Buderus, CTA, Elco, Nibe, Roth, Novelan und Wolf.
 
+Neu in Version 5.0 ist die Symcon-Kachel mit interaktiver Wärmepumpengrafik.
+Sie zeigt Luft/Wasser- und Sole/Wasser-Anlagen mit passenden Messwerten und
+wählbaren Komponenten. Betriebsarten und Sollwerte sind direkt in der Kachel
+bedienbar.
+
 Java bleibt Standard. Version 5.0 ergänzt WebSocket und direkte
 Modbus-TCP-/SHI-Anbindung mit einer gemeinsamen Istwertliste. Bestätigte
 Gegenstücke verwenden bestehende Variablen; die bisherigen Java-Steuerungen und
@@ -20,9 +25,6 @@ gelesen; WW Soll zeigt den wirksamen Sollwert aus 3004, ID 18.
 Diese Abfragen benötigen keine angelegten Symcon-Variablen. Die Heizkorrektur
 wird aus Parameter 1 gelesen. Details stehen in der
 [Moduldokumentation](WPLUX/README.md#rückmeldungen-der-steuerung).
-
-Die integrierte HTML-SDK-Grafik bietet Luft/Wasser und Sole/Wasser im
-gleichen Stil, mit passenden Messwerten und optionalen Anlagenkomponenten.
 
 ## Einstieg
 
