@@ -1,0 +1,229 @@
+{
+  "groups": [
+    {
+      "name": "Ablaufzeiten",
+      "id": "0x5346e0",
+      "count": 11,
+      "fields": [
+        {
+          "id": "0x534364",
+          "name": "WP Seit",
+          "raw": "00:00:01"
+        },
+        {
+          "id": "0x5416ec",
+          "name": "ZWE1 seit",
+          "raw": "00:00:00"
+        },
+        {
+          "id": "0x528f0c",
+          "name": "Netzeinschaltv.",
+          "raw": "00:00:00"
+        },
+        {
+          "id": "0x53980c",
+          "name": "SSP-Zeit",
+          "raw": "00:00:00"
+        },
+        {
+          "id": "0x54409c",
+          "name": "VD-Stand",
+          "raw": "01:17:42"
+        },
+        {
+          "id": "0x53a5e4",
+          "name": "HRM-Zeit",
+          "raw": "00:00:00"
+        },
+        {
+          "id": "0x535afc",
+          "name": "HRW-Zeit",
+          "raw": "00:03:09"
+        },
+        {
+          "id": "0x52c8dc",
+          "name": "TDI seit",
+          "raw": "00:00:00"
+        },
+        {
+          "id": "0x536a8c",
+          "name": "Sperre WW",
+          "raw": "00:00:00"
+        },
+        {
+          "id": "0x53984c",
+          "name": "Freig. ZWE",
+          "raw": "01:00:00"
+        },
+        {
+          "id": "0x52c90c",
+          "name": "Freigabe Kühlung",
+          "raw": "11:59:59"
+        }
+      ]
+    },
+    {
+      "name": "Betriebsstunden",
+      "id": "0x53fd48",
+      "count": 8,
+      "fields": [
+        {
+          "id": "0x528ecc",
+          "name": "Betriebstund. VD1",
+          "raw": "15591h"
+        },
+        {
+          "id": "0x535b3c",
+          "name": "Impulse Verdichter 1",
+          "raw": "7126"
+        },
+        {
+          "id": "0x528f0c",
+          "name": "Laufzeit Ø VD1",
+          "raw": "02:11"
+        },
+        {
+          "id": "0x535afc",
+          "name": "Betriebstunden ZWE1",
+          "raw": "0h"
+        },
+        {
+          "id": "0x536a8c",
+          "name": "Betriebstunden WP",
+          "raw": "15591h"
+        },
+        {
+          "id": "0x53428c",
+          "name": "Betriebstunden Heiz.",
+          "raw": "13124h"
+        },
+        {
+          "id": "0x52909c",
+          "name": "Betriebstunden WW",
+          "raw": "1728h"
+        },
+        {
+          "id": "0x527044",
+          "name": "Betriebstunden Kuehl",
+          "raw": "734h"
+        }
+      ]
+    },
+    {
+      "name": "Anlagenstatus",
+      "id": "0x539a10",
+      "count": 12,
+      "fields": [
+        {
+          "id": "0x5284fc",
+          "name": "Wärmepumpen Typ",
+          "raw": "LW 8"
+        },
+        {
+          "id": "0x5286ac",
+          "name": "Wärmepumpen Typ",
+          "raw": "CMD_6"
+        },
+        {
+          "id": "0x543f2c",
+          "name": "Softwarestand",
+          "raw": "V3.86.1 (r7762)"
+        },
+        {
+          "id": "0x53462c",
+          "name": "HZ/IO",
+          "raw": "7664"
+        },
+        {
+          "id": "0x53940c",
+          "name": "ASB",
+          "raw": "7440"
+        },
+        {
+          "id": "0x52950c",
+          "name": "ASB HW Revision",
+          "raw": "5"
+        },
+        {
+          "id": "0x541bfc",
+          "name": "Inverter SW Version",
+          "raw": "49"
+        },
+        {
+          "id": "0x5357fc",
+          "name": "Bivalenz Stufe",
+          "raw": "1"
+        },
+        {
+          "id": "0x543f8c",
+          "name": "Betriebszustand",
+          "raw": ""
+        },
+        {
+          "id": "0x53935c",
+          "name": "Leistung Ist",
+          "raw": "0.00 kW"
+        },
+        {
+          "id": "0x536a8c",
+          "name": "Abtaubedarf",
+          "raw": "29.8%"
+        },
+        {
+          "id": "0x52909c",
+          "name": "Letzte Abt.",
+          "raw": "22.10.26 00:25"
+        }
+      ]
+    },
+    {
+      "name": "Wärmemenge",
+      "id": "0x52e2c0",
+      "count": 6,
+      "fields": [
+        {
+          "id": "0x5286ac",
+          "name": "Heizung",
+          "raw": "45821.9 kWh"
+        },
+        {
+          "id": "0x543f2c",
+          "name": "Warmwasser",
+          "raw": "8369.4 kWh"
+        },
+        {
+          "id": "0x5285fc",
+          "name": "Gesamt",
+          "raw": "54191.3 kWh"
+        },
+        {
+          "id": "0x541bfc",
+          "name": "Zus. Wärmeerz",
+          "raw": "2.4 kWh"
+        },
+        {
+          "id": "0x53935c",
+          "name": "seit :  1. 1.2018",
+          "raw": "54307.8 kWh"
+        },
+        {
+          "id": "0x53fb54",
+          "name": "seit Reset:",
+          "raw": "54307.8 kWh"
+        }
+      ]
+    },
+    {
+      "name": "GLT",
+      "id": "0x52a248",
+      "count": 1,
+      "fields": [
+        {
+          "id": "0x5286ac",
+          "name": "Art",
+          "raw": "Aus"
+        }
+      ]
+    }
+  ]
+}

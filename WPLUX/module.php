@@ -1,7 +1,26 @@
 <?php
 
+require_once __DIR__ . '/ModbusSHI.php';
+require_once __DIR__ . '/Visualization.php';
+require_once __DIR__ . '/WebEEV.php';
+require_once __DIR__ . '/DataSources.php';
+require_once __DIR__ . '/Configuration.php';
+require_once __DIR__ . '/Firmware.php';
+require_once __DIR__ . '/VariablePresentation.php';
+
+// Abort obsolete callbacks as soon as their Symcon interface disappears.
+class LuxtronikInstanceUnavailable extends Exception {}
+
 class Luxtronik extends IPSModuleStrict
 {
+    use LuxtronikModbusSHI;
+    use LuxtronikVisualization;
+    use LuxtronikWebEEV;
+    use LuxtronikDataSources;
+    use LuxtronikConfiguration;
+    use LuxtronikFirmware;
+    use LuxtronikVariablePresentation;
+
     private const SOCKET_TIMEOUT = 5.0;
     private const MAX_RESPONSE_VALUES = 65536;
 
@@ -11,6 +30,24 @@ class Luxtronik extends IPSModuleStrict
     public function Create(): void
     {
         parent::Create();
+        $this->SetVisualizationType(
+            defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN')
+                ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN
+                : 1
+        );
+
+        $this->RegisterPropertyString('CommunicationMode', 'java');
+        $this->RegisterPropertyString('MeasurementBulkSource', 'java');
+        $this->RegisterPropertyInteger('ModbusPort', 502);
+        $this->RegisterPropertyInteger('ModbusUnitID', 1);
+        $this->RegisterPropertyInteger('ModbusTimeout', 500);
+        $this->RegisterPropertyBoolean('ModbusJavaSupplement', true);
+        $this->RegisterPropertyBoolean('ModbusReadSupplement', false);
+        $this->RegisterPropertyBoolean('ShowAdvancedModbusPoints', false);
+        $this->RegisterPropertyString('SHIControlList', '[]');
+        $this->RegisterPropertyBoolean('AdvancedSourceSelection', false);
+        // Retained for saved configurations; COP source selection is now automatic.
+        $this->RegisterPropertyBoolean('InternalCOP', true);
 
         $this->RegisterPropertyString('IPAddress', '0.0.0.0');
         $this->RegisterPropertyInteger('Port', 8889);
@@ -41,6 +78,7 @@ class Luxtronik extends IPSModuleStrict
 
         // Timer für Aktualisierung registrieren
         $this->RegisterTimer('UpdateTimer', 0, 'WPLUX_Update(' . $this->InstanceID . ');');  
+        $this->CreateVisualization();
     }
 
     public function Migrate(string $JSONData): string
@@ -50,16 +88,18 @@ class Luxtronik extends IPSModuleStrict
 
         // Alte Persistenz dekodieren
         $data = json_decode($JSONData, true);
-        if (!is_array($data) || !isset($data['configuration']['IDListe'])) {
+        if (!is_array($data)) return '';
+        $visualizationChanged = $this->MigrateVisualizationSettings($data);
+        if (!isset($data['configuration']['IDListe'])) {
             // Nichts zu tun
-            return '';
+            return $visualizationChanged ? json_encode($data) : '';
         }
 
         // IDListe ist als JSON-String gespeichert
         $raw = json_decode($data['configuration']['IDListe'], true);
         if (!is_array($raw) || empty($raw)) {
             // Nichts Sinnvolles drin
-            return '';
+            return $visualizationChanged ? json_encode($data) : '';
         }
 
         // Prüfen: schon neues Format? (id + enabled)
@@ -72,7 +112,7 @@ class Luxtronik extends IPSModuleStrict
         }
         if ($alreadyNew) {
             // Schon migriert -> nichts ändern
-            return '';
+            return $visualizationChanged ? json_encode($data) : '';
         }
 
         // --- Migration: alte IDs -> [{enabled, id}] ---
@@ -102,7 +142,7 @@ class Luxtronik extends IPSModuleStrict
 
         if (empty($new)) {
             // Keine brauchbaren IDs gefunden -> nichts ändern
-            return '';
+            return $visualizationChanged ? json_encode($data) : '';
         }
 
         // Sortieren wie vorher
@@ -114,10 +154,30 @@ class Luxtronik extends IPSModuleStrict
         return json_encode($data);
     }
 
+    private function DeviceAddressConfigured(): bool
+    {
+        return !in_array(trim($this->ReadPropertyString('IPAddress')),['','0.0.0.0','::'],true);
+    }
+
     public function ApplyChanges(): void
     {
          //Never delete this line!
         parent::ApplyChanges();
+        $this->RunWithInstanceInterface(fn() => $this->ApplyInstanceChanges(), 'Konfiguration');
+    }
+
+    private function ApplyInstanceChanges(): void
+    {
+        $this->SetVisualizationType(
+            defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN')
+                ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN
+                : 1
+        );
+        $this->SyncWebVariableSelection();
+        $this->UpdateStoredVariablePresentations();
+        $this->RefreshVisualization(true);
+
+        $this->DisableSHIActions();
 
         if (!$this->ReadPropertyBoolean('InstanceStatus')) {
             $this->SetTimerInterval('UpdateTimer', 0);
@@ -128,8 +188,8 @@ class Luxtronik extends IPSModuleStrict
 
         $this->SetStatus(102); // Instanz aktiv
 
-        // Variablenprofile zentral aus dieser module.php erstellen
-        $this->CreateVariableProfiles();
+        $this->SyncSHIControlVariables();
+        $this->SyncSHIReadVariables();
 
         // Timer für Aktualisierung aktualisieren
         $this->SetTimerInterval('UpdateTimer', $this->ReadPropertyInteger('UpdateInterval') * 1000);
@@ -139,10 +199,11 @@ class Luxtronik extends IPSModuleStrict
         $port = $this->ReadPropertyInteger('Port');
 
         // Überprüfe, ob die IP-Adresse nicht die Muster-IP ist
-        if ($ipAddress == '0.0.0.0') 
+        if (!$this->DeviceAddressConfigured())
         {
+            $this->SetTimerInterval('UpdateTimer', 0);
+            $this->SetStatus(104);
             $this->SendDebug("Konfiguration", "IP-Adresse ist nicht konfiguriert", 0);   
-            $this->LogMessage("IP-Adresse ist nicht konfiguriert", KL_ERROR);
         } 
         else 
         {
@@ -155,10 +216,9 @@ class Luxtronik extends IPSModuleStrict
         $kuehlungVisible = $this->ReadPropertyBoolean('KuehlungVisible');
         $warmwasserVisible = $this->ReadPropertyBoolean('WarmwasserVisible');
         $schwimmbadVisible = $this->ReadPropertyBoolean('SchwimmbadVisible');
-        $tempsetVisible = $this->ReadPropertyBoolean('TempsetVisible');
-        $wwsetVisible = $this->ReadPropertyBoolean('WWsetVisible');
-        $rbesetVisible = $this->ReadPropertyBoolean('RBEsetVisible');
-        $copVarId = $this->ReadPropertyInteger('kwin');
+        $tempsetVisible = $this->SharedNumericControlEnabled('Anpassung_Temp');
+        $wwsetVisible = $this->SharedNumericControlEnabled('Anpassung_WW');
+        $rbesetVisible = $this->SharedNumericControlEnabled('Anpassung_RBE');
         $jazVarId = $this->ReadPropertyInteger('kwhin');
         $hz_timerWeekVisible = $this->ReadPropertyInteger('HZ_TimerWeekVisible');
         $hz_timerWeekendVisible = $this->ReadPropertyInteger('HZ_TimerWeekendVisible');
@@ -170,7 +230,7 @@ class Luxtronik extends IPSModuleStrict
         // Steuervariablen erstellen und senden an die Funktion RequestAction
         if ($heizungVisible) 
         {
-            $this->RegisterVariableInteger('Mode_Heizung', 'Modus Heizung', 'WPLUX.Wwhe', 0);
+            $this->RegisterNativeControlVariable('Mode_Heizung', 'Modus Heizung', 0);
             $this->getParameter('Mode_Heizung');
             $Value = $this->GetValue('Mode_Heizung');
             $this->EnableAction('Mode_Heizung');
@@ -182,7 +242,7 @@ class Luxtronik extends IPSModuleStrict
 
         if ($warmwasserVisible) 
         {
-            $this->RegisterVariableInteger('Mode_WW', 'Modus Warmwasser', 'WPLUX.Wwhe', 1);
+            $this->RegisterNativeControlVariable('Mode_WW', 'Modus Warmwasser', 1);
             $this->getParameter('Mode_WW');
             $Value = $this->GetValue('Mode_WW');
             $this->EnableAction('Mode_WW');
@@ -194,7 +254,7 @@ class Luxtronik extends IPSModuleStrict
 
         if ($kuehlungVisible) 
         {
-            $this->RegisterVariableInteger('Mode_Kuehlung', 'Modus Kühlung', 'WPLUX.Kue', 2);
+            $this->RegisterNativeControlVariable('Mode_Kuehlung', 'Modus Kühlung', 2);
             $this->getParameter('Mode_Kuehlung');
             $Value = $this->GetValue('Mode_Kuehlung');   
             $this->EnableAction('Mode_Kuehlung');
@@ -206,31 +266,31 @@ class Luxtronik extends IPSModuleStrict
 
         if ($tempsetVisible) 
         {
-            $this->RegisterVariableFloat('Anpassung_Temp', 'Temperaturkorrektur', 'WPLUX.Tset', 3);
-            $this->getParameter('Anpassung_Temp'); 
+            $this->RegisterNativeControlVariable('Anpassung_Temp', 'Temperaturkorrektur', 3);
+            if (!$this->UsesModbusWrite('Anpassung_Temp')) $this->getParameter('Anpassung_Temp');
             $Value = $this->GetValue('Anpassung_Temp'); 
             $this->EnableAction('Anpassung_Temp');
         } 
         else 
         {
-            $this->UnregisterVariable('Anpassung_Temp');
+            $this->UnregisterNativeNumericControl('Anpassung_Temp');
         }
 
         if ($wwsetVisible) 
         {
-            $this->RegisterVariableFloat('Anpassung_WW', 'Warmwasser Soll', 'WPLUX.Wset', 4);
-            $this->getParameter('Anpassung_WW'); 
+            $this->RegisterNativeControlVariable('Anpassung_WW', 'Warmwasser Soll', 4);
+            if (!$this->UsesModbusWrite('Anpassung_WW')) $this->getParameter('Anpassung_WW');
             $Value = $this->GetValue('Anpassung_WW'); 
             $this->EnableAction('Anpassung_WW');
         } 
         else 
         {
-            $this->UnregisterVariable('Anpassung_WW');
+            $this->UnregisterNativeNumericControl('Anpassung_WW');
         }
 
         if ($schwimmbadVisible) 
         {
-            $this->RegisterVariableInteger('Mode_Schwimmbad', 'Modus Schwimmbad', 'WPLUX.Wwhe', 5);
+            $this->RegisterNativeControlVariable('Mode_Schwimmbad', 'Modus Schwimmbad', 5);
             $this->getParameter('Mode_Schwimmbad');
             $this->EnableAction('Mode_Schwimmbad');
         } 
@@ -241,27 +301,23 @@ class Luxtronik extends IPSModuleStrict
 
         if ($rbesetVisible) 
         {
-            $this->RegisterVariableFloat('Anpassung_RBE', 'Raumtemperatur Soll', 'WPLUX.Wset', 6);
-            $this->getParameter('Anpassung_RBE'); 
+            $this->RegisterNativeControlVariable('Anpassung_RBE', 'Raumtemperatur Soll', 6);
+            if (!$this->UsesModbusWrite('Anpassung_RBE')) $this->getParameter('Anpassung_RBE');
             $Value = $this->GetValue('Anpassung_RBE'); 
             $this->EnableAction('Anpassung_RBE');
         } 
         else 
         {
-            $this->UnregisterVariable('Anpassung_RBE');
+            $this->UnregisterNativeNumericControl('Anpassung_RBE');
         }
 
-        if ($copVarId !== 0 && IPS_VariableExists($copVarId)) {
-            $created = $this->RegisterVariableFloat('copfaktor', 'COP-Faktor', 'WPLUX.Cop', 7);
-            if ($created) {
-                $this->SetValueIfChanged('copfaktor', 0);
-            }
-        } else {
-            $this->UnregisterVariable('copfaktor');
+        $created = $this->RegisterNativeControlVariable('copfaktor', 'COP-Faktor', 7);
+        if ($created) {
+            $this->SetValueIfChanged('copfaktor', 0);
         }
 
         if ($jazVarId !== 0 && IPS_VariableExists($jazVarId)) {
-            $created = $this->RegisterVariableFloat('jazfaktor', 'JAZ-Faktor', 'WPLUX.Cop', 8);
+            $created = $this->RegisterNativeControlVariable('jazfaktor', 'JAZ-Faktor', 8);
             if ($created) {
                 $this->SetValueIfChanged('jazfaktor', 0);
             }
@@ -329,7 +385,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterVariableInteger($id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->EnableAction($id);
                 // holt Wert von der Lux und schreibt intern per $this->SetValueIfChanged(...)
                 $this->getParameter($id);
@@ -406,7 +462,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterVariableInteger($id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);
@@ -491,7 +547,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterVariableInteger($id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);
@@ -604,7 +660,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterVariableInteger($id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);
@@ -721,7 +777,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterVariableInteger($id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);
@@ -877,7 +933,7 @@ class Luxtronik extends IPSModuleStrict
 
             foreach ($ids as $id => $name) 
             {
-                $this->RegisterVariableInteger($id, $name, '~UnixTimestampTime', $position++);
+                $this->RegisterNativeControlVariable($id, $name, $position++);
                 $this->getParameter($id);
                 $this->GetValue($id);
                 $this->EnableAction($id);
@@ -899,10 +955,27 @@ class Luxtronik extends IPSModuleStrict
                 $this->UnregisterVariable($id);
             }
         }
+        // Rebind after configuration-created values (including COP/JAZ) exist.
+        $this->SyncSHIControlVariables(true);
+        $this->RefreshDerivedMeasurements();
+        $this->RefreshVisualization(true);
     }
 
     public function RequestAction(string $Ident, mixed $Value): void 
     {
+        if ($Ident === 'SetHeaterSwitch') {
+            $this->HandleHeaterSwitchAction($Value);
+            return;
+        }
+        if (in_array($Ident, ['SetControlMode', 'SetNumericControl', 'SetBinaryControl'], true)) {
+            $this->HandleVisualizationAction($Ident, $Value);
+            return;
+        }
+        if($this->IsRetainedLegacySHIControl($Ident)) throw new RuntimeException('Diese bisherige Testvariable wird als inaktive Java-Variable erhalten. Für SHI bitte die eigene SHI-Steuervariable verwenden.');
+        if ($this->UsesModbusWrite($Ident) || str_starts_with($Ident, 'SHI_')) {
+            $this->HandleSHIAction($Ident, $Value);
+            return;
+        }
 
             if (!$this->ReadPropertyBoolean('InstanceStatus')) {
                 $message = 'Aktion nicht möglich: Die Instanz ist deaktiviert.';
@@ -933,6 +1006,13 @@ class Luxtronik extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
+        return $this->RunWithInstanceInterface(fn() => $this->BuildConfigurationForm(), 'Konfigurationsformular',
+            '{"elements":[{"type":"Label","caption":"Die Modulinstanz ist derzeit nicht verfügbar."}]}');
+    }
+
+    private function BuildConfigurationForm(): string
+    {
+        $controlCaptions = $this->TimerControlWriteCaptions();
         // Namen und IDs kommen direkt aus der zentralen ID-Konfiguration
         // am Schluss dieser module.php. Eine separate Java-Datensatzdatei ist
         // dafür nicht mehr erforderlich.
@@ -1014,37 +1094,37 @@ class Luxtronik extends IPSModuleStrict
                         [
                         'type'    => 'CheckBox',
                         'name'    => 'HeizungVisible',
-                            'caption' => 'Steuervariable für Heizungs-Modus aktivieren'
+                            'caption' => $controlCaptions['HeizungVisible']
                         ],
                         [
                             'type'    => 'CheckBox',
                             'name'    => 'WarmwasserVisible',
-                            'caption' => 'Steuervariable für Warmwasser-Modus aktivieren'
+                            'caption' => $controlCaptions['WarmwasserVisible']
                         ],
                         [
                             'type'    => 'CheckBox',
                             'name'    => 'SchwimmbadVisible',
-                            'caption' => 'Steuervariable für Schwimmbad-Modus aktivieren'
+                            'caption' => $controlCaptions['SchwimmbadVisible']
                         ],
                         [
                         'type'    => 'CheckBox',
                         'name'    => 'KuehlungVisible',
-                        'caption' => 'Steuervariable für Kühlungs-Modus aktivieren'
+                        'caption' => $controlCaptions['KuehlungVisible']
                         ],
                         [
                             'type'    => 'CheckBox',
                             'name'    => 'TempsetVisible',
-                            'caption' => 'Steuervariable für Temperaturkorrektur aktivieren'
+                            'caption' => $controlCaptions['TempsetVisible']
                         ],
                         [
                         'type'    => 'CheckBox',
                         'name'    => 'WWsetVisible',
-                        'caption' => 'Steuervariable für Warmwasser-Soll aktivieren'
+                        'caption' => $controlCaptions['WWsetVisible']
                         ],
                         [
                             'type'    => 'CheckBox',
                             'name'    => 'RBEsetVisible',
-                            'caption' => 'Steuervariable für Raumbedieneinheit aktivieren'
+                            'caption' => $controlCaptions['RBEsetVisible']
                         ],
                         [
                             'type'    => 'Select',
@@ -1093,7 +1173,7 @@ class Luxtronik extends IPSModuleStrict
                                 [
                                     'type'    => 'SelectVariable',
                                     'name'    => 'kwin',
-                                    'caption' => 'Eingangsleistung zur Berechnung des COP (kW)'
+                                    'caption' => 'Externe Eingangsleistung für COP (leer = intern ID 268)'
                                 ],
                                 [
                                     'type'    => 'SelectVariable',
@@ -1181,12 +1261,38 @@ class Luxtronik extends IPSModuleStrict
             ]
         ];
 
-        return json_encode($form);
+        return json_encode($this->SimplifyConfigurationForm($this->AddVisualizationForm($this->AddWebEEVForm($this->AddModbusForm($form)))));
     }
 
     public function Update(): void
     {
-        if (!$this->ReadPropertyBoolean('InstanceStatus')) {
+        $this->RunWithInstanceInterface(fn() => $this->UpdateInstance(), 'Aktualisierung');
+    }
+
+    private function RunWithInstanceInterface(callable $callback, string $operation, mixed $fallback = null): mixed
+    {
+        if (!IPS_InstanceExists($this->InstanceID)) return $fallback;
+        $previous = null;
+        $previous = set_error_handler(static function (int $severity, string $message, string $file, int $line) use (&$previous): bool {
+            if ((error_reporting() & $severity) && (str_contains($message, 'InstanceInterface is not available')
+                || str_contains($message, 'InstanceInterface is not a PHP module'))) {
+                throw new LuxtronikInstanceUnavailable($message);
+            }
+            return $previous !== null ? (bool)$previous($severity, $message, $file, $line) : false;
+        });
+        try {
+            return $callback();
+        } catch (LuxtronikInstanceUnavailable $error) {
+            IPS_LogMessage('Luxtronik ' . $this->InstanceID, $operation . ' abgebrochen: Instanzschnittstelle nicht verfügbar.');
+            return $fallback;
+        } finally {
+            restore_error_handler();
+        }
+    }
+
+    private function UpdateInstance(): void
+    {
+        if (!$this->ReadPropertyBoolean('InstanceStatus') || !$this->DeviceAddressConfigured()) {
             return;
         }
 
@@ -1215,59 +1321,42 @@ class Luxtronik extends IPSModuleStrict
 
         $daten_raw = $this->ReadData(3004);
         if ($daten_raw === null) {
+            $source=$this->VisualizationSourceKey();
+            $previous=json_decode($this->GetBuffer('JavaAvailability'),true)??[];
+            $knownCount=($previous['source']??'')===$source
+                ?($previous['lastSuccessfulCount']??(empty($previous['failed'])?($previous['count']??null):null)):null;
+            $this->SetBuffer('JavaAvailability',json_encode(['source'=>$source,'count'=>0,'failed'=>true,'lastSuccessfulCount'=>$knownCount],JSON_THROW_ON_ERROR));
+            $this->SetBuffer('ControlSources','');
+            $this->UpdateMeasurementSupplements();
+            $this->RefreshControlValues();
+            $this->RefreshVisualization();
             return;
         }
+        $this->SetBuffer('JavaAvailability',json_encode(['source'=>$this->VisualizationSourceKey(),'count'=>count($daten_raw),'lastSuccessfulCount'=>count($daten_raw)],JSON_THROW_ON_ERROR));
+        $this->RememberJavaFirmware($daten_raw);
         $JavaWerte = count($daten_raw);
-
-        // Init für JAZ (falls 151/152 nicht vorkommen)
-        $value_out_heizung = 0;
-        $value_out_warmwasser = 0;
+        $graphicPoints = $this->HybridMeasurementIDs();
+        $graphicValues = [];
 
         // Alle Werte einmal durchgehen
         for ($i = 0; $i < $JavaWerte; ++$i) {
 
-            // --- Werte erfassen für COP/JAZ unabhängig von Auswahl ---
-            if ($i == 257) { // Wärmeleistung an Funktion senden zur Berechnung des COP
-                $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
-                $this->calc_cop('cop', $value);
+            // Cache measurements for HTML-SDK without registering Symcon objects.
+            if (isset($graphicPoints[$i])) {
+                $graphicValues[$i] = $this->convertValueBasedOnID($daten_raw[$i], $i);
             }
 
-            if ($i == 151) { // Wärmemenge Heizung
-                $value_out_heizung = $this->convertValueBasedOnID($daten_raw[$i], $i);
-            }
-
-            if ($i == 152) { // Wärmemenge Warmwasser
-                $value_out_warmwasser = $this->convertValueBasedOnID($daten_raw[$i], $i);
-            }
-
-            // --- Nur ausgewählte IDs verarbeiten ---
-            if (isset($enabledIds[$i])) {
-
-                // umrechnen wenn nötig
-                $value = $this->convertValueBasedOnID($daten_raw[$i], $i);
-
-                // Ident aus Dataset, Fallback falls nicht vorhanden
-                $ident = $java_dataset[$i] ?? ('ID_' . $i);
-
-                // Variable anlegen/aktualisieren
-                $this->CreateOrUpdateVariable($ident, $value, $i);
-
-                // Debug
-                $this->SendDebug(
-                    "Wert gesendet",
-                    "Der Wert: {$daten_raw[$i]} der ID: {$i} wurde erfasst, umgerechnet in: {$value} und an 'CreateOrUpdateVariable' gesandt",
-                    0
-                );
-
-            } else {
+            // Publish selected values after the preferred and replacement sources have been read.
+            if (!isset($enabledIds[$i])) {
                 // Variable löschen, da nicht ausgewählt
                 $this->DeleteVariableIfExists($java_dataset[$i] ?? ('ID_' . $i));
             }
+            if (isset($enabledIds[$i]) || isset($graphicPoints[$i])) {
+                $this->SendDebug('Java gelesen', ($java_dataset[$i] ?? ('ID_' . $i)) . ": 3004, ID $i", 0);
+            }
         }
 
-        // JAZ berechnen
-        $value_out = $value_out_heizung + $value_out_warmwasser;
-        $this->calc_jaz('jaz', $value_out);
+        $this->StoreVisualizationPoints($graphicValues);
 
         /*
          * Sollwerte / Betriebsarten ebenfalls zyklisch von der Luxtronik
@@ -1277,7 +1366,9 @@ class Luxtronik extends IPSModuleStrict
          * Wichtig: Eine einzige 3003-Abfrage pro Update-Zyklus, nicht eine
          * neue Socket-Verbindung je Sollwert.
          */
+        $this->UpdateMeasurementSupplements();
         $this->RefreshControlValues();
+        $this->RefreshVisualization();
     }
 
     /** Eine vollständige Antwort lesen, bevor Modulvariablen verändert werden. */
@@ -1289,15 +1380,15 @@ class Luxtronik extends IPSModuleStrict
     /** Zeitgrenze gilt für die gesamte Verbindung, auch bei langsamen Teilantworten. */
     private function Exchange(int $command, array $arguments): ?array
     {
-        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-        if ($socket === false) {
-            $this->LogMessage('Socket konnte nicht erstellt werden.', KL_ERROR);
-            return null;
-        }
-
+        if(!$this->DeviceAddressConfigured()) return null;
+        $socket = null;
         try {
+            $socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+            if ($socket === false) {
+                throw new RuntimeException('Socket konnte nicht erstellt werden.');
+            }
             $deadline = microtime(true) + self::SOCKET_TIMEOUT;
-            if (!socket_set_nonblock($socket)) {
+            if (!@socket_set_nonblock($socket)) {
                 throw new RuntimeException('Socket konnte nicht auf nichtblockierend gestellt werden.');
             }
             $ip = $this->ReadPropertyString('IPAddress');
@@ -1308,7 +1399,10 @@ class Luxtronik extends IPSModuleStrict
                     throw new RuntimeException('Verbindung fehlgeschlagen: ' . socket_strerror($error));
                 }
                 $this->WaitForSocket($socket, false, $deadline);
-                $error = socket_get_option($socket, SOL_SOCKET, SO_ERROR);
+                $error = @socket_get_option($socket, SOL_SOCKET, SO_ERROR);
+                if ($error === false) {
+                    throw new RuntimeException('Verbindungsstatus konnte nicht gelesen werden.');
+                }
                 if ($error !== 0) {
                     throw new RuntimeException('Verbindung fehlgeschlagen: ' . socket_strerror((int)$error));
                 }
@@ -1342,10 +1436,14 @@ class Luxtronik extends IPSModuleStrict
         } catch (RuntimeException | ValueError $error) {
             $message = "Kommando $command: " . $error->getMessage();
             $this->SendDebug('Socketverbindung', $message, 0);
-            $this->LogMessage($message, KL_ERROR);
+            if (!in_array($command, [3003, 3004], true)) {
+                $this->LogMessage($message, KL_ERROR);
+            }
             return null;
         } finally {
-            socket_close($socket);
+            if ($socket instanceof Socket) {
+                socket_close($socket);
+            }
         }
     }
 
@@ -1448,62 +1546,7 @@ class Luxtronik extends IPSModuleStrict
     private function CreateOrUpdateVariable(string $ident, mixed $value, int $id): void
     {
         $config = $this->GetDataPointConfig($id);
-        $type = (string)$config['type'];
-        $profile = (string)$config['profile'];
-
-        // Ein Typwechsel würde bestehende Variablen samt ID löschen.
-        // Alte Stringvariablen behalten, aber bereits korrekt skalierte Werte schreiben.
-        if ($id >= 203 && $id <= 207) {
-            $existingID = @$this->GetIDForIdent($ident);
-            if ($existingID !== false && IPS_VariableExists($existingID)
-                && IPS_GetVariable($existingID)['VariableType'] === VARIABLETYPE_STRING) {
-                $type = 'string';
-                $profile = '';
-            }
-        }
-
-        /*
-         * Variablentyp und Profil kommen aus der zentralen DATA_POINT_CONFIG,
-         * mit Bestandsschutz für die oben geprüften Stringvariablen.
-         */
-        switch ($type) {
-            case 'bool':
-                $this->RegisterVariableBoolean(
-                    $ident,
-                    $ident,
-                    $profile,
-                    $id
-                );
-                break;
-
-            case 'int':
-                $this->RegisterVariableInteger(
-                    $ident,
-                    $ident,
-                    $profile,
-                    $id
-                );
-                break;
-
-            case 'float':
-                $this->RegisterVariableFloat(
-                    $ident,
-                    $ident,
-                    $profile,
-                    $id
-                );
-                break;
-
-            case 'string':
-            default:
-                $this->RegisterVariableString(
-                    $ident,
-                    $ident,
-                    $profile,
-                    $id
-                );
-                break;
-        }
+        $type = $this->EnsureJavaMeasurementVariable($ident, $id, $config);
 
         /*
          * Vor dem Vergleich auf die in der zentralen ID-Konfiguration
@@ -1587,89 +1630,68 @@ class Luxtronik extends IPSModuleStrict
     }
 
     /**
-     * Liest die konfigurierten Sollwerte/Betriebsarten mit EINER 3003-Abfrage
-     * und übernimmt nur tatsächlich geänderte Werte nach IP-Symcon.
+     * Liest Parameter intern mit einer 3003-Abfrage pro Zyklus, unabhängig
+     * von Variablen. Warmwasser verwendet die wirksame Rückmeldung aus ID 18.
      */
     private function RefreshControlValues(): void
     {
-        $targets = [];
-
-        if ($this->ReadPropertyBoolean('HeizungVisible')) {
-            $targets['Mode_Heizung'] = ['index' => 3, 'conversion' => 'raw'];
+        // Always cache the controller feedback, independently of optional variables.
+        $targets = [
+            'Mode_Heizung'=>['index'=>3,'conversion'=>'raw','visible'=>'HeizungVisible'],
+            'Mode_WW'=>['index'=>4,'conversion'=>'raw','visible'=>'WarmwasserVisible'],
+            'Mode_Kuehlung'=>['index'=>108,'conversion'=>'raw','visible'=>'KuehlungVisible'],
+            'Mode_Schwimmbad'=>['index'=>119,'conversion'=>'raw','visible'=>'SchwimmbadVisible'],
+            'Anpassung_Temp'=>['index'=>1,'conversion'=>'minus_correction','visible'=>'TempsetVisible'],
+            'Anpassung_RBE'=>['index'=>1148,'conversion'=>'tenth','visible'=>'RBEsetVisible']
+        ];
+        $source=$this->VisualizationSourceKey();
+        $controlSources=['source'=>$source,'updatedAt'=>time(),'idents'=>[],'values'=>[],'sources'=>[]];
+        $water=$this->GetHybridVisualizationPoint('Warmwasser_Soll_Temperatur');
+        if($water!==null) {
+            $controlSources['idents']['Anpassung_WW']=true;
+            $controlSources['values']['Anpassung_WW']=$water['value'];
+            $controlSources['sources']['Anpassung_WW']=$water['source'];
+            if($this->SharedNumericControlEnabled('Anpassung_WW')) $this->SetValueIfChanged('Anpassung_WW',$water['value']);
         }
-
-        if ($this->ReadPropertyBoolean('WarmwasserVisible')) {
-            $targets['Mode_WW'] = ['index' => 4, 'conversion' => 'raw'];
+        $this->SetBuffer('ControlSources',json_encode($controlSources,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+        $datenRaw=$this->ReadData(3003);
+        if($datenRaw===null || $source!==$this->VisualizationSourceKey()) return;
+        foreach($targets as $ident=>$target) {
+            $index=$target['index'];
+            if(!array_key_exists($index,$datenRaw)) continue;
+            $value=$datenRaw[$index];
+            if($target['conversion']==='minus_correction' && $value>2147483647) $value-=4294967296;
+            if($target['conversion']!=='raw') $value*=0.1;
+            $controlSources['idents'][$ident]=true;
+            $controlSources['values'][$ident]=$value;
+            $controlSources['sources'][$ident]='Java';
+            if($this->ReadPropertyBoolean($target['visible']) && $this->SetValueIfChanged($ident,$value))
+                $this->SendDebug('Sollwerte empfangen',$ident.' wurde von der Luxtronik übernommen: '.$value,0);
         }
+        $this->SetBuffer('ControlSources',json_encode($controlSources,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+    }
 
-        if ($this->ReadPropertyBoolean('KuehlungVisible')) {
-            $targets['Mode_Kuehlung'] = ['index' => 108, 'conversion' => 'raw'];
-        }
+    private function InternalControlReading(string $ident): ?array
+    {
+        $cache=json_decode($this->GetBuffer('ControlSources'),true)??[];
+        if(($cache['source']??'')!==$this->VisualizationSourceKey() || !array_key_exists($ident,$cache['values']??[])) return null;
+        $value=$cache['values'][$ident];
+        $unit=str_starts_with($ident,'Anpassung_')?'°C':'';
+        $id=@$this->GetIDForIdent($ident);
+        $id=$id!==false && IPS_VariableExists($id)?$id:0;
+        $formatted=$unit!==''?number_format((float)$value,1,'.','').' '.$unit:(string)$value;
+        if($id>0 && GetValue($id)===$value) $formatted=GetValueFormatted($id);
+        return ['variableId'=>$id,'ident'=>$ident,'value'=>$value,'formatted'=>$formatted,
+            'unit'=>$unit,'binary'=>false,'source'=>$cache['sources'][$ident]??'Java'];
+    }
 
-        if ($this->ReadPropertyBoolean('SchwimmbadVisible')) {
-            $targets['Mode_Schwimmbad'] = ['index' => 119, 'conversion' => 'raw'];
-        }
-
-        if ($this->ReadPropertyBoolean('TempsetVisible')) {
-            $targets['Anpassung_Temp'] = ['index' => 1, 'conversion' => 'minus_correction'];
-        }
-
-        if ($this->ReadPropertyBoolean('WWsetVisible')) {
-            $targets['Anpassung_WW'] = ['index' => 105, 'conversion' => 'tenth'];
-        }
-
-        if ($this->ReadPropertyBoolean('RBEsetVisible')) {
-            $targets['Anpassung_RBE'] = ['index' => 1148, 'conversion' => 'tenth'];
-        }
-
-        if ($targets === []) {
-            return;
-        }
-
-        $datenRaw = $this->ReadData(3003);
-        if ($datenRaw === null) {
-            return;
-        }
-
-        foreach ($targets as $ident => $target) {
-            $index = (int)$target['index'];
-
-            if (!array_key_exists($index, $datenRaw)) {
-                $this->SendDebug(
-                    'Sollwerte empfangen',
-                    "Index {$index} für {$ident} wurde von 3003 nicht geliefert",
-                    0
-                );
-                continue;
-            }
-
-            $value = $datenRaw[$index];
-
-            switch ($target['conversion']) {
-                case 'minus_correction':
-                    if ($value > 2147483647) {
-                        $value -= 4294967296;
-                    }
-                    $value *= 0.1;
-                    break;
-
-                case 'tenth':
-                    $value *= 0.1;
-                    break;
-
-                case 'raw':
-                default:
-                    break;
-            }
-
-            if ($this->SetValueIfChanged($ident, $value)) {
-                $this->SendDebug(
-                    'Sollwerte empfangen',
-                    "{$ident} wurde von der Luxtronik übernommen: {$value}",
-                    0
-                );
-            }
-        }
+    private function StoreInternalControlReading(string $ident,mixed $value,string $source): void
+    {
+        if($source!==$this->VisualizationSourceKey()) return;
+        $cache=json_decode($this->GetBuffer('ControlSources'),true)??[];
+        if(($cache['source']??'')!==$source) $cache=['source'=>$source,'idents'=>[],'values'=>[],'sources'=>[]];
+        $cache['updatedAt']=time();$cache['idents'][$ident]=true;$cache['values'][$ident]=$value;$cache['sources'][$ident]='Java';
+        $this->SetBuffer('ControlSources',json_encode($cache,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
     }
 
     private function setParameter(string $type, mixed $value): bool
@@ -1718,8 +1740,21 @@ class Luxtronik extends IPSModuleStrict
 
     private function getParameter(string $mode): void
     {
+        if($mode==='Anpassung_WW') {
+            $source=$this->VisualizationSourceKey();
+            $raw=$this->ReadData(3004);
+            if($raw!==null && array_key_exists(18,$raw) && $source===$this->VisualizationSourceKey()) {
+                $value=$this->convertValueBasedOnID($raw[18],18);
+                $this->StoreVisualizationPoints([18=>$value],true);
+                $this->SetValueIfChanged($mode,$value);
+                $this->StoreInternalControlReading($mode,$value,$source);
+            }
+            return;
+        }
+
+        $source=$this->VisualizationSourceKey();
         $datenRaw = $this->ReadData(3003);
-        if ($datenRaw === null) {
+        if ($datenRaw === null || $source!==$this->VisualizationSourceKey()) {
             return;
         }
 
@@ -1729,12 +1764,10 @@ class Luxtronik extends IPSModuleStrict
             case 'Mode_Kuehlung':
             case 'Mode_Schwimmbad':
             case 'Anpassung_Temp':
-            case 'Anpassung_WW':
             case 'Anpassung_RBE':
                 // Index bestimmen
                 $index = match ($mode) {
                     'Anpassung_Temp' => 1,
-                    'Anpassung_WW'   => 105,
                     'Mode_Heizung'   => 3,
                     'Mode_WW'        => 4,
                     'Mode_Kuehlung'  => 108,
@@ -1757,7 +1790,7 @@ class Luxtronik extends IPSModuleStrict
                         $value -= 4294967296;
                     }
                     $value *= 0.1;
-                } elseif (in_array($mode, ['Anpassung_WW', 'Anpassung_RBE'], true)) {
+                } elseif ($mode==='Anpassung_RBE') {
                     $value *= 0.1;
                 }
         
@@ -1769,6 +1802,7 @@ class Luxtronik extends IPSModuleStrict
                         0
                     );
                 }
+                $this->StoreInternalControlReading($mode,$value,$source);
                 break;
         
             default: // Hier werden die ganzen Timer geholt
@@ -1787,11 +1821,16 @@ class Luxtronik extends IPSModuleStrict
         $copfaktorVariableID = @$this->GetIDForIdent('copfaktor');
         $kwInVarId = $this->ReadPropertyInteger('kwin');
 
-        if ($mode !== 'cop' || $kwInVarId === 0 || !IPS_VariableExists($kwInVarId) || $copfaktorVariableID === false) {
-            return;
+        if ($mode !== 'cop' || $copfaktorVariableID === false) return;
+        if($kwInVarId > 0 && IPS_VariableExists($kwInVarId)) {
+            $reading=['value'=>GetValue($kwInVarId),'unit'=>$this->GetVariableUnit($kwInVarId)];
+            $power=$this->VisualizationPowerReading($reading,'kW');
+        } else {
+            $reading=$this->GetHybridVisualizationPoint('Leistungsaufnahme');
+            $power=$reading===null?null:$this->VisualizationPowerReading($reading,'W');
         }
-
-        $kw_in = GetValue($kwInVarId);
+        if($power===null || !is_finite($value) || $value<0) return;
+        $kw_in=$power['watts']/1000;
         if ((float)$kw_in == 0.0) {
             $this->SetValueIfChanged('copfaktor', 0);
             $this->SendDebug('COP-Faktor', 'Eingangsleistung (kw_in) ist 0. COP-Faktor wurde auf 0 gesetzt.', 0);
@@ -1861,294 +1900,6 @@ class Luxtronik extends IPSModuleStrict
         $this->WriteAttributeFloat('start_kwh_in', 0);
         $this->WriteAttributeFloat('start_value_out', 0);
         $this->SendDebug("JAZ-Reset", "Der Reset der Start-Werte zur JAZ-Berechnung wurde durchgeführt", 0);
-    }
-
-    private function CreateVariableProfiles(): void
-    {
-        // Benötigte Variablenprofile erstellen
-
-        // WPLUX.Imp
-        if (!IPS_VariableProfileExists("WPLUX.Imp")) {
-            IPS_CreateVariableProfile("WPLUX.Imp", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Imp erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Imp", 0, 0, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Imp", 0);
-            IPS_SetVariableProfileText("WPLUX.Imp", "", " impulse");
-        }
-
-        // WPLUX.Typ
-        if (!IPS_VariableProfileExists("WPLUX.Typ")) {
-            IPS_CreateVariableProfile("WPLUX.Typ", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Typ erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Typ", 0, 0, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Typ", 0);
-            IPS_SetVariableProfileText("WPLUX.Typ", "", "");
-        }
-
-        // WPLUX.Biv
-        if (!IPS_VariableProfileExists("WPLUX.Biv")) {
-            IPS_CreateVariableProfile("WPLUX.Biv", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Biv erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Biv", 1, 3, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Biv", 0);
-            IPS_SetVariableProfileText("WPLUX.Biv", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Biv", 1, "ein Verdichter darf laufen", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Biv", 2, "zwei Verdichter dürfen laufen", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Biv", 3, "zusätzlicher Wärmeerzeuger darf mitlaufen", "", -1);
-        }
-
-        // WPLUX.BZ
-        if (!IPS_VariableProfileExists("WPLUX.BZ")) {
-            IPS_CreateVariableProfile("WPLUX.BZ", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.BZ erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.BZ", 0, 7, 1);
-            IPS_SetVariableProfileDigits("WPLUX.BZ", 0);
-            IPS_SetVariableProfileText("WPLUX.BZ", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.BZ", 0, "Heizen", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.BZ", 1, "Warmwasser", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.BZ", 2, "Schwimmbad / Photovoltaik", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.BZ", 3, "EVU", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.BZ", 4, "Abtauen", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.BZ", 5, "Keine Anforderung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.BZ", 6, "Heizen ext. Energiequelle", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.BZ", 7, "Kühlbetrieb ", "", -1);
-        }
-
-        // WPLUX.Off
-        if (!IPS_VariableProfileExists("WPLUX.Off")) {
-            IPS_CreateVariableProfile("WPLUX.Off", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Off erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Off", 1, 9, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Off", 0);
-            IPS_SetVariableProfileText("WPLUX.Off", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Off", 1, "Wärmepumpe Störung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Off", 2, "Anlagen Störung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Off", 3, "Betriebsart Zweiter Wärmeerzeuger", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Off", 4, "EVU-Sperre", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Off", 5, "Lauftabtau (nur LW-Geräte)", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Off", 6, "Temperatur Einsatzgrenze maximal", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Off", 7, "Temperatur Einsatzgrenze minimal", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Off", 8, "Untere Einsatzgrenze", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Off", 9, "Keine Anforderung ", "", -1);
-        }
-
-        // WPLUX.Comf
-        if (!IPS_VariableProfileExists("WPLUX.Comf")) {
-            IPS_CreateVariableProfile("WPLUX.Comf", 0); // 0 = Bool
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Comf erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Comf", 0, 1, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Comf", 0);
-            IPS_SetVariableProfileText("WPLUX.Comf", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Comf", 0, "nicht verbaut", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Comf", 1, "verbaut", "", -1);
-        }
-
-        // WPLUX.Men1
-        if (!IPS_VariableProfileExists("WPLUX.Men1")) {
-            IPS_CreateVariableProfile("WPLUX.Men1", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Men1 erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Men1", 0, 7, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Men1", 0);
-            IPS_SetVariableProfileText("WPLUX.Men1", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Men1", 0, "Wärmepumpe läuft", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men1", 1, "Wärmepumpe steht", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men1", 2, "Wärmepumpe kommt", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men1", 3, "Fehlercode Speicherplatz 0", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men1", 4, "Abtauen", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men1", 5, "Warte auf LIN-Verbindung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men1", 6, "Verdichter heizt auf", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men1", 7, "Pumpenvorlauf ", "", -1);
-        }
-
-        // WPLUX.Men2
-        if (!IPS_VariableProfileExists("WPLUX.Men2")) {
-            IPS_CreateVariableProfile("WPLUX.Men2", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Men2 erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Men2", 0, 1, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Men2", 0);
-            IPS_SetVariableProfileText("WPLUX.Men2", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Men2", 0, "seit :", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men2", 1, "in : ", "", -1);
-        }
-
-        // WPLUX.Men3
-        if (!IPS_VariableProfileExists("WPLUX.Men3")) {
-            IPS_CreateVariableProfile("WPLUX.Men3", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Men3 erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Men3", 0, 17, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Men3", 0);
-            IPS_SetVariableProfileText("WPLUX.Men3", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 0, "Heizbetrieb", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 1, "Keine Anforderung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 2, "Netz-Einschaltverzögerung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 3, "Schaltspielsperre", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 4, "Sperrzeit", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 5, "Brauchwasser", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 6, "Info Ausheizprogramm", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 7, "Abtauen", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 8, "Pumpenvorlauf", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 9, "Thermische Desinfektion", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 11, "Heizbetrieb", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 12, "Schwimmbad / Photovoltaik", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 13, "Heizen ext. Energiequelle", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 14, "Brauchwasser ext. Energiequelle", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 16, "Durchflussüberachung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Men3", 17, "Zweiter Wärmeerzeuger 1 Betrieb ", "", -1);
-        }
-
-        // WPLUX.Akt
-        if (!IPS_VariableProfileExists("WPLUX.Akt")) {
-            IPS_CreateVariableProfile("WPLUX.Akt", 0); // 0 = Bool
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Akt erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Akt", 0, 1, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Akt", 0);
-            IPS_SetVariableProfileText("WPLUX.Akt", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Akt", 0, "inaktiv", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Akt", 1, "aktiv", "", -1);
-        }
-
-        // WPLUX.Pres
-        if (!IPS_VariableProfileExists("WPLUX.Pres")) {
-            IPS_CreateVariableProfile("WPLUX.Pres", 2); // 2 = Float
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Pres erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Pres", 0, 0, 0.1);
-            IPS_SetVariableProfileDigits("WPLUX.Pres", 1);
-            IPS_SetVariableProfileText("WPLUX.Pres", "", " bar");
-        }
-
-        // WPLUX.Fan
-        if (!IPS_VariableProfileExists("WPLUX.Fan")) {
-            IPS_CreateVariableProfile("WPLUX.Fan", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Fan erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Fan", 0, 0, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Fan", 0);
-            IPS_SetVariableProfileText("WPLUX.Fan", "", " rpm");
-        }
-
-        // WPLUX.Ver
-        if (!IPS_VariableProfileExists("WPLUX.Ver")) {
-            IPS_CreateVariableProfile("WPLUX.Ver", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Ver erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Ver", 0, 0, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Ver", 0);
-            IPS_SetVariableProfileText("WPLUX.Ver", "", " rpm");
-        }
-
-        // WPLUX.HzState
-        if (!IPS_VariableProfileExists("WPLUX.HzState")) {
-            IPS_CreateVariableProfile("WPLUX.HzState", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.HzState erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.HzState", 0, 4, 1);
-            IPS_SetVariableProfileDigits("WPLUX.HzState", 0);
-            IPS_SetVariableProfileText("WPLUX.HzState", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.HzState", 0, "Aus", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.HzState", 1, "Normal", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.HzState", 2, "Abgesenkt", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.HzState", 3, "Heizgrenze", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.HzState", 4, "Frostschutz", "", -1);
-        }
-
-        // WPLUX.Bet
-        if (!IPS_VariableProfileExists("WPLUX.Bet")) {
-            IPS_CreateVariableProfile("WPLUX.Bet", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Bet erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Bet", 0, 12, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Bet", 0);
-            IPS_SetVariableProfileText("WPLUX.Bet", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 0, "Aus", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 1, "Kühlung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 2, "Heizung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 3, "Störung", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 4, "Übergang", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 5, "Abtauen", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 6, "Warte", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 7, "Warte", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 8, "Übergang", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 9, "Stop", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 10, "Manuell ", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 11, "Simulation Start", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Bet", 12, "EVU Sperre", "", -1);
-        }
-
-        // WPLUX.lh
-        if (!IPS_VariableProfileExists("WPLUX.lh")) {
-            IPS_CreateVariableProfile("WPLUX.lh", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.lh erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.lh", 0, 0, 1);
-            IPS_SetVariableProfileDigits("WPLUX.lh", 0);
-            IPS_SetVariableProfileText("WPLUX.lh", "", " l/h");
-        }
-
-        // WPLUX.Wwhe
-        if (!IPS_VariableProfileExists("WPLUX.Wwhe")) {
-            IPS_CreateVariableProfile("WPLUX.Wwhe", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Wwhe erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Wwhe", 0, 4, 0);
-            IPS_SetVariableProfileDigits("WPLUX.Wwhe", 0);
-            IPS_SetVariableProfileText("WPLUX.Wwhe", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 0, "Automatik", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 1, "Zus. Wärmeerzeugun", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 2, "Party", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 3, "Ferien", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Wwhe", 4, "Aus", "", -1);
-        }
-
-        // WPLUX.Kue
-        if (!IPS_VariableProfileExists("WPLUX.Kue")) {
-            IPS_CreateVariableProfile("WPLUX.Kue", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Kue erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Kue", 0, 1, 0);
-            IPS_SetVariableProfileDigits("WPLUX.Kue", 0);
-            IPS_SetVariableProfileText("WPLUX.Kue", "", "");
-            IPS_SetVariableProfileAssociation("WPLUX.Kue", 0, "Aus", "", -1);
-            IPS_SetVariableProfileAssociation("WPLUX.Kue", 1, "Automatik", "", -1);
-        }
-
-        // WPLUX.Tset
-        if (!IPS_VariableProfileExists("WPLUX.Tset")) {
-            IPS_CreateVariableProfile("WPLUX.Tset", 2); // 2 = Float
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Tset erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Tset", -5, 5, 0.5);
-            IPS_SetVariableProfileDigits("WPLUX.Tset", 1);
-            IPS_SetVariableProfileText("WPLUX.Tset", "", " °C");
-        }
-
-        // WPLUX.Wset
-        if (!IPS_VariableProfileExists("WPLUX.Wset")) {
-            IPS_CreateVariableProfile("WPLUX.Wset", 2); // 2 = Float
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Wset erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Wset", 30, 65, 0.5);
-            IPS_SetVariableProfileDigits("WPLUX.Wset", 1);
-            IPS_SetVariableProfileText("WPLUX.Wset", "", " °C");
-        }
-
-        // WPLUX.Std
-        if (!IPS_VariableProfileExists("WPLUX.Std")) {
-            IPS_CreateVariableProfile("WPLUX.Std", 1); // 1 = Integer
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Std erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Std", 0, 0, 1);
-            IPS_SetVariableProfileDigits("WPLUX.Std", 0);
-            IPS_SetVariableProfileText("WPLUX.Std", "", " Std.");
-        }
-
-        // WPLUX.kW
-        if (!IPS_VariableProfileExists("WPLUX.kW")) {
-            IPS_CreateVariableProfile("WPLUX.kW", 2); // 2 = Float
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.kW erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.kW", 0, 0, 0.01);
-            IPS_SetVariableProfileDigits("WPLUX.kW", 2);
-            IPS_SetVariableProfileText("WPLUX.kW", "", " kW");
-        }
-
-        // WPLUX.Cop
-        if (!IPS_VariableProfileExists("WPLUX.Cop")) {
-            IPS_CreateVariableProfile("WPLUX.Cop", 2); // 2 = Float
-            $this->SendDebug("Variablenprofil", "Variablenprofil WPLUX.Cop erstellt", 0);
-            IPS_SetVariableProfileValues("WPLUX.Cop", 0, 0, 0.1);
-            IPS_SetVariableProfileDigits("WPLUX.Cop", 1);
-            IPS_SetVariableProfileText("WPLUX.Cop", "", "");
-        }
-
     }
 
     /*

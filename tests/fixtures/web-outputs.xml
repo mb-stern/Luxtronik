@@ -1,0 +1,28 @@
+<Content>
+  <item id="0x53d80c"><name>AV-Abtauventil</name><value>Aus</value></item>
+  <item id="0x53dddc"><name>BUP</name><value>Ein</value></item>
+  <item id="0x53d04c"><name>FUP 1</name><value>Ein</value></item>
+  <item id="0x53db64"><name>HUP</name><value>Ein</value></item>
+  <item id="0x53e324"><name>Mischer 1 Auf</name><value>Aus</value></item>
+  <item id="0x53b45c"><name>Mischer 1 Zu</name><value>Ein</value></item>
+  <item id="0x53d9cc"><name>Ventil.-BOSUP</name><value>Ein</value></item>
+  <item id="0x53e084"><name>Verdichter 1</name><value>Ein</value></item>
+  <item id="0x54062c"><name>ZIP</name><value>Aus</value></item>
+  <item id="0x53d77c"><name>ZUP</name><value>Aus</value></item>
+  <item id="0x53e8ac"><name>ZWE 1</name><value>Aus</value></item>
+  <item id="0x54048c"><name>ZWE 3</name><value>Aus</value></item>
+  <item id="0x5404bc"><name>SLP</name><value>Aus</value></item>
+  <item id="0x53f07c"><name>FUP 2</name><value>Aus</value></item>
+  <item id="0x540994"><name>FUP 3</name><value>Aus</value></item>
+  <item id="0x540784"><name>AO 1</name><value>5.00 V</value></item>
+  <item id="0x5407b4"><name>AO 2</name><value>10.00 V</value></item>
+  <item id="0x53f89c"><name>AO 21</name><value>0.00 V</value></item>
+  <item id="0x53f8dc"><name>AO 22</name><value>0.00 V</value></item>
+  <item id="0x54031c"><name>HUP</name><value>44.5 %</value></item>
+  <item id="0x53fb54"><name>Freq. Sollwert</name><value>3272 RPM</value></item>
+  <item id="0x53fb94"><name>Freq. aktuell</name><value>3238 RPM</value></item>
+  <item id="0x53fc94"><name>Ventilatordrehzahl</name><value>199 RPM</value></item>
+  <item id="0x53fcd4"><name>EEV Heizen</name><value>42.9 %</value></item>
+  <item id="0x53fd14"><name>EEV Kühlen</name><value>100.0 %</value></item>
+  <name>Ausgänge</name>
+</Content>

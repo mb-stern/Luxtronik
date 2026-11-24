@@ -6,9 +6,82 @@ const VARIABLETYPE_BOOLEAN = 0;
 const VARIABLETYPE_INTEGER = 1;
 const VARIABLETYPE_FLOAT = 2;
 const VARIABLETYPE_STRING = 3;
+const KR_READY = 10103;
+const VM_DELETE = 10602;
+const VM_UPDATE = 10603;
+const VM_CHANGEPROFILEACTION = 10605;
+const OM_CHILDADDED = 10412;
+const OM_CHILDREMOVED = 10413;
+const IM_CHANGESTATUS = 10505;
+const VARIABLE_PRESENTATION_SLIDER = '{6B9CAEEC-5958-C223-30F7-BD36569FC57A}';
+const VARIABLE_PRESENTATION_ENUMERATION = '{52D9E126-D7D2-2CBB-5E62-4CF7BA7C5D82}';
+const VARIABLE_PRESENTATION_VALUE_PRESENTATION = '{3319437D-7CDE-699D-750A-3C6A3841FA75}';
+const VARIABLE_PRESENTATION_DATE_TIME = '{497C4845-27FA-6E4F-AE37-5D951D3BDBF9}';
+const VARIABLE_PRESENTATION_SWITCH = '{60AE6B26-B3E2-BDB1-A3A1-BE232940664B}';
+const VARIABLE_PRESENTATION_LEGACY = '{4153A8D4-5C33-C65F-C1F3-7B61AAF99B1C}';
 
 $GLOBALS['testVariables'] = [];
 $GLOBALS['testNextID'] = 10000;
+$GLOBALS['testProfiles'] = [
+    '~Temperature'=>['Suffix'=>' °C','Digits'=>1], '~Temperature.Difference'=>['Suffix'=>' K','Digits'=>1],
+    '~Electricity'=>['Suffix'=>' kWh','Digits'=>1], '~Volt'=>['Suffix'=>' V','Digits'=>1],
+    '~Watt'=>['Suffix'=>' W','Digits'=>0], '~Valve.F'=>['Suffix'=>' %','Digits'=>1,'MinValue'=>0,'MaxValue'=>100]
+];
+
+function IPS_SemaphoreEnter(string $name, int $wait): bool {
+    if (!empty($GLOBALS['testSemaphores'][$name])) return false;
+    $GLOBALS['testSemaphores'][$name] = true;
+    return true;
+}
+function IPS_SemaphoreLeave(string $name): bool { unset($GLOBALS['testSemaphores'][$name]); return true; }
+
+function IPS_VariableProfileExists(string $name): bool { return isset($GLOBALS['testProfiles'][$name]); }
+function IPS_CreateVariableProfile(string $name, int $type): void { $GLOBALS['testProfiles'][$name] = ['ProfileType' => $type, 'Associations' => []]; }
+function IPS_SetVariableProfileValues(string $name, float $min, float $max, float $step): void { $GLOBALS['testProfiles'][$name] = array_replace($GLOBALS['testProfiles'][$name], ['MinValue' => $min, 'MaxValue' => $max, 'StepSize' => $step]); }
+function IPS_SetVariableProfileDigits(string $name, int $digits): void { $GLOBALS['testProfiles'][$name]['Digits'] = $digits; }
+function IPS_SetVariableProfileText(string $name, string $prefix, string $suffix): void { $GLOBALS['testProfiles'][$name]['Prefix'] = $prefix; $GLOBALS['testProfiles'][$name]['Suffix'] = $suffix; }
+function IPS_SetVariableProfileAssociation(string $name, float $value, string $text, string $icon, int $color): void { $GLOBALS['testProfiles'][$name]['Associations'][] = ['Value' => $value, 'Name' => $text]; }
+function IPS_GetVariableProfile(string $name): array { return $GLOBALS['testProfiles'][$name]; }
+function IPS_InstanceExists(int $id): bool { return isset($GLOBALS['testInstances'][$id]); }
+function IPS_LogMessage(string $sender, string $message): bool { $GLOBALS['testGlobalLogs'][] = [$sender,$message]; return true; }
+function IPS_GetKernelRunlevel(): int { return KR_READY; }
+function IPS_GetName(int $id): string { return $GLOBALS['testVariables'][$id]['name'] ?? ''; }
+function IPS_SetName(int $id,string $name): bool { $GLOBALS['testVariables'][$id]['name']=$name;return true; }
+function IPS_GetObject(int $id): array { return ['ObjectIdent' => $GLOBALS['testVariables'][$id]['ident'] ?? '', 'ObjectIcon' => $GLOBALS['testVariables'][$id]['icon'] ?? '', 'ObjectPosition' => $GLOBALS['testVariables'][$id]['position'] ?? 0]; }
+function IPS_SetPosition(int $id, int $position): bool { $GLOBALS['testVariables'][$id]['position']=$position; return true; }
+function IPS_GetParent(int $id): int { return $GLOBALS['testVariables'][$id]['instance'] ?? 0; }
+function IPS_GetChildrenIDs(int $id): array {
+    return array_keys(array_filter($GLOBALS['testVariables'], static fn(array $variable): bool => $variable['instance'] === $id));
+}
+function IPS_GetVariablePresentation(int $id): array {
+    $v=$GLOBALS['testVariables'][$id];
+    if (!empty($v['custom_presentation'])) return $v['custom_presentation'];
+    if (!empty($v['custom_profile'])) return ['PRESENTATION'=>VARIABLE_PRESENTATION_LEGACY, 'PROFILE'=>$v['custom_profile']];
+    return $v['presentation']??$v['native_presentation']??[];
+}
+function IPS_SetVariableCustomPresentation(int $id,array $presentation): bool {
+    $GLOBALS['testVariables'][$id]['custom_presentation']=$presentation;
+    $GLOBALS['testVariables'][$id]['custom_profile']=$presentation['PROFILE']??'';
+    $GLOBALS['testPresentationChanges'][]=[$id,$presentation];return true;
+}
+function GetValueFormatted(int $id): string {
+    $variable = $GLOBALS['testVariables'][$id];
+    $profile = $GLOBALS['testProfiles'][$variable['profile']] ?? [];
+    if (isset($variable['formatted'])) return $variable['formatted'];
+    $presentation = IPS_GetVariablePresentation($id);
+    if (!empty($presentation['INTERVALS_ACTIVE'])) {
+        foreach (json_decode($presentation['INTERVALS'],true) as $interval) {
+            if ($interval['ConstantActive'] && $variable['value'] >= $interval['IntervalMinValue'] && $variable['value'] <= $interval['IntervalMaxValue']) {
+                return $interval['ConstantValue'];
+            }
+        }
+    }
+    $options = isset($presentation['OPTIONS']) ? json_decode($presentation['OPTIONS'],true) : ($profile['Associations'] ?? []);
+    foreach (is_array($options) ? $options : [] as $option) {
+        if ((string)$option['Value'] === (string)$variable['value']) return (string)($option['Caption'] ?? $option['Name']);
+    }
+    return $variable['formatted'] ?? (string)$variable['value'] . ($presentation['SUFFIX'] ?? $profile['Suffix'] ?? '');
+}
 
 function IPS_VariableExists(int $id): bool
 {
@@ -17,12 +90,21 @@ function IPS_VariableExists(int $id): bool
 
 function IPS_GetVariable(int $id): array
 {
-    return ['VariableType' => $GLOBALS['testVariables'][$id]['type']];
+    $v = $GLOBALS['testVariables'][$id];
+    return ['VariableType' => $v['type'], 'VariableProfile' => $v['profile'],
+        'VariableCustomProfile' => $v['custom_profile']??'', 'VariableAction' => $v['action'] ?? 0, 'VariableCustomAction' => $v['custom_action'] ?? 0,
+        'VariablePresentation'=>$v['native_presentation']??[], 'VariableCustomPresentation'=>$v['custom_presentation']??[]];
 }
 
 function GetValue(int $id): mixed
 {
     return $GLOBALS['testVariables'][$id]['value'];
+}
+
+function RequestAction(int $id, mixed $value): bool
+{
+    $GLOBALS['testRequestedActions'][] = [$id, $value];
+    return $GLOBALS['testRequestActionResult'] ?? true;
 }
 
 function IPS_GetObjectIDByIdent(string $ident, int $instanceID): int|false
@@ -35,64 +117,119 @@ function IPS_GetObjectIDByIdent(string $ident, int $instanceID): int|false
     return false;
 }
 
+function IPS_GetConfiguration(int $id): string {return $GLOBALS['testInstanceConfiguration'][$id]??'{}';}
+
+function IPS_GetInstance(int $id): array
+{
+    return $GLOBALS['testInstanceInfo'][$id]??['ConnectionID'=>0,'ModuleInfo'=>['ModuleID'=>'']];
+}
+
 class IPSModuleStrict
 {
+    public mixed $testParentCallback=null;
+    protected function SendDataToParent(string $json): mixed
+    {
+        if($this->testParentCallback===null) throw new RuntimeException('No test gateway connected');
+        return ($this->testParentCallback)(json_decode($json,true,512,JSON_THROW_ON_ERROR));
+    }
+
     public int $InstanceID;
     public array $properties = [];
     public array $attributes = [];
     public array $errors = [];
     public int $writes = 0;
+    public int $formReloads = 0;
+    protected function ReloadForm(): void {++$this->formReloads;}
+    public int $status = 0;
+    public array $timers = [];
+    public array $actions = [];
+    public array $buffers = [];
+    public array $messages = [];
+    public array $updates = [];
+    public array $formUpdates = [];
+    public array $debugMessages = [];
+    protected function UpdateFormField(string $name, string $parameter, mixed $value): bool
+    {
+        // Symcon accepts scalar values; complex form values must arrive as JSON strings.
+        if (!is_scalar($value)) throw new InvalidArgumentException('Cannot auto-convert value for parameter Value (Type is not supported)');
+        $this->formUpdates[] = [$name, $parameter, $value];
+        return true;
+    }
+    public int $visualizationType = 0;
+    public ?string $interfaceWarning = null;
+    public int $interfaceReads = 0;
 
     public function __construct()
     {
         $this->InstanceID = ++$GLOBALS['testNextID'];
+        $GLOBALS['testInstances'][$this->InstanceID] = true;
         $this->Create();
     }
 
     public function Create(): void {}
     public function ApplyChanges(): void {}
     public function Migrate(string $data): string { return ''; }
-    protected function RegisterPropertyString(string $name, string $value): void { $this->properties[$name] = $value; }
-    protected function RegisterPropertyInteger(string $name, int $value): void { $this->properties[$name] = $value; }
-    protected function RegisterPropertyBoolean(string $name, bool $value): void { $this->properties[$name] = $value; }
+    protected function RegisterPropertyString(string $name, string $value): void { $this->properties[$name] ??= $value; }
+    protected function RegisterPropertyInteger(string $name, int $value): void { $this->properties[$name] ??= $value; }
+    protected function RegisterPropertyBoolean(string $name, bool $value): void { $this->properties[$name] ??= $value; }
     protected function RegisterAttributeFloat(string $name, float $value): void { $this->attributes[$name] = $value; }
-    protected function ReadPropertyString(string $name): string { return $this->properties[$name]; }
+    protected function ReadPropertyString(string $name): string {
+        ++$this->interfaceReads;
+        if ($this->interfaceWarning !== null) trigger_error($this->interfaceWarning,E_USER_WARNING);
+        return $this->properties[$name];
+    }
     protected function ReadPropertyInteger(string $name): int { return $this->properties[$name]; }
     protected function ReadPropertyBoolean(string $name): bool { return $this->properties[$name]; }
     protected function ReadAttributeFloat(string $name): float { return $this->attributes[$name]; }
     protected function WriteAttributeFloat(string $name, float $value): void { $this->attributes[$name] = $value; }
-    protected function RegisterTimer(string $name, int $interval, string $script): void {}
-    protected function SendDebug(string $name, mixed $value, int $format): void {}
+    protected function RegisterTimer(string $name, int $interval, string $script): void {$this->timers[$name]=$interval;}
+    protected function SetTimerInterval(string $name, int $interval): void { $this->timers[$name] = $interval; }
+    protected function SetStatus(int $status): void { $this->status = $status; }
+    public function EnableAction(string $ident): bool { $this->actions[$ident] = true; $GLOBALS['testVariables'][$this->GetIDForIdent($ident)]['action'] = $this->InstanceID; return true; }
+    protected function DisableAction(string $ident): bool { $this->actions[$ident] = false; $GLOBALS['testVariables'][$this->GetIDForIdent($ident)]['action'] = 0; return true; }
+    protected function SetVisualizationType(int $type): void { $this->visualizationType = $type; }
+    protected function SetBuffer(string $name, string $value): void { $this->buffers[$name] = $value; }
+    protected function GetBuffer(string $name): string { return $this->buffers[$name] ?? ''; }
+    protected function RegisterMessage(int $sender, int $message): bool { $this->messages[$sender][$message] = true; return true; }
+    protected function UnregisterMessage(int $sender, int $message): bool { unset($this->messages[$sender][$message]); return true; }
+    protected function UpdateVisualizationValue(mixed $data): bool { $this->updates[] = json_decode($data, true, 512, JSON_THROW_ON_ERROR); return true; }
+    protected function SendDebug(string $name, mixed $value, int $format): void { $this->debugMessages[] = [$name,$value,$format]; }
     protected function LogMessage(string $message, int $severity): void { $this->errors[] = $message; }
     public function GetIDForIdent(string $ident): int|false { return IPS_GetObjectIDByIdent($ident, $this->InstanceID); }
+    protected function GetValue(string $ident): mixed { return GetValue($this->GetIDForIdent($ident)); }
 
-    protected function RegisterVariableBoolean(string $ident, string $name, string $profile = '', int $position = 0): bool
+    protected function RegisterVariableBoolean(string $ident, string $name, string|array $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_BOOLEAN, false);
+        return $this->register($ident, VARIABLETYPE_BOOLEAN, false, $name, $profile, $position);
     }
-    public function RegisterVariableInteger(string $ident, string $name, string $profile = '', int $position = 0): bool
+    public function RegisterVariableInteger(string $ident, string $name, string|array $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_INTEGER, 0);
+        return $this->register($ident, VARIABLETYPE_INTEGER, 0, $name, $profile, $position);
     }
-    public function RegisterVariableFloat(string $ident, string $name, string $profile = '', int $position = 0): bool
+    public function RegisterVariableFloat(string $ident, string $name, string|array $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_FLOAT, 0.0);
+        return $this->register($ident, VARIABLETYPE_FLOAT, 0.0, $name, $profile, $position);
     }
-    public function RegisterVariableString(string $ident, string $name, string $profile = '', int $position = 0): bool
+    public function RegisterVariableString(string $ident, string $name, string|array $profile = '', int $position = 0): bool
     {
-        return $this->register($ident, VARIABLETYPE_STRING, '');
+        return $this->register($ident, VARIABLETYPE_STRING, '', $name, $profile, $position);
     }
-    private function register(string $ident, int $type, mixed $initial): bool
+    private function register(string $ident, int $type, mixed $initial, string $name, string|array $profile, int $position = 0): bool
     {
+        $presentation=is_array($profile)?$profile:[];
+        $profile=is_array($profile)?($profile['PROFILE']??''):$profile;
         $id = $this->GetIDForIdent($ident);
         if ($id !== false && IPS_GetVariable($id)['VariableType'] === $type) {
+            $GLOBALS['testVariables'][$id]['profile'] = $profile;
+            $GLOBALS['testVariables'][$id]['native_presentation']=$presentation;
             return false;
         }
         if ($id !== false) {
             unset($GLOBALS['testVariables'][$id]);
         }
         $GLOBALS['testVariables'][++$GLOBALS['testNextID']] = [
-            'ident' => $ident, 'instance' => $this->InstanceID, 'type' => $type, 'value' => $initial
+            'ident' => $ident, 'instance' => $this->InstanceID, 'type' => $type, 'value' => $initial,
+            'name' => $name, 'profile' => $profile, 'position' => $position, 'native_presentation'=>$presentation
         ];
         return true;
     }
